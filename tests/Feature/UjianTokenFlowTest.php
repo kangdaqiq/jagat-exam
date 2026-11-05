@@ -85,6 +85,8 @@ class UjianTokenFlowTest extends TestCase
             'kode_bank' => 'BS-MTK-01',
             'durasi_menit' => 45,
             'is_active' => true,
+            'acak_soal' => false,
+            'acak_opsi' => false,
         ]);
 
         $soal1 = Soal::create([
@@ -224,6 +226,8 @@ class UjianTokenFlowTest extends TestCase
             'tanggal' => now()->toDateString(),
             'durasi_menit' => 45,
             'status' => 'SCHEDULED',
+            'acak_soal' => false,
+            'acak_opsi' => false,
         ]);
         $ujian->kelas()->attach($this->kelas->id);
         $ujian->syncPesertaFromKelas();

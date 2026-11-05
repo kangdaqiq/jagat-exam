@@ -41,6 +41,8 @@ class ExamRunnerTest extends TestCase
             'user_id' => $this->admin->id,
             'total_bobot' => 100,
             'is_active' => true,
+            'acak_soal' => false,
+            'acak_opsi' => false,
         ]);
 
         $this->soal1 = $this->bankSoal->soals()->create([
@@ -177,6 +179,116 @@ class ExamRunnerTest extends TestCase
             'soal_id' => $essay2->id,
             'jawaban_teks' => 'Jawaban gravitasi',
         ]);
+    }
+
+    public function test_acak_soal_and_acak_opsi_in_exam_runner(): void
+    {
+        // Buat bank soal dengan acak_soal = true dan acak_opsi = true
+        $bank = BankSoal::create([
+            'judul' => 'Bank Soal Acak',
+            'kode_bank' => 'BS-ACAK-01',
+            'mapel_id' => $this->bankSoal->mapel_id,
+            'user_id' => $this->admin->id,
+            'tingkat' => '10',
+            'acak_soal' => true,
+            'acak_opsi' => true,
+            'is_active' => true,
+        ]);
+
+        // Buat 10 soal pilihan ganda
+        for ($i = 1; $i <= 10; $i++) {
+            $soal = $bank->soals()->create([
+                'nomor_urut' => $i,
+                'tipe_soal' => 'pilihan_ganda',
+                'bobot_nilai' => 10,
+                'pertanyaan' => "<p>Pertanyaan nomor {$i}</p>",
+            ]);
+
+            $soal->opsiJawabans()->createMany([
+                ['label' => 'A', 'teks_opsi' => "Opsi A Soal {$i}", 'is_jawaban_benar' => true, 'nomor_urut' => 1],
+                ['label' => 'B', 'teks_opsi' => "Opsi B Soal {$i}", 'is_jawaban_benar' => false, 'nomor_urut' => 2],
+                ['label' => 'C', 'teks_opsi' => "Opsi C Soal {$i}", 'is_jawaban_benar' => false, 'nomor_urut' => 3],
+                ['label' => 'D', 'teks_opsi' => "Opsi D Soal {$i}", 'is_jawaban_benar' => false, 'nomor_urut' => 4],
+            ]);
+        }
+
+        // Siswa 1 mulai ujian
+        $component1 = Livewire::test(ExamRunner::class, ['bankSoal' => $bank]);
+        $component1->set('nama_peserta', 'Siswa Satu')->call('startExam');
+        $sesi1 = $component1->get('sesi');
+
+        // Siswa 2 mulai ujian
+        $component2 = Livewire::test(ExamRunner::class, ['bankSoal' => $bank]);
+        $component2->set('nama_peserta', 'Siswa Dua')->call('startExam');
+        $sesi2 = $component2->get('sesi');
+
+        // Verifikasi urutan opsi tersimpan di ujian_jawabans
+        $jawabans1 = $sesi1->jawabans()->orderBy('nomor_urut', 'asc')->get();
+        $this->assertCount(10, $jawabans1);
+        $this->assertNotNull($jawabans1->first()->urutan_opsi);
+        $this->assertIsArray($jawabans1->first()->urutan_opsi);
+
+        // Verifikasi ExamRunner menampilkan soal sesuai urutan siswa
+        $soalsSiswa1 = $component1->get('soals');
+        $this->assertCount(10, $soalsSiswa1);
+        $this->assertEquals($jawabans1->pluck('soal_id')->toArray(), $soalsSiswa1->pluck('id')->toArray());
+
+        // Verifikasi opsi display_label A, B, C, D
+        $firstSoal = $soalsSiswa1->first();
+        $displayLabels = $firstSoal->opsiJawabans->pluck('display_label')->toArray();
+        $this->assertEquals(['A', 'B', 'C', 'D'], $displayLabels);
+
+        // Siswa 1 menjawab soal pertama: temukan label mana yang teksnya adalah teks opsi yang benar
+        $kunciAsli = $firstSoal->opsiJawabans->firstWhere('is_jawaban_benar', true);
+        $selectedLabel = $kunciAsli->display_label;
+
+        $component1->call('pilihJawabanOpsi', $selectedLabel, $firstSoal->id);
+        $component1->call('submitUjianFinal');
+
+        // Verifikasi bahwa jawaban dengan label acak tersebut dinilai BENAR (skor 10)
+        $sesi1->refresh();
+        $jawaban1_1 = $sesi1->jawabans()->where('soal_id', $firstSoal->id)->first();
+        $this->assertTrue((bool) $jawaban1_1->is_benar);
+        $this->assertEquals(10.0, (float) $jawaban1_1->skor_didapat);
+    }
+
+    public function test_benar_salah_options_are_never_shuffled(): void
+    {
+        $bank = BankSoal::create([
+            'judul' => 'Bank Soal Benar Salah',
+            'kode_bank' => 'BS-BS-01',
+            'mapel_id' => $this->bankSoal->mapel_id,
+            'user_id' => $this->admin->id,
+            'tingkat' => '10',
+            'acak_soal' => true,
+            'acak_opsi' => true,
+            'is_active' => true,
+        ]);
+
+        $soal = $bank->soals()->create([
+            'nomor_urut' => 1,
+            'tipe_soal' => 'benar_salah',
+            'bobot_nilai' => 10,
+            'pertanyaan' => '<p>Bumi mengelilingi matahari.</p>',
+        ]);
+
+        $soal->opsiJawabans()->createMany([
+            ['label' => 'A', 'teks_opsi' => 'Benar', 'is_jawaban_benar' => true, 'nomor_urut' => 1],
+            ['label' => 'B', 'teks_opsi' => 'Salah', 'is_jawaban_benar' => false, 'nomor_urut' => 2],
+        ]);
+
+        $component = Livewire::test(ExamRunner::class, ['bankSoal' => $bank]);
+        $component->set('nama_peserta', 'Siswa BS')->call('startExam');
+        $sesi = $component->get('sesi');
+
+        $jawaban = $sesi->jawabans()->where('soal_id', $soal->id)->first();
+        // urutan_opsi harus null untuk benar_salah
+        $this->assertNull($jawaban->urutan_opsi);
+
+        $soals = $component->get('soals');
+        $bsOpsi = $soals->first()->opsiJawabans;
+        $this->assertEquals('Benar', $bsOpsi[0]->teks_opsi);
+        $this->assertEquals('Salah', $bsOpsi[1]->teks_opsi);
     }
 }
 

@@ -344,11 +344,28 @@
                                     @php
                                         $opsiTerpilih = is_array($jwb->jawaban_pilihan) ? ($jwb->jawaban_pilihan[0] ?? null) : $jwb->jawaban_pilihan;
                                         $kunciBenar = $soal?->opsiJawabans->where('is_jawaban_benar', true)->first();
+                                        $teksOpsiTerpilih = null;
+                                        if ($opsiTerpilih && !empty($jwb->urutan_opsi) && is_array($jwb->urutan_opsi)) {
+                                            $idx = ord(strtoupper($opsiTerpilih)) - 65;
+                                            $idOpsi = $jwb->urutan_opsi[$idx] ?? null;
+                                            $opsiModel = $soal?->opsiJawabans->firstWhere('id', $idOpsi);
+                                            if ($opsiModel) {
+                                                $teksOpsiTerpilih = strip_tags($opsiModel->teks_opsi);
+                                            }
+                                        } elseif ($opsiTerpilih) {
+                                            $opsiModel = $soal?->opsiJawabans->firstWhere('label', $opsiTerpilih);
+                                            if ($opsiModel) {
+                                                $teksOpsiTerpilih = strip_tags($opsiModel->teks_opsi);
+                                            }
+                                        }
                                     @endphp
                                     <div class="flex items-center justify-between">
                                         <span class="text-gray-500 font-semibold">Jawaban Siswa:</span>
                                         <span class="font-bold text-sm {{ $isBenar ? 'text-emerald-600' : 'text-red-600' }}">
                                             {{ $opsiTerpilih ?: 'Tidak Menjawab (Kosong)' }}
+                                            @if($teksOpsiTerpilih)
+                                                <span class="text-xs font-normal text-gray-500">({{ $teksOpsiTerpilih }})</span>
+                                            @endif
                                         </span>
                                     </div>
                                     <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
