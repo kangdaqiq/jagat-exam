@@ -411,6 +411,18 @@ MD;
         $this->assertEquals('essay', $results[4]['tipe_soal']);
         $this->assertEquals('essay', $results[4]['tipe_soal']);
     }
+
+    public function test_can_trigger_sesuaikan_bobot_action(): void
+    {
+        $component = Livewire::actingAs($this->admin)
+            ->test(EditBankSoal::class, ['record' => $this->bankSoal->id]);
+
+        $component->callAction('sesuaikanBobot')
+            ->assertHasNoErrors()
+            ->assertNotified('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (75:25)');
+
+        $this->assertEquals(100.0, (float) $this->bankSoal->fresh()->total_bobot);
+    }
 }
 
 
