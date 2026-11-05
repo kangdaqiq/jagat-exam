@@ -18,8 +18,9 @@ class AiQuestionService
             'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Sangat Cepat & Paling Stabil - Rekomendasi Utama)',
             'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash (Cepat & Andal)',
             'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)',
+            'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS)',
             'gemini-flash-latest' => '🔄 Gemini Flash Latest (Versi Terbaru Otomatis)',
-            'gemini-2.5-pro' => '🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal Kompleks)',
+            'gemini-2.5-pro' => '🔬 Gemini 2.5 Pro (Alternatif Pro)',
         ];
     }
 

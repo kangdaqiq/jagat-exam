@@ -197,7 +197,7 @@ class KelolaBankSoalTest extends TestCase
         $component = Livewire::test(EditBankSoal::class, ['record' => $this->bankSoal->id]);
 
         $component->call('openAiModal', 'current')
-            ->assertSet('ai_model', 'gemini-3.5-flash')
+            ->assertSet('ai_model', 'gemini-3.6-flash')
             ->set('ai_model', 'gemini-3.5-flash-lite')
             ->set('ai_topik', 'Fotosintesis dan Klorofil')
             ->call('generateWithAi')
