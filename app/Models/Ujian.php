@@ -1,0 +1,251 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+
+class Ujian extends Model
+{
+    use HasFactory;
+
+    protected $table = 'ujians';
+
+    protected $fillable = [
+        'exam_id',
+        'nama_ujian',
+        'tipe_ujian',
+        'mapel_id',
+        'bank_soal_id',
+        'guru_id',
+        'tanggal',
+        'waktu_mulai',
+        'waktu_selesai',
+        'durasi_menit',
+        'status',
+        'token_ujian',
+        'token_generated_at',
+        'keterangan',
+    ];
+
+    public const TIPE_ASESMEN_HARIAN = 'asesmen_harian';
+    public const TIPE_TENGAH_SEMESTER = 'asesmen_tengah_semester';
+    public const TIPE_AKHIR_SEMESTER = 'asesmen_akhir_semester';
+
+    public static function getTipeOptions(?User $user = null): array
+    {
+        $user = $user ?? auth()->user();
+
+        // Guru hanya boleh membuat Asesmen Harian
+        if ($user && $user->isGuru()) {
+            return [
+                self::TIPE_ASESMEN_HARIAN => 'Asesmen Harian (Ulangan Harian)',
+            ];
+        }
+
+        // Admin berhak membuat semua jenis asesmen
+        return [
+            self::TIPE_ASESMEN_HARIAN => 'Asesmen Harian (Ulangan Harian)',
+            self::TIPE_TENGAH_SEMESTER => 'Asesmen Tengah Semester (PTS / STS)',
+            self::TIPE_AKHIR_SEMESTER => 'Asesmen Akhir Semester (PAS / SAS)',
+        ];
+    }
+
+    public function isAsesmenHarian(): bool
+    {
+        return ($this->tipe_ujian ?? self::TIPE_ASESMEN_HARIAN) === self::TIPE_ASESMEN_HARIAN;
+    }
+
+    public function isAsesmenTengahSemester(): bool
+    {
+        return $this->tipe_ujian === self::TIPE_TENGAH_SEMESTER;
+    }
+
+    public function isAsesmenAkhirSemester(): bool
+    {
+        return $this->tipe_ujian === self::TIPE_AKHIR_SEMESTER;
+    }
+
+    public function getTipeLabel(): string
+    {
+        return match ($this->tipe_ujian) {
+            self::TIPE_ASESMEN_HARIAN => 'Asesmen Harian',
+            self::TIPE_TENGAH_SEMESTER => 'Tengah Semester (PTS/STS)',
+            self::TIPE_AKHIR_SEMESTER => 'Akhir Semester (PAS/SAS)',
+            default => 'Asesmen Harian',
+        };
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'tanggal' => 'date',
+            'durasi_menit' => 'integer',
+            'token_generated_at' => 'datetime',
+        ];
+    }
+
+    protected static function booted()
+    {
+        static::creating(function (Ujian $ujian) {
+            if (empty($ujian->exam_id)) {
+                $ujian->exam_id = static::generateExamId();
+            }
+        });
+    }
+
+    /**
+     * Generate unique exam_id (contoh: EXAM-202611-7B8A)
+     */
+    public static function generateExamId(): string
+    {
+        do {
+            $code = 'EXAM-' . date('Ym') . '-' . strtoupper(Str::random(4));
+        } while (static::where('exam_id', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Generate kode token akses ujian 6 karakter (contoh: A7K9P2)
+     * Menggunakan karakter yang jelas dan tidak membingungkan (tanpa 0, O, 1, I).
+     */
+    public static function generateToken(): string
+    {
+        $pool = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $token = '';
+        for ($i = 0; $i < 6; $i++) {
+            $token .= $pool[random_int(0, strlen($pool) - 1)];
+        }
+        return $token;
+    }
+
+    /**
+     * Membuka sesi ujian oleh Guru (Status -> ONGOING, buat Token baru)
+     */
+    public function startExam(): string
+    {
+        $token = static::generateToken();
+        $this->update([
+            'status' => 'ONGOING',
+            'token_ujian' => $token,
+            'token_generated_at' => now(),
+        ]);
+
+        return $token;
+    }
+
+    /**
+     * Menghasilkan ulang token baru saat ujian sedang berlangsung
+     */
+    public function refreshToken(): string
+    {
+        $token = static::generateToken();
+        $this->update([
+            'token_ujian' => $token,
+            'token_generated_at' => now(),
+        ]);
+
+        return $token;
+    }
+
+    /**
+     * Menutup sesi ujian (Status -> COMPLETED)
+     */
+    public function finishExam(): void
+    {
+        $this->update([
+            'status' => 'COMPLETED',
+        ]);
+    }
+
+    /**
+     * Sinkronkan peserta ujian otomatis dari semua kelas yang dipilih
+     */
+    public function syncPesertaFromKelas(): int
+    {
+        $kelasIds = $this->kelas()->pluck('kelas.id')->toArray();
+        if (empty($kelasIds)) {
+            return 0;
+        }
+
+        $siswas = Siswa::whereIn('kelas_id', $kelasIds)
+            ->where('is_active', true)
+            ->whereNotNull('user_id')
+            ->get();
+
+        $count = 0;
+        foreach ($siswas as $siswa) {
+            $peserta = UjianPeserta::firstOrCreate(
+                [
+                    'ujian_id' => $this->id,
+                    'siswa_id' => $siswa->id,
+                ],
+                [
+                    'user_id' => $siswa->user_id,
+                    'status' => 'BELUM_MULAI',
+                ]
+            );
+
+            if ($peserta->wasRecentlyCreated) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    // ==========================================
+    // RELASI ELOQUENT
+    // ==========================================
+
+    public function mapel(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_id');
+    }
+
+    public function bankSoal(): BelongsTo
+    {
+        return $this->belongsTo(BankSoal::class, 'bank_soal_id');
+    }
+
+    public function guru(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'guru_id');
+    }
+
+    public function kelas(): BelongsToMany
+    {
+        return $this->belongsToMany(Kelas::class, 'ujian_kelas', 'ujian_id', 'kelas_id')->withTimestamps();
+    }
+
+    public function pesertas(): HasMany
+    {
+        return $this->hasMany(UjianPeserta::class, 'ujian_id');
+    }
+
+    public function ujianSesis(): HasMany
+    {
+        return $this->hasMany(UjianSesi::class, 'ujian_id');
+    }
+
+    /**
+     * Scope untuk menyaring daftar ujian:
+     * - Admin: semua ujian
+     * - Guru: ujian di mana dia ditugaskan sebagai pengawas/pengampu (guru_id)
+     */
+    public function scopeForUser($query, ?User $user = null)
+    {
+        $user = $user ?? auth()->user();
+        if (!$user || $user->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where('guru_id', $user->id);
+    }
+}
+

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Web CBT - ExamGuard Ready</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            background-color: #f1f5f9;
+            color: #1e293b;
+            padding: 16px;
+        }
+        .header {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+        .badge {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .timer {
+            font-size: 16px;
+            font-weight: bold;
+            color: #dc2626;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+        .question-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .option {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .option:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .option input {
+            margin-right: 12px;
+            transform: scale(1.2);
+        }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 24px;
+        }
+        .btn {
+            padding: 14px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-submit {
+            background: #16a34a;
+            color: white;
+            width: 100%;
+        }
+        .btn-submit:hover {
+            background: #15803d;
+        }
+        .env-status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+        }
+        .status-verified {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-unverified {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Ujian -->
+    <div class="header">
+        <div>
+            <h2 style="font-size: 18px;">Ujian Akhir Semester (CBT)</h2>
+            <div id="deviceInfo" style="font-size: 12px; color: #64748b; margin-top: 4px;">Memeriksa aplikasi...</div>
+        </div>
+        <div class="timer" id="timerDisplay">Waktu: 45:00</div>
+    </div>
+
+    <!-- Status Verifikasi Aplikasi -->
+    <div id="statusBox" class="env-status status-unverified">
+        Memeriksa lingkungan peramban...
+    </div>
+
+    <!-- Kartu Soal Contoh -->
+    <div class="card" style="margin-top: 16px;">
+        <div class="badge" style="display: inline-block; margin-bottom: 12px;">Soal No. 1 dari 1</div>
+        <div class="question-title">
+            Manakah pernyataan berikut yang paling tepat mengenai arsitektur sistem ujian daring (CBT) dengan fitur Anti-Cheat?
+        </div>
+
+        <label class="option">
+            <input type="radio" name="q1" value="A">
+            <span>A. Aplikasi dapat mengunci jendela layar (Kiosk Mode) dan mendeteksi penekanan tombol Home/Recents.</span>
+        </label>
+        <label class="option">
+            <input type="radio" name="q1" value="B">
+            <span>B. Siswa bebas membuka tab Google Chrome saat ujian berlangsung.</span>
+        </label>
+        <label class="option">
+            <input type="radio" name="q1" value="C">
+            <span>C. Layar dapat direkam dan di-screenshot secara bebas tanpa perlindungan.</span>
+        </label>
+        <label class="option">
+            <input type="radio" name="q1" value="D">
+            <span>D. Audio sirine otomatis mati jika tombol volume ponsel di-mute.</span>
+        </label>
+    </div>
+
+    <!-- Tombol Kirim Jawaban -->
+    <div class="footer">
+        <button class="btn btn-submit" onclick="submitExam()">Kirim Jawaban &amp; Selesai Ujian</button>
+    </div>
+
+    <script>
+        // Inisialisasi Deteksi Antarmuka Android
+        window.addEventListener('DOMContentLoaded', () => {
+            const statusBox = document.getElementById('statusBox');
+            const deviceInfo = document.getElementById('deviceInfo');
+
+            if (window.AndroidExam) {
+                const version = window.AndroidExam.getAppVersion();
+                const battery = window.AndroidExam.getBatteryLevel();
+                statusBox.className = "env-status status-verified";
+                statusBox.innerHTML = `<strong>Tervalidasi:</strong> Dibuka lewat ${version} (Baterai: ${battery}%)`;
+                deviceInfo.innerText = `Mode Kiosk Aktif | Baterai Siswa: ${battery}%`;
+            } else {
+                statusBox.className = "env-status status-unverified";
+                statusBox.innerHTML = "<strong>Peringatan:</strong> Halaman ini dibuka di luar aplikasi resmi ExamGuard CBT!";
+                deviceInfo.innerText = "Mode Browser Biasa (Tidak Terkunci)";
+            }
+        });
+
+        // Deteksi jika jendela web diminimalkan atau tab disembunyikan
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (window.AndroidExam) {
+                    window.AndroidExam.triggerViolation("Siswa menyembunyikan halaman web ujian!");
+                }
+            }
+        });
+
+        // Fungsi saat Siswa Mengirim Jawaban
+        function submitExam() {
+            const selected = document.querySelector('input[name="q1"]:checked');
+            if (!selected) {
+                alert("Harap pilih salah satu jawaban terlebih dahulu!");
+                return;
+            }
+
+            if (confirm("Apakah Anda yakin ingin menyelesaikan ujian dan mengirim jawaban?")) {
+                if (window.AndroidExam) {
+                    // Beri tahu aplikasi Android bahwa ujian selesai secara sah
+                    // Ini akan melepas Kiosk Mode tanpa memicu alarm!
+                    window.AndroidExam.finishExam();
+                } else {
+                    alert("Jawaban terkirim! (Simulasi di browser biasa)");
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
