@@ -174,8 +174,80 @@
             color: #ffffff !important;
             box-shadow: 0 2px 8px rgba(5,150,105,0.3) !important;
         }
-        .exam-nav-btn-finish:hover {
+        .exam-nav-btn-finish:hover:not(.is-disabled) {
             background: #047857 !important;
+        }
+        .exam-nav-btn-finish.is-disabled {
+            background: #94a3b8 !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+        }
+
+        /* Tombol Selesai & Tutup Custom */
+        .exam-btn-finish-custom {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 12px !important;
+            border: none !important;
+            font-size: 13px !important;
+            font-weight: 800 !important;
+            color: #ffffff !important;
+            background: #059669 !important;
+            box-shadow: 0 2px 8px rgba(5,150,105,0.3) !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            box-sizing: border-box !important;
+            min-height: 44px !important;
+            padding: 11px 16px !important;
+        }
+        .exam-btn-finish-custom:hover:not(.is-disabled) {
+            background: #047857 !important;
+        }
+        .exam-btn-finish-custom.is-disabled {
+            background: #94a3b8 !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+        }
+
+        .exam-btn-sheet-close {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 12px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            color: #475569 !important;
+            background: #ffffff !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            box-sizing: border-box !important;
+            min-height: 44px !important;
+            padding: 11px 16px !important;
+        }
+        .exam-btn-sheet-close:hover {
+            background: #f8fafc !important;
+            border-color: #94a3b8 !important;
+        }
+
+        /* Zoom Control Buttons */
+        .exam-zoom-btn {
+            padding: 4px 8px !important;
+            border-radius: 8px !important;
+            border: none !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+            background: transparent;
+            color: #64748b;
+            transition: all 0.15s;
+        }
+        .exam-zoom-btn.is-active {
+            background: #ffffff !important;
+            color: #2563eb !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
         }
 
         /* Option Card Touch Optimization */
@@ -317,10 +389,26 @@
             z-index: 50 !important;
             background: rgba(15,23,42,0.65) !important;
             backdrop-filter: blur(4px) !important;
-            display: flex !important;
-            align-items: flex-end !important;
-            justify-content: center !important;
-            padding: 0 !important;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 0;
+        }
+        .exam-mobile-overlay[style*="display: none"],
+        .exam-confirm-modal-overlay[style*="display: none"],
+        [x-cloak] {
+            display: none !important;
+        }
+        .exam-confirm-modal-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 50 !important;
+            background: rgba(15,23,42,0.65) !important;
+            backdrop-filter: blur(4px) !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
         }
         .exam-mobile-sheet {
             background: #fff !important;
@@ -683,14 +771,14 @@
                 {{-- Zoom Font Switcher (Client-side, 0ms, Sembunyi otomatis di mobile kecil) --}}
                 <div class="exam-zoom-controls" style="display: flex; align-items: center; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; padding: 2px; gap: 1px;">
                     <button type="button" @click="zoomLevel = 'sm'"
-                        :style="zoomLevel === 'sm' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 11px; font-weight: 700; cursor: pointer;">A-</button>
+                        class="exam-zoom-btn" :class="zoomLevel === 'sm' ? 'is-active' : ''"
+                        style="font-size: 11px;">A-</button>
                     <button type="button" @click="zoomLevel = 'md'"
-                        :style="zoomLevel === 'md' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: 700; cursor: pointer;">A</button>
+                        class="exam-zoom-btn" :class="zoomLevel === 'md' ? 'is-active' : ''"
+                        style="font-size: 12px;">A</button>
                     <button type="button" @click="zoomLevel = 'lg'"
-                        :style="zoomLevel === 'lg' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer;">A+</button>
+                        class="exam-zoom-btn" :class="zoomLevel === 'lg' ? 'is-active' : ''"
+                        style="font-size: 13px;">A+</button>
                 </div>
 
                 {{-- Tombol Reload / Segarkan Halaman jika soal macet --}}
@@ -982,9 +1070,9 @@
                                 type="button"
                                 @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
                                 :disabled="answeredCount < totalSoals"
-                                :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : ''"
-                                :title="answeredCount < totalSoals ? 'Harap jawab seluruh ' + totalSoals + ' butir soal terlebih dahulu (' + belumCount + ' butir belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
                                 class="exam-nav-btn exam-nav-btn-finish"
+                                :class="answeredCount < totalSoals ? 'is-disabled' : ''"
+                                :title="answeredCount < totalSoals ? 'Harap jawab seluruh ' + totalSoals + ' butir soal terlebih dahulu (' + belumCount + ' butir belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
                             >
                                 <span>Selesai Ujian &#10003;</span>
                             </button>
@@ -1062,9 +1150,10 @@
                     type="button"
                     @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
                     :disabled="answeredCount < totalSoals"
-                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3);'"
+                    class="exam-btn-finish-custom"
+                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
                     :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
-                    style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; transition: all 0.15s; min-height: 44px;"
+                    style="width: 100%;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
                 </button>
@@ -1083,12 +1172,12 @@
     <div
         x-show="showDaftarSoalMobile"
         x-cloak
+        @click.self="showDaftarSoalMobile = false"
         class="exam-mobile-overlay"
-        style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;"
     >
-        <div class="exam-mobile-sheet" style="background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); padding: 20px 18px; max-height: 90vh; overflow-y: auto; max-width: 440px;">
+        <div class="exam-mobile-sheet">
             {{-- Mobile Pull Handle --}}
-            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 99px; margin: 0 auto 12px;"></div>
+            <div style="width: 40px; height: 4px; background: #cbd5e1; border-radius: 99px; margin: 0 auto 14px;"></div>
 
             <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; margin-bottom: 14px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -1097,7 +1186,12 @@
                         <span x-text="answeredCount"></span> / {{ $this->soals->count() }}
                     </span>
                 </div>
-                <button type="button" @click="showDaftarSoalMobile = false" style="background: none; border: none; font-size: 24px; font-weight: 700; color: #94a3b8; cursor: pointer; line-height: 1; padding: 4px;">&times;</button>
+                <button
+                    type="button"
+                    @click.stop="showDaftarSoalMobile = false"
+                    style="background: none; border: none; font-size: 28px; font-weight: 700; color: #94a3b8; cursor: pointer; line-height: 1; padding: 6px 12px; touch-action: manipulation;"
+                    title="Tutup"
+                >&times;</button>
             </div>
 
             {{-- Grid Nomor --}}
@@ -1113,7 +1207,6 @@
                             'is-answered': !isRagu({{ $s->id }}) && isAnswered({{ $s->id }}),
                             'is-unanswered': !isRagu({{ $s->id }}) && !isAnswered({{ $s->id }})
                         }"
-                        style="height: 44px !important;"
                     >
                         {{ $idx + 1 }}
                     </button>
@@ -1136,11 +1229,12 @@
                 </div>
             </div>
 
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 10px;">
                 <button
                     type="button"
-                    @click="showDaftarSoalMobile = false"
-                    style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
+                    @click.stop="showDaftarSoalMobile = false"
+                    class="exam-btn-sheet-close"
+                    style="flex: 1;"
                 >
                     Tutup
                 </button>
@@ -1148,9 +1242,10 @@
                     type="button"
                     @click="if (answeredCount >= totalSoals) { showDaftarSoalMobile = false; showConfirmSubmitModal = true; }"
                     :disabled="answeredCount < totalSoals"
-                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 10px rgba(5,150,105,0.3);'"
+                    class="exam-btn-finish-custom"
+                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
                     :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
-                    style="flex: 1.5; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; min-height: 44px; transition: all 0.15s;"
+                    style="flex: 1.5;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
                 </button>
@@ -1164,7 +1259,8 @@
     <div
         x-show="showConfirmSubmitModal"
         x-cloak
-        style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+        @click.self="showConfirmSubmitModal = false"
+        class="exam-confirm-modal-overlay"
     >
         <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); padding: 24px 20px; text-align: center;">
             <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
@@ -1198,11 +1294,12 @@
                 <strong>Catatan:</strong> Semua soal sudah dijawab, namun masih ada <strong x-text="raguCount + ' butir ragu-ragu'"></strong>.
             </div>
 
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 10px;">
                 <button
                     type="button"
                     @click="showConfirmSubmitModal = false"
-                    style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
+                    class="exam-btn-sheet-close"
+                    style="flex: 1;"
                 >
                     Cek Kembali
                 </button>
@@ -1210,8 +1307,9 @@
                     type="button"
                     @click="if (answeredCount >= totalSoals) submitFinal()"
                     :disabled="answeredCount < totalSoals"
-                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3);'"
-                    style="flex: 1.2; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; min-height: 44px; transition: all 0.15s;"
+                    class="exam-btn-finish-custom"
+                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
+                    style="flex: 1.2;"
                 >
                     Kirim Jawaban &#10003;
                 </button>
