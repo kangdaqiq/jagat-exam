@@ -56,7 +56,7 @@ class CreateUjian extends CreateRecord
         if ($record->status === 'ONGOING' && $record->token_ujian) {
             Notification::make()
                 ->title('Token Ujian Berhasil Dibuat!')
-                ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$record->token_ujian}**\n\nSiswa dapat langsung memasukkan token ini di portal ujian.")
+                ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$record->token_ujian}**\n\nToken aktif selama **10 menit**. Siswa dapat langsung memasukkan token ini di portal ujian.")
                 ->success()
                 ->persistent()
                 ->send();

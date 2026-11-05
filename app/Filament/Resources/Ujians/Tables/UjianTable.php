@@ -19,6 +19,7 @@ class UjianTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->poll('10s')
             ->columns([
                 TextColumn::make('exam_id')
                     ->label('Exam ID')
@@ -93,16 +94,35 @@ class UjianTable
                     ->sortable(),
 
                 TextColumn::make('token_ujian')
-                    ->label('TOKEN AKSES')
+                    ->label('TOKEN AKSES (10 MNT)')
                     ->badge()
-                    ->color('primary')
+                    ->color(fn (Ujian $record): string =>
+                        $record->status !== 'ONGOING'
+                            ? 'gray'
+                            : ($record->isTokenActive() ? 'success' : 'danger')
+                    )
                     ->weight('heavy')
-                    ->copyable()
+                    ->copyable(fn (Ujian $record): bool => $record->isTokenActive())
                     ->copyMessage('Token disalin!')
                     ->placeholder('-')
-                    ->formatStateUsing(fn (?string $state, Ujian $record): string =>
-                        $record->status === 'ONGOING' && $state ? $state : '-'
-                    )
+                    ->formatStateUsing(function (?string $state, Ujian $record): string {
+                        if ($record->status !== 'ONGOING' || empty($state)) {
+                            return '-';
+                        }
+                        if ($record->isTokenExpired()) {
+                            return "{$state} (EXP)";
+                        }
+                        return $state;
+                    })
+                    ->description(function (Ujian $record): ?string {
+                        if ($record->status !== 'ONGOING' || empty($record->token_ujian)) {
+                            return null;
+                        }
+                        if ($record->isTokenExpired()) {
+                            return 'Kedaluwarsa (10 mnt)';
+                        }
+                        return 'Sisa waktu: ' . $record->sisaWaktuTokenFormatted();
+                    })
                     ->extraAttributes(fn (?string $state, Ujian $record): array => [
                         'style' => $record->status === 'ONGOING'
                             ? 'font-family: monospace; font-size: 15px; font-weight: 800; letter-spacing: 0.15em;'
@@ -158,29 +178,43 @@ class UjianTable
 
                         Notification::make()
                             ->title('Ujian Berhasil Dimulai! Status: ONGOING')
-                            ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$token}**\n\nSiswa dapat memasukkan kode ini di portal ujian masing-masing ({$synced} siswa tersinkron).")
+                            ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$token}**\n\nToken berlaku selama **10 menit** ({$synced} siswa tersinkron). Bagikan kode ini ke siswa di kelas.")
                             ->success()
                             ->persistent()
                             ->send();
                     }),
 
-                // ACTION 2: REFRESH TOKEN
+                // ACTION 2: REFRESH TOKEN / GENERATE TOKEN BARU (Masa berlaku 10 menit)
                 Action::make('refresh_token')
-                    ->label('Ganti Token')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->color('warning')
+                    ->label(fn (Ujian $record): string =>
+                        $record->isTokenExpired() ? 'Generate Token Baru' : 'Ganti Token'
+                    )
+                    ->icon(fn (Ujian $record): Heroicon =>
+                        $record->isTokenExpired() ? Heroicon::OutlinedSparkles : Heroicon::OutlinedArrowPath
+                    )
+                    ->color(fn (Ujian $record): string =>
+                        $record->isTokenExpired() ? 'danger' : 'warning'
+                    )
                     ->requiresConfirmation()
-                    ->modalHeading('Perbarui Kode Token Ujian?')
-                    ->modalDescription('Apakah Anda yakin ingin mengganti kode token sesi ujian saat ini dengan kode baru?')
-                    ->modalSubmitActionLabel('Generate Token Baru')
+                    ->modalHeading(fn (Ujian $record): string =>
+                        $record->isTokenExpired()
+                            ? 'Generate Token Ujian Baru (Token Telah Kedaluwarsa)'
+                            : 'Perbarui Kode Token Ujian?'
+                    )
+                    ->modalDescription(fn (Ujian $record): string =>
+                        $record->isTokenExpired()
+                            ? 'Token ujian sebelumnya telah kedaluwarsa setelah 10 menit. Klik tombol di bawah untuk membuat token baru yang aktif selama 10 menit ke depan.'
+                            : 'Apakah Anda yakin ingin mengganti kode token sesi ujian saat ini dengan kode baru? Token baru akan aktif selama 10 menit ke depan.'
+                    )
+                    ->modalSubmitActionLabel('Rilis Token Sekarang')
                     ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
                     ->action(function (Ujian $record) {
                         $newToken = $record->refreshToken();
 
                         Notification::make()
-                            ->title('Token Ujian Berhasil Diperbarui!')
-                            ->body("TOKEN BARU:\n\n# **{$newToken}**")
-                            ->warning()
+                            ->title('Token Ujian Berhasil Digenerate!')
+                            ->body("TOKEN BARU (BERLAKU 10 MENIT):\n\n# **{$newToken}**\n\nToken aktif selama 10 menit ke depan. Bagikan kode ini kepada siswa di ruangan ujian.")
+                            ->success()
                             ->persistent()
                             ->send();
                     }),

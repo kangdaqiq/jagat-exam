@@ -38,6 +38,8 @@ class Ujian extends Model
     public const TIPE_TENGAH_SEMESTER = 'asesmen_tengah_semester';
     public const TIPE_AKHIR_SEMESTER = 'asesmen_akhir_semester';
 
+    public const TOKEN_EXPIRY_MINUTES = 10;
+
     public static function getTipeOptions(?User $user = null): array
     {
         $user = $user ?? auth()->user();
@@ -155,6 +157,60 @@ class Ujian extends Model
         ]);
 
         return $token;
+    }
+
+    /**
+     * Memeriksa apakah token ujian saat ini sudah kedaluwarsa (berlaku 10 menit)
+     */
+    public function isTokenExpired(): bool
+    {
+        if ($this->status !== 'ONGOING') {
+            return true;
+        }
+
+        if (empty($this->token_ujian) || ! $this->token_generated_at) {
+            return true;
+        }
+
+        return now()->greaterThan($this->token_generated_at->copy()->addMinutes(self::TOKEN_EXPIRY_MINUTES));
+    }
+
+    /**
+     * Memeriksa apakah token ujian saat ini masih aktif dan dapat digunakan
+     */
+    public function isTokenActive(): bool
+    {
+        return $this->status === 'ONGOING' && ! empty($this->token_ujian) && ! $this->isTokenExpired();
+    }
+
+    /**
+     * Hitung sisa detik masa berlaku token sebelum kedaluwarsa (maks 10 menit / 600 detik)
+     */
+    public function sisaDetikToken(): int
+    {
+        if (! $this->isTokenActive() || ! $this->token_generated_at) {
+            return 0;
+        }
+
+        $expiredAt = $this->token_generated_at->copy()->addMinutes(self::TOKEN_EXPIRY_MINUTES);
+
+        return max(0, (int) now()->diffInSeconds($expiredAt, false));
+    }
+
+    /**
+     * Format sisa waktu token (contoh: "08:45" atau "Kedaluwarsa")
+     */
+    public function sisaWaktuTokenFormatted(): string
+    {
+        $detik = $this->sisaDetikToken();
+        if ($detik <= 0) {
+            return 'Kedaluwarsa';
+        }
+
+        $m = floor($detik / 60);
+        $s = $detik % 60;
+
+        return sprintf('%02d:%02d', $m, $s);
     }
 
     /**

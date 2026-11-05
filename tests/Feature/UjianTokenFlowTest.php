@@ -383,5 +383,58 @@ class UjianTokenFlowTest extends TestCase
         $resSiswa = $this->get('/guru/hasil-ujians');
         $resSiswa->assertStatus(403);
     }
+
+    public function test_token_expires_after_10_minutes_and_must_be_regenerated(): void
+    {
+        // Setup ujian ONGOING
+        $ujian = Ujian::create([
+            'nama_ujian' => 'Ulangan Harian Timer Token',
+            'tipe_ujian' => Ujian::TIPE_ASESMEN_HARIAN,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'durasi_menit' => 45,
+            'status' => 'ONGOING',
+            'token_ujian' => 'EXPR99',
+            'token_generated_at' => now()->subMinutes(11), // Sudah lewat 11 menit (exp)
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+        $ujian->kelas()->attach($this->kelas->id);
+        $ujian->syncPesertaFromKelas();
+
+        // 1. Verifikasi model mendeteksi token telah kedaluwarsa
+        $this->assertTrue($ujian->isTokenExpired());
+        $this->assertFalse($ujian->isTokenActive());
+        $this->assertEquals(0, $ujian->sisaDetikToken());
+
+        // 2. Siswa mencoba memasukkan token yang sudah kedaluwarsa
+        Livewire::actingAs($this->siswaUser)
+            ->test(PortalUjian::class)
+            ->set('token_input', 'EXPR99')
+            ->call('submitToken')
+            ->assertHasErrors(['token_input'])
+            ->assertSee('KEDALUWARSA');
+
+        // 3. Guru me-refresh / re-generate token baru
+        $newToken = $ujian->refreshToken();
+        $ujian->refresh();
+
+        $this->assertNotEquals('EXPR99', $newToken);
+        $this->assertFalse($ujian->isTokenExpired());
+        $this->assertTrue($ujian->isTokenActive());
+        $this->assertGreaterThan(500, $ujian->sisaDetikToken());
+
+        // 4. Siswa memasukkan token baru -> berhasil masuk ujian
+        $res = Livewire::actingAs($this->siswaUser)
+            ->test(PortalUjian::class)
+            ->set('token_input', $newToken)
+            ->call('submitToken')
+            ->assertHasNoErrors();
+
+        $sesi = \App\Models\UjianSesi::where('ujian_id', $ujian->id)->where('user_id', $this->siswaUser->id)->first();
+        $this->assertNotNull($sesi);
+        $res->assertRedirect(route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]));
+    }
 }
 

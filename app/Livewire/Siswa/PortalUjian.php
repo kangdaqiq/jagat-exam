@@ -48,7 +48,13 @@ class PortalUjian extends Component
             ->first();
 
         if (!$ujian) {
-            $this->addError('token_input', 'Kode token salah, sudah kedaluwarsa, atau ujian belum dibuka oleh Guru Pengawas.');
+            $this->addError('token_input', 'Kode token salah, sudah diganti, atau ujian belum dibuka oleh Guru Pengawas.');
+            return;
+        }
+
+        // Cek kedaluwarsa token (masa berlaku 10 menit)
+        if ($ujian->isTokenExpired()) {
+            $this->addError('token_input', 'Kode token ujian telah KEDALUWARSA (masa berlaku 10 menit telah habis). Silakan minta Guru Pengawas / Proktor untuk generate token baru.');
             return;
         }
 
