@@ -500,7 +500,7 @@ class ExamRunner extends Component
             $soal = $jawaban->soal;
             if (!$soal) continue;
 
-            $bobot = (float) $soal->bobot_nilai;
+            $bobot = $this->sesi ? $this->sesi->getEffectiveBobotForJawaban($jawaban) : (float) $soal->bobot_nilai;
             $isBenar = false;
             $skor = 0.0;
 
@@ -548,6 +548,24 @@ class ExamRunner extends Component
                         $isBenar = true;
                         $skor = $bobot;
                     }
+                }
+            } elseif ($soal->tipe_soal === 'menjodohkan') {
+                $opsiList = $soal->opsiJawabans->values();
+                $siswaMatching = is_array($jawaban->jawaban_pilihan) ? $jawaban->jawaban_pilihan : [];
+                $totalPasangan = $opsiList->count();
+                $pasanganBenar = 0;
+
+                foreach ($opsiList as $idx => $opt) {
+                    $kunciKanan = trim($opt->pasangan_matching ?? '');
+                    $jawabanKanan = trim($siswaMatching[$idx] ?? '');
+                    if (filled($kunciKanan) && $kunciKanan === $jawabanKanan) {
+                        $pasanganBenar++;
+                    }
+                }
+
+                if ($totalPasangan > 0 && $pasanganBenar === $totalPasangan) {
+                    $isBenar = true;
+                    $skor = $bobot;
                 }
             } elseif ($soal->tipe_soal === 'isian') {
                 $kunciIsian = strtolower(trim($soal->kunci_isian ?? ''));

@@ -327,7 +327,7 @@
                                     @endif
 
                                     <span class="text-xs text-gray-400">
-                                        Bobot: {{ (float) ($soal?->bobot_nilai ?? 1) }} Poin
+                                        Bobot: {{ (float) ($sesi ? $sesi->getEffectiveBobotForJawaban($jwb) : ($soal?->bobot_nilai ?? 1)) }} Poin
                                     </span>
                                 </div>
                             </div>
@@ -427,15 +427,18 @@
 
                                         {{-- Input Koreksi Nilai Essay oleh Guru --}}
                                         <div class="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
+                                            @php
+                                                $maxBobotEssay = $sesi ? $sesi->getEffectiveBobotForJawaban($jwb) : (float) ($soal->bobot_nilai ?? 10);
+                                            @endphp
                                             <span class="font-bold text-gray-700 dark:text-gray-300">
-                                                Beri Nilai Essay (Maks: {{ (float) $soal->bobot_nilai }} Poin):
+                                                Beri Nilai Essay (Maks: {{ (float) $maxBobotEssay }} Poin):
                                             </span>
                                             <div class="flex items-center gap-2" x-data="{ skor: '{{ (float) $jwb->skor_didapat }}' }">
                                                 <input
                                                     type="number"
-                                                    step="0.5"
+                                                    step="0.25"
                                                     min="0"
-                                                    max="{{ (float) $soal->bobot_nilai }}"
+                                                    max="{{ (float) $maxBobotEssay }}"
                                                     x-model="skor"
                                                     class="w-20 px-2 py-1 text-center font-bold text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"
                                                 />

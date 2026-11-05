@@ -108,7 +108,7 @@ class AiQuestionService
             throw new Exception("Teks sumber soal masih kosong.");
         }
 
-        $defaultBobot = (float) ($params['bobot_nilai'] ?? 2.0);
+        $defaultBobot = isset($params['default_bobot']) ? (float) $params['default_bobot'] : (isset($params['bobot_nilai']) ? (float) $params['bobot_nilai'] : null);
         $provider = $params['provider'] ?? config('ai.provider', 'gemini');
         $apiKey = $params['api_key'] ?? ($provider === 'gemini' ? config('ai.gemini.api_key') : config('ai.openai.api_key'));
 
@@ -153,7 +153,7 @@ class AiQuestionService
     /**
      * Fallback parser lokal berbasis pemrosesan teks cerdas & regex jika AI offline atau testing
      */
-    public function fallbackLocalParse(string $rawText, float $defaultBobot = 2.0): array
+    public function fallbackLocalParse(string $rawText, ?float $defaultBobot = null): array
     {
         // 1. Normalisasi Markdown, Karakter Khusus & HTML Entities
         $text = html_entity_decode($rawText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -365,13 +365,47 @@ class AiQuestionService
 
                 $allSoals[] = [
                     'tipe_soal' => $tipe,
-                    'bobot_nilai' => $defaultBobot,
+                    'bobot_nilai' => $defaultBobot ?? 2.0,
                     'pertanyaan' => $pertanyaanText,
                     'opsi_jawabans' => $opsiJawabans,
                     'kunci_isian' => ($tipe === 'isian') ? ($kunci ?? '') : '',
                     'rubrik_essay' => ($tipe === 'essay') ? ($pembahasan ?: 'Pedoman penilaian essay...') : '',
                     'pembahasan' => $pembahasan,
                 ];
+            }
+        }
+
+        // Seimbangkan bobot_nilai agar total 100 poin (Objektif : Subjektif = 75 : 25 atau 100%) jika tidak ada bobot kustom
+        if ($defaultBobot === null) {
+            $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
+            $objIndices = [];
+            $subIndices = [];
+            foreach ($allSoals as $idx => $f) {
+                if (in_array($f['tipe_soal'], $objTypes)) {
+                    $objIndices[] = $idx;
+                } else {
+                    $subIndices[] = $idx;
+                }
+            }
+
+            $hasObj = !empty($objIndices);
+            $hasSub = !empty($subIndices);
+
+            $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
+            $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
+
+            if ($hasObj) {
+                $bobotObj = round($targetObj / count($objIndices), 2);
+                foreach ($objIndices as $idx) {
+                    $allSoals[$idx]['bobot_nilai'] = $bobotObj;
+                }
+            }
+
+            if ($hasSub) {
+                $bobotSub = round($targetSub / count($subIndices), 2);
+                foreach ($subIndices as $idx) {
+                    $allSoals[$idx]['bobot_nilai'] = $bobotSub;
+                }
             }
         }
 
@@ -729,6 +763,40 @@ PROMPT;
                 'rubrik_essay' => $item['rubrik_essay'] ?? '',
                 'pembahasan' => $item['pembahasan'] ?? '',
             ];
+        }
+
+        // Seimbangkan bobot_nilai agar total 100 poin (Objektif : Subjektif = 75 : 25 atau 100%) jika tidak ada bobot kustom
+        if (empty($params['default_bobot'])) {
+            $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
+            $objIndices = [];
+            $subIndices = [];
+            foreach ($formatted as $idx => $f) {
+                if (in_array($f['tipe_soal'], $objTypes)) {
+                    $objIndices[] = $idx;
+                } else {
+                    $subIndices[] = $idx;
+                }
+            }
+
+            $hasObj = !empty($objIndices);
+            $hasSub = !empty($subIndices);
+
+            $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
+            $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
+
+            if ($hasObj) {
+                $bobotObj = round($targetObj / count($objIndices), 2);
+                foreach ($objIndices as $idx) {
+                    $formatted[$idx]['bobot_nilai'] = $bobotObj;
+                }
+            }
+
+            if ($hasSub) {
+                $bobotSub = round($targetSub / count($subIndices), 2);
+                foreach ($subIndices as $idx) {
+                    $formatted[$idx]['bobot_nilai'] = $bobotSub;
+                }
+            }
         }
 
         return $formatted;

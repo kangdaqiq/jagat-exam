@@ -99,6 +99,48 @@ class BankSoal extends Model
         return $this->hasMany(UjianSesi::class, 'bank_soal_id');
     }
 
+    /**
+     * Otomatis membagi bobot soal ke total 100 poin:
+     * - Jika ada objektif (PG/PGK/BS/Matching) dan subjektif (Isian/Essay): Rasio 75 : 25
+     * - Jika hanya objektif: 100%
+     * - Jika hanya subjektif: 100%
+     */
+    public function autoDistributeBobot(): void
+    {
+        $soals = $this->soals()->get();
+        if ($soals->isEmpty()) return;
+
+        $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
+        $subTypes = ['isian', 'essay'];
+
+        $objSoals = $soals->filter(fn($s) => in_array($s->tipe_soal, $objTypes));
+        $subSoals = $soals->filter(fn($s) => in_array($s->tipe_soal, $subTypes));
+
+        $hasObj = $objSoals->isNotEmpty();
+        $hasSub = $subSoals->isNotEmpty();
+
+        $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
+        $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
+
+        if ($hasObj) {
+            $countObj = $objSoals->count();
+            $bobotPerObj = round($targetObj / $countObj, 2);
+            foreach ($objSoals as $s) {
+                $s->update(['bobot_nilai' => $bobotPerObj]);
+            }
+        }
+
+        if ($hasSub) {
+            $countSub = $subSoals->count();
+            $bobotPerSub = round($targetSub / $countSub, 2);
+            foreach ($subSoals as $s) {
+                $s->update(['bobot_nilai' => $bobotPerSub]);
+            }
+        }
+
+        $this->update(['total_bobot' => 100]);
+    }
+
 
     /**
      * Scope untuk membatasi bank soal berdasarkan pengguna (Guru vs Admin)

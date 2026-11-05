@@ -745,8 +745,13 @@ class EditBankSoal extends Page
                 $this->selectSoal($firstNewId);
             }
 
+            if ($this->import_default_bobot == 2.0) {
+                // Otomatis sesuaikan bobot seluruh bank soal ke skala 100 poin (rasio 75:25)
+                $this->record->autoDistributeBobot();
+            }
+
             Notification::make()
-                ->title(count($this->parsed_soals_preview) . " butir soal baru berhasil ditambahkan ke Bank Soal!")
+                ->title(count($this->parsed_soals_preview) . " butir soal baru berhasil ditambahkan!")
                 ->success()
                 ->send();
         }
@@ -761,6 +766,19 @@ class EditBankSoal extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('sesuaikanBobot')
+                ->label('Sesuaikan Bobot (100 Poin)')
+                ->icon(Heroicon::OutlinedCalculator)
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading('Sesuaikan Bobot Soal Menjadi 100 Poin?')
+                ->modalDescription('Sistem akan membagi bobot seluruh butir soal menjadi total 100 poin dengan rasio Objektif : Essay/Isian = 75 : 25 (atau 100% jika hanya ada satu jenis soal).')
+                ->action(function () {
+                    $this->record->autoDistributeBobot();
+                    $this->loadRecord();
+                    Notification::make()->title('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (75:25)')->success()->send();
+                }),
+
             Action::make('pengaturanPaket')
                 ->label('Pengaturan Paket')
                 ->icon(Heroicon::OutlinedCog6Tooth)

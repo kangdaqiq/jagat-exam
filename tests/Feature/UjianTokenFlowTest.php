@@ -101,6 +101,19 @@ class UjianTokenFlowTest extends TestCase
             ['label' => 'A', 'teks_opsi' => '$x = \pm 2$', 'is_jawaban_benar' => true, 'bobot_persen' => 100],
             ['label' => 'B', 'teks_opsi' => '$x = 0$', 'is_jawaban_benar' => false, 'bobot_persen' => 0],
         ]);
+
+        $soal2 = Soal::create([
+            'bank_soal_id' => $this->bankSoal->id,
+            'nomor_urut' => 2,
+            'tipe_soal' => 'pilihan_ganda',
+            'pertanyaan' => 'Nilai dari $2 + 2$ adalah?',
+            'bobot_nilai' => 50,
+        ]);
+
+        $soal2->opsiJawabans()->createMany([
+            ['label' => 'A', 'teks_opsi' => '4', 'is_jawaban_benar' => true, 'bobot_persen' => 100],
+            ['label' => 'B', 'teks_opsi' => '5', 'is_jawaban_benar' => false, 'bobot_persen' => 0],
+        ]);
     }
 
     /**

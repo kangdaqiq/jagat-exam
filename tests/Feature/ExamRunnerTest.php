@@ -112,9 +112,9 @@ class ExamRunnerTest extends TestCase
             ->assertSet('is_submitted', true)
             ->assertDispatched('ujian-selesai-resmi');
 
-        // Check scores: Option B is correct (5.0), Isian "nusantara" matches (5.0) -> Total 10.0
+        // Check scores: Option B is correct (75.0), Isian "nusantara" matches (25.0) -> Total 100.0 (75:25)
         $sesi = $this->bankSoal->fresh()->sesis()->first();
-        $this->assertEquals(10.0, (float) $sesi->skor_total);
+        $this->assertEquals(100.0, (float) $sesi->skor_total);
         $this->assertEquals('selesai', $sesi->status);
     }
 
@@ -289,6 +289,105 @@ class ExamRunnerTest extends TestCase
         $bsOpsi = $soals->first()->opsiJawabans;
         $this->assertEquals('Benar', $bsOpsi[0]->teks_opsi);
         $this->assertEquals('Salah', $bsOpsi[1]->teks_opsi);
+    }
+
+    public function test_scoring_ratio_75_to_25_and_pure_100_percent(): void
+    {
+        // 1. Bank Soal Campuran: 20 PG + 5 Essay
+        $bankCampuran = BankSoal::create([
+            'judul' => 'Ujian Campuran 20 PG 5 Essay',
+            'kode_bank' => 'BS-CAMPUR-25',
+            'mapel_id' => $this->bankSoal->mapel_id,
+            'user_id' => $this->admin->id,
+            'tingkat' => '10',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+            'is_active' => true,
+        ]);
+
+        for ($i = 1; $i <= 20; $i++) {
+            $soal = $bankCampuran->soals()->create([
+                'nomor_urut' => $i,
+                'tipe_soal' => 'pilihan_ganda',
+                'pertanyaan' => "Soal PG {$i}",
+            ]);
+            $soal->opsiJawabans()->createMany([
+                ['label' => 'A', 'teks_opsi' => 'Benar', 'is_jawaban_benar' => true, 'nomor_urut' => 1],
+                ['label' => 'B', 'teks_opsi' => 'Salah', 'is_jawaban_benar' => false, 'nomor_urut' => 2],
+            ]);
+        }
+
+        for ($i = 21; $i <= 25; $i++) {
+            $bankCampuran->soals()->create([
+                'nomor_urut' => $i,
+                'tipe_soal' => 'essay',
+                'pertanyaan' => "Soal Essay {$i}",
+            ]);
+        }
+
+        // Test autoDistributeBobot() pada model
+        $bankCampuran->autoDistributeBobot();
+        $this->assertEquals(100.0, (float) $bankCampuran->fresh()->total_bobot);
+        $this->assertEquals(3.75, (float) $bankCampuran->soals()->first()->bobot_nilai); // 75 / 20 = 3.75
+        $this->assertEquals(5.00, (float) $bankCampuran->soals()->where('tipe_soal', 'essay')->first()->bobot_nilai); // 25 / 5 = 5.00
+
+        // Siswa mengerjakan: Menjawab 10 PG benar dari 20 PG
+        $runner = Livewire::test(ExamRunner::class, ['bankSoal' => $bankCampuran]);
+        $runner->set('nama_peserta', 'Budi 75:25')->call('startExam');
+
+        $soals = $runner->get('soals');
+        for ($i = 0; $i < 10; $i++) {
+            $runner->call('pilihJawabanOpsi', 'A', $soals[$i]->id); // 10 soal benar
+        }
+
+        $runner->call('submitUjianFinal');
+
+        // Verifikasi perolehan skor objektif: 10 * 3.75 = 37.5 poin
+        $sesi = $bankCampuran->sesis()->first();
+        $this->assertEquals(37.5, (float) $sesi->skor_total);
+        $this->assertEquals(75.0, $sesi->getTargetBobotObjektif());
+        $this->assertEquals(25.0, $sesi->getTargetBobotSubjektif());
+
+        // 2. Bank Soal Murni Objektif (10 PG, 0 Essay) -> Skala 100%
+        $bankMurniPG = BankSoal::create([
+            'judul' => 'Ujian Murni 10 PG',
+            'kode_bank' => 'BS-MURNI-10',
+            'mapel_id' => $this->bankSoal->mapel_id,
+            'user_id' => $this->admin->id,
+            'tingkat' => '10',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+            'is_active' => true,
+        ]);
+
+        for ($i = 1; $i <= 10; $i++) {
+            $s = $bankMurniPG->soals()->create([
+                'nomor_urut' => $i,
+                'tipe_soal' => 'pilihan_ganda',
+                'pertanyaan' => "Soal {$i}",
+            ]);
+            $s->opsiJawabans()->createMany([
+                ['label' => 'A', 'teks_opsi' => 'Benar', 'is_jawaban_benar' => true, 'nomor_urut' => 1],
+                ['label' => 'B', 'teks_opsi' => 'Salah', 'is_jawaban_benar' => false, 'nomor_urut' => 2],
+            ]);
+        }
+
+        $bankMurniPG->autoDistributeBobot();
+        $this->assertEquals(10.0, (float) $bankMurniPG->soals()->first()->bobot_nilai); // 100 / 10 = 10.0
+
+        $runnerMurni = Livewire::test(ExamRunner::class, ['bankSoal' => $bankMurniPG]);
+        $runnerMurni->set('nama_peserta', 'Budi 100%')->call('startExam');
+        $soalsMurni = $runnerMurni->get('soals');
+        for ($i = 0; $i < 8; $i++) {
+            $runnerMurni->call('pilihJawabanOpsi', 'A', $soalsMurni[$i]->id); // 8 benar dari 10
+        }
+        $runnerMurni->call('submitUjianFinal');
+
+        // Verifikasi perolehan skor murni 100%: 8 * 10 = 80.0 poin
+        $sesiMurni = $bankMurniPG->sesis()->first();
+        $this->assertEquals(80.0, (float) $sesiMurni->skor_total);
+        $this->assertEquals(100.0, $sesiMurni->getTargetBobotObjektif());
+        $this->assertEquals(0.0, $sesiMurni->getTargetBobotSubjektif());
     }
 }
 

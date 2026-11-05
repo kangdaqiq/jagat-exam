@@ -92,7 +92,8 @@ class ViewHasilUjian extends Page
         $jawaban = UjianJawaban::with('soal', 'sesi')->find($jawabanId);
         if (!$jawaban) return;
 
-        $maxBobot = (float) ($jawaban->soal?->bobot_nilai ?? 10);
+        $sesi = $jawaban->sesi;
+        $maxBobot = $sesi ? $sesi->getEffectiveBobotForJawaban($jawaban) : (float) ($jawaban->soal?->bobot_nilai ?? 10);
         $finalSkor = max(0, min($maxBobot, $skor));
 
         $jawaban->update([
@@ -101,7 +102,6 @@ class ViewHasilUjian extends Page
         ]);
 
         // Hitung ulang total skor di sesi dan di tabel peserta
-        $sesi = $jawaban->sesi;
         if ($sesi) {
             $totalSkorBaru = (float) $sesi->jawabans()->sum('skor_didapat');
             $sesi->update(['skor_total' => $totalSkorBaru]);
