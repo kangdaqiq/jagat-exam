@@ -60,6 +60,19 @@
 
                 <button
                     type="button"
+                    wire:click="openImportTextModal('batch')"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg text-white shadow-sm transition hover:opacity-95"
+                    style="background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff;"
+                    title="Tambah / Import soal dari hasil copas teks AI Chatbot (ChatGPT, Claude, DeepSeek, dsb)"
+                >
+                    <svg width="15" height="15" class="w-4 h-4 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    <span>Copas Teks AI</span>
+                </button>
+
+                <button
+                    type="button"
                     wire:click="openAiModal('current')"
 
                     class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg text-white shadow-sm transition hover:opacity-95"
@@ -98,19 +111,32 @@
             <aside class="w-full lg:w-80 xl:w-96 shrink-0 flex flex-col bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden sticky top-4">
                 {{-- Header Sidebar: Tombol Tambah Soal & Search --}}
                 <div class="p-3 border-b border-gray-200 dark:border-gray-800 space-y-2.5 bg-gray-50/70 dark:bg-gray-900/80">
-                    <div class="grid grid-cols-5 gap-1.5">
+                    <div class="grid grid-cols-6 gap-1.5">
                         <button
                             type="button"
                             wire:click="tambahSoal"
                             wire:loading.attr="disabled"
-                            class="col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                            class="col-span-2 inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
                             style="background-color: #2563eb; color: #ffffff;"
                             title="Tambah 1 butir soal manual"
                         >
-                            <svg width="14" height="14" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg width="13" height="13" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
                             </svg>
                             <span>+ Tambah</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="openImportTextModal('batch')"
+                            class="col-span-2 inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                            style="background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff;"
+                            title="Import & bedah soal dari copas teks AI chatbot (ChatGPT, dll)"
+                        >
+                            <svg width="13" height="13" class="w-3.5 h-3.5 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span>Copas Teks</span>
                         </button>
 
                         <button
@@ -120,7 +146,7 @@
                             style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff;"
                             title="Generate beberapa butir soal sekaligus dengan AI Agent"
                         >
-                            <svg width="14" height="14" class="w-3.5 h-3.5 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg width="13" height="13" class="w-3.5 h-3.5 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                             <span>AI Batch</span>
@@ -1725,6 +1751,353 @@
                             Sedang Memproses AI Agent...
                         </span>
                     </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- ===================================================================== --}}
+    {{-- MODAL DIALOG: IMPORT / TAMBAH SOAL DARI TEKS (AI CHATBOT)             --}}
+    {{-- ===================================================================== --}}
+    @if($showImportTextModal)
+        <div
+            class="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+            x-transition.opacity
+            @keydown.escape.window="$wire.closeImportTextModal()"
+        >
+            <div
+                class="relative w-full max-w-3xl bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
+            >
+                {{-- Modal Header --}}
+                <div class="p-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between"
+                     style="background: linear-gradient(135deg, rgba(5, 150, 105, 0.08) 0%, rgba(13, 148, 136, 0.08) 100%);">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                             style="background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff;">
+                            <svg width="22" height="22" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                Tambah Soal dari Teks (AI Chatbot)
+                                <span class="px-2 py-0.5 text-[10px] uppercase font-extrabold tracking-wider rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                    AI Smart Parser
+                                </span>
+                            </h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Copas teks soal dari ChatGPT, Claude, DeepSeek, atau dokumen teks — AI akan otomatis membedah nomor, pertanyaan, opsi, kunci, dan rumus!
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        wire:click="closeImportTextModal"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg"
+                    >
+                        <svg width="20" height="20" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Modal Body --}}
+                <div class="p-6 space-y-4 max-h-[calc(85vh-140px)] overflow-y-auto">
+                    @if(!$has_parsed)
+                        {{-- STEP 1: FORM INPUT TEKS MENTAH --}}
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wider">
+                                Pilih Mode Penyimpanan:
+                            </label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="cursor-pointer p-3 rounded-xl border transition flex items-start gap-2.5 {{ $import_mode === 'batch' ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 ring-1 ring-emerald-500' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/40 hover:bg-gray-50' }}">
+                                    <input type="radio" wire:model.live="import_mode" value="batch" class="mt-0.5 text-emerald-600 focus:ring-emerald-500" />
+                                    <div>
+                                        <span class="block text-xs font-bold text-gray-900 dark:text-white">
+                                            Tambah sebagai Soal Baru (Batch)
+                                        </span>
+                                        <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                            Menambahkan seluruh butir soal yang ditemukan ke daftar Bank Soal.
+                                        </span>
+                                    </div>
+                                </label>
+
+                                <label class="cursor-pointer p-3 rounded-xl border transition flex items-start gap-2.5 {{ $import_mode === 'current' ? 'border-primary-500 bg-primary-50/60 dark:bg-primary-950/30 ring-1 ring-primary-500' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/40 hover:bg-gray-50' }}">
+                                    <input type="radio" wire:model.live="import_mode" value="current" class="mt-0.5 text-primary-600 focus:ring-primary-500" />
+                                    <div>
+                                        <span class="block text-xs font-bold text-gray-900 dark:text-white">
+                                            Timpa Soal Aktif (No. {{ $nomor_urut }})
+                                        </span>
+                                        <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                            Gunakan butir soal pertama untuk mengisi formulir soal yang sedang diedit.
+                                        </span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {{-- Textarea Copas Teks --}}
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                    Tempelkan Teks Soal di Sini: <span class="text-danger-500">*</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    wire:click="loadSampleText"
+                                    class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                                >
+                                    <span>Contoh Format Chatbot</span>
+                                </button>
+                            </div>
+
+                            <textarea
+                                wire:model="raw_text_input"
+                                rows="8"
+                                placeholder="Contoh format teks hasil copas ChatGPT:&#10;&#10;1. Berapakah nilai 2 + 2?&#10;A. 3&#10;B. 4&#10;C. 5&#10;D. 6&#10;Kunci: B&#10;Pembahasan: 2 + 2 = 4.&#10;&#10;2. Organel sel penghasil energi...&#10;A. Lisosom&#10;B. Ribosom&#10;C. Mitokondria&#10;D. Vakuola&#10;Kunci: C"
+                                class="w-full text-xs font-mono rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 p-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                            ></textarea>
+                            @error('raw_text_input')
+                                <p class="text-xs text-danger-500 mt-1">{{ $message }}</p>
+                            @enderror
+                            <div class="mt-1 flex items-center justify-between text-[11px] text-gray-500">
+                                <span>Format fleksibel: Mendukung Pilihan Ganda (A-E), Benar/Salah, Essay, Kunci &amp; Pembahasan, serta rumus KaTeX ($).</span>
+                            </div>
+                        </div>
+
+                        {{-- Pengaturan Bobot & Model AI --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Bobot Nilai Default per Butir
+                                </label>
+                                <div class="flex items-center">
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0.1"
+                                        wire:model="import_default_bobot"
+                                        class="w-full text-xs font-bold rounded-l-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 py-2 px-3 focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                    <span class="inline-flex items-center px-3 py-2 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                                        Poin
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Model AI Parser
+                                </label>
+                                <select
+                                    wire:model="ai_model"
+                                    class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-emerald-500"
+                                >
+                                    <option value="gemini-3.5-flash">⚡ Gemini 3.5 Flash (Cepat &amp; Presisi)</option>
+                                    <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)</option>
+                                    <option value="gemini-3.5-pro">🧠 Gemini 3.5 Pro (Teks Kompleks &amp; LaTeX)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {{-- API Key Accordion --}}
+                        <div x-data="{ showKeyConfig: {{ empty(config('ai.gemini.api_key')) ? 'true' : 'false' }} }" class="p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full {{ filled(config('ai.gemini.api_key')) || filled($ai_api_key) ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse' }}"></span>
+                                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                        Status API Key Gemini:
+                                        @if(filled(config('ai.gemini.api_key')) || filled($ai_api_key))
+                                            <span class="text-emerald-600 font-bold">Siap Digunakan</span>
+                                        @else
+                                            <span class="text-amber-600 font-bold">Belum Diisi (Gunakan Key Sendiri / Fallback Regex)</span>
+                                        @endif
+                                    </span>
+                                </div>
+                                <button type="button" @click="showKeyConfig = !showKeyConfig" class="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
+                                    <span x-text="showKeyConfig ? 'Sembunyikan' : 'Ubah / Masukkan Key'"></span>
+                                </button>
+                            </div>
+
+                            <div x-show="showKeyConfig" x-cloak class="mt-2.5 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <input
+                                    type="password"
+                                    wire:model="ai_api_key"
+                                    placeholder="Masukkan Google Gemini API Key (AIzaSy...)"
+                                    class="w-full text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-3 focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <label class="flex items-center gap-1.5 cursor-pointer text-gray-600 dark:text-gray-400">
+                                        <input type="checkbox" wire:model="ai_simpan_api_key" class="rounded text-emerald-600" />
+                                        <span>Simpan ke file .env</span>
+                                    </label>
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:underline font-medium">
+                                        Dapatkan API Key Gratis &nearr;
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                    @else
+                        {{-- STEP 2: PRATINJAU HASIL PARSING AI SEBELUM DISIMPAN --}}
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                                <div class="flex items-center gap-2">
+                                    <svg width="20" height="20" class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <div>
+                                        <span class="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                                            Ditemukan {{ count($parsed_soals_preview) }} Butir Soal Terstruktur!
+                                        </span>
+                                        <p class="text-[11px] text-emerald-700 dark:text-emerald-400">
+                                            Periksa pratinjau butir soal di bawah ini. Anda dapat menghapus butir yang tidak diinginkan sebelum menyimpan.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    wire:click="resetImportTextPreview"
+                                    class="px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg transition"
+                                >
+                                    &larr; Ubah Teks
+                                </button>
+                            </div>
+
+                            <div class="space-y-3">
+                                @foreach($parsed_soals_preview as $idx => $item)
+                                    <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/60 shadow-sm relative space-y-2.5">
+                                        {{-- Header Butir --}}
+                                        <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/60 pb-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-black text-xs flex items-center justify-center">
+                                                    {{ $idx + 1 }}
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                    {{ str_replace('_', ' ', $item['tipe_soal'] ?? 'pilihan_ganda') }}
+                                                </span>
+                                                <span class="text-xs text-gray-400">
+                                                    Bobot: <strong class="text-gray-700 dark:text-gray-300">{{ $item['bobot_nilai'] }} Poin</strong>
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                wire:click="hapusParsedItem({{ $idx }})"
+                                                class="text-danger-500 hover:text-danger-700 p-1 rounded hover:bg-danger-50 dark:hover:bg-danger-950/40 text-xs flex items-center gap-1"
+                                                title="Hapus butir ini dari pratinjau"
+                                            >
+                                                <svg width="14" height="14" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                <span>Hapus</span>
+                                            </button>
+                                        </div>
+
+                                        {{-- Teks Pertanyaan --}}
+                                        <div class="text-xs text-gray-900 dark:text-gray-100 font-medium leading-relaxed prose dark:prose-invert max-w-none">
+                                            {!! $item['pertanyaan'] !!}
+                                        </div>
+
+                                        {{-- Pilihan Jawaban jika ada --}}
+                                        @if(!empty($item['opsi_jawabans']))
+                                            <div class="space-y-1.5 pt-1">
+                                                @foreach($item['opsi_jawabans'] as $opt)
+                                                    <div class="flex items-center gap-2 p-2 rounded-lg text-xs {{ !empty($opt['is_jawaban_benar']) ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 font-bold text-emerald-900 dark:text-emerald-200' : 'bg-gray-50 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 border border-transparent' }}">
+                                                        <span class="w-5 h-5 rounded flex items-center justify-center text-[11px] font-black shrink-0 {{ !empty($opt['is_jawaban_benar']) ? 'bg-emerald-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300' }}">
+                                                            {{ $opt['label'] ?? '' }}
+                                                        </span>
+                                                        <span class="flex-1">{{ $opt['teks_opsi'] ?? '' }}</span>
+                                                        @if(!empty($opt['is_jawaban_benar']))
+                                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-600 text-white shrink-0">
+                                                                KUNCI BENAR ✓
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        {{-- Kunci Isian / Rubrik Essay jika ada --}}
+                                        @if(!empty($item['kunci_isian']))
+                                            <div class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-xs text-emerald-800 dark:text-emerald-300">
+                                                <strong>Kunci Jawaban Isian:</strong> {{ $item['kunci_isian'] }}
+                                            </div>
+                                        @endif
+                                        @if(!empty($item['rubrik_essay']))
+                                            <div class="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-xs text-blue-800 dark:text-blue-300">
+                                                <strong>Rubrik Penilaian:</strong> {{ $item['rubrik_essay'] }}
+                                            </div>
+                                        @endif
+
+                                        {{-- Pembahasan --}}
+                                        @if(!empty($item['pembahasan']))
+                                            <div class="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                                                <strong class="text-amber-800 dark:text-amber-400">Pembahasan:</strong> {{ $item['pembahasan'] }}
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Modal Footer --}}
+                <div class="p-4 bg-gray-50 dark:bg-gray-800/60 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <button
+                        type="button"
+                        wire:click="closeImportTextModal"
+                        class="px-4 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                    >
+                        Batal
+                    </button>
+
+                    @if(!$has_parsed)
+                        <button
+                            type="button"
+                            wire:click="parseTextWithAi"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg shadow-md transition hover:opacity-95"
+                            style="background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff;"
+                        >
+                            <svg wire:loading.remove wire:target="parseTextWithAi" width="16" height="16" class="w-4 h-4 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <svg wire:loading wire:target="parseTextWithAi" class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span wire:loading.remove wire:target="parseTextWithAi">
+                                Bedah &amp; Proses Teks dengan AI &rarr;
+                            </span>
+                            <span wire:loading wire:target="parseTextWithAi">
+                                AI Sedang Membedah Teks Soal...
+                            </span>
+                        </button>
+                    @else
+                        <button
+                            type="button"
+                            wire:click="simpanParsedSoals"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg shadow-md transition hover:opacity-95"
+                            style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff;"
+                        >
+                            <svg wire:loading.remove wire:target="simpanParsedSoals" width="16" height="16" class="w-4 h-4 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <svg wire:loading wire:target="simpanParsedSoals" class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span wire:loading.remove wire:target="simpanParsedSoals">
+                                Simpan ({{ count($parsed_soals_preview) }} Butir) ke Bank Soal
+                            </span>
+                            <span wire:loading wire:target="simpanParsedSoals">
+                                Menyimpan ke Database...
+                            </span>
+                        </button>
+                    @endif
                 </div>
             </div>
         </div>

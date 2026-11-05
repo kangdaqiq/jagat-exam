@@ -65,6 +65,15 @@ class EditBankSoal extends Page
     public bool $ai_simpan_api_key = true;
     public bool $is_generating_ai = false;
 
+    // Import dari Teks / Copas AI Chatbot Properties
+    public bool $showImportTextModal = false;
+    public string $raw_text_input = '';
+    public string $import_mode = 'batch'; // 'batch' | 'current'
+    public float $import_default_bobot = 2.0;
+    public array $parsed_soals_preview = [];
+    public bool $is_parsing_text = false;
+    public bool $has_parsed = false;
+
 
     public function mount(int | string $record): void
     {
@@ -556,6 +565,195 @@ class EditBankSoal extends Page
                 ->danger()
                 ->send();
         }
+    }
+
+    public function openImportTextModal(string $mode = 'batch'): void
+    {
+        $this->import_mode = $mode;
+        $this->showImportTextModal = true;
+        $this->has_parsed = false;
+        $this->parsed_soals_preview = [];
+        if (empty($this->ai_model)) {
+            $this->ai_model = config('ai.gemini.model', 'gemini-3.5-flash');
+        }
+        if (empty($this->ai_api_key)) {
+            $this->ai_api_key = config('ai.gemini.api_key', '');
+        }
+    }
+
+    public function closeImportTextModal(): void
+    {
+        $this->showImportTextModal = false;
+    }
+
+    public function resetImportTextPreview(): void
+    {
+        $this->has_parsed = false;
+        $this->parsed_soals_preview = [];
+    }
+
+    public function loadSampleText(): void
+    {
+        $this->raw_text_input = "1. Jika diketahui f(x) = 2x^2 + 5x - 3, berapakah nilai f(2)?\n" .
+            "A. 11\n" .
+            "B. 15\n" .
+            "C. 18\n" .
+            "D. 21\n" .
+            "Kunci: B\n" .
+            "Pembahasan: Substitusikan x = 2 ke fungsi: f(2) = 2(2)^2 + 5(2) - 3 = 8 + 10 - 3 = 15.\n\n" .
+            "2. Organel sel yang berfungsi sebagai tempat berlangsungnya respirasi aerob dan penghasil utama energi (ATP) adalah...\n" .
+            "A. Ribosom\n" .
+            "B. Lisosom\n" .
+            "C. Mitokondria\n" .
+            "D. Badan Golgi\n" .
+            "Kunci: C\n" .
+            "Pembahasan: Mitokondria adalah penghasil energi seluler (ATP) melalui siklus Krebs dan rantai transpor elektron.";
+    }
+
+    public function hapusParsedItem(int $index): void
+    {
+        unset($this->parsed_soals_preview[$index]);
+        $this->parsed_soals_preview = array_values($this->parsed_soals_preview);
+        if (empty($this->parsed_soals_preview)) {
+            $this->has_parsed = false;
+        }
+    }
+
+    public function parseTextWithAi(?AiQuestionService $aiService = null): void
+    {
+        $aiService = $aiService ?? app(AiQuestionService::class);
+
+        $this->validate([
+            'raw_text_input' => 'required|string|min:10',
+            'import_default_bobot' => 'required|numeric|min:0.1',
+        ], [
+            'raw_text_input.required' => 'Silakan tempelkan (paste) teks soal dari chatbot terlebih dahulu.',
+            'raw_text_input.min' => 'Teks soal terlalu pendek (minimal 10 karakter).',
+            'import_default_bobot.required' => 'Bobot default wajib diisi.',
+            'import_default_bobot.min' => 'Bobot minimal adalah 0.1 poin.',
+        ]);
+
+        $this->is_parsing_text = true;
+
+        try {
+            $apiKey = trim($this->ai_api_key);
+            if (filled($apiKey) && $this->ai_simpan_api_key) {
+                $aiService->saveApiKeyToEnv($apiKey, 'gemini');
+                config(['ai.gemini.api_key' => $apiKey]);
+            }
+
+            $results = $aiService->parseRawTextToSoals($this->raw_text_input, [
+                'bobot_nilai' => $this->import_default_bobot,
+                'api_key' => $apiKey ?: null,
+                'provider' => 'gemini',
+                'model' => $this->ai_model ?: 'gemini-3.5-flash',
+            ]);
+
+            if (empty($results)) {
+                throw new \Exception('Tidak dapat mendeteksi atau membedah butir soal dari teks yang diberikan.');
+            }
+
+            $this->parsed_soals_preview = $results;
+            $this->has_parsed = true;
+
+            Notification::make()
+                ->title(count($results) . ' butir soal berhasil dibedah oleh AI!')
+                ->body('Silakan tinjau butir soal sebelum disimpan ke Bank Soal.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Membedah Teks Soal')
+                ->body($e->getMessage())
+                ->danger()
+                ->persistent()
+                ->send();
+        } finally {
+            $this->is_parsing_text = false;
+        }
+    }
+
+    public function simpanParsedSoals(): void
+    {
+        if (empty($this->parsed_soals_preview)) {
+            Notification::make()
+                ->title('Tidak ada butir soal untuk disimpan.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        if ($this->import_mode === 'current') {
+            // Terapkan butir pertama ke soal yang sedang aktif
+            $item = $this->parsed_soals_preview[0];
+            $this->tipe_soal = $item['tipe_soal'];
+            $this->bobot_nilai = (float) ($item['bobot_nilai'] ?? $this->import_default_bobot);
+            $this->pertanyaan = $item['pertanyaan'];
+            $this->opsi_jawabans = $item['opsi_jawabans'] ?? [];
+            $this->kunci_isian = $item['kunci_isian'] ?? '';
+            $this->rubrik_essay = $item['rubrik_essay'] ?? '';
+            $this->pembahasan = $item['pembahasan'] ?? '';
+
+            $this->simpanSoal(false);
+
+            $this->dispatch('soal-loaded',
+                pertanyaan: $this->pertanyaan,
+                pembahasan: $this->pembahasan,
+            );
+
+            Notification::make()
+                ->title("Soal No. {$this->nomor_urut} berhasil diperbarui dari teks!")
+                ->success()
+                ->send();
+        } else {
+            // Batch mode: Tambahkan butir-butir baru ke bank soal
+            $startNomor = ((int) $this->record->soals()->max('nomor_urut')) + 1;
+            $firstNewId = null;
+
+            foreach ($this->parsed_soals_preview as $item) {
+                $newSoal = $this->record->soals()->create([
+                    'nomor_urut' => $startNomor++,
+                    'tipe_soal' => $item['tipe_soal'],
+                    'bobot_nilai' => (float) ($item['bobot_nilai'] ?? $this->import_default_bobot),
+                    'pertanyaan' => $item['pertanyaan'],
+                    'media_type' => 'none',
+                    'kunci_isian' => $item['kunci_isian'] ?? '',
+                    'rubrik_essay' => $item['rubrik_essay'] ?? '',
+                    'pembahasan' => $item['pembahasan'] ?? '',
+                ]);
+
+                if (!$firstNewId) {
+                    $firstNewId = $newSoal->id;
+                }
+
+                if (!empty($item['opsi_jawabans'])) {
+                    foreach ($item['opsi_jawabans'] as $order => $opt) {
+                        $newSoal->opsiJawabans()->create([
+                            'label' => $opt['label'] ?? chr(65 + $order),
+                            'teks_opsi' => $opt['teks_opsi'] ?? '',
+                            'gambar_opsi' => null,
+                            'is_jawaban_benar' => !empty($opt['is_jawaban_benar']),
+                            'pasangan_matching' => $opt['pasangan_matching'] ?? null,
+                            'nomor_urut' => $order + 1,
+                        ]);
+                    }
+                }
+            }
+
+            if ($firstNewId) {
+                $this->selectSoal($firstNewId);
+            }
+
+            Notification::make()
+                ->title(count($this->parsed_soals_preview) . " butir soal baru berhasil ditambahkan ke Bank Soal!")
+                ->success()
+                ->send();
+        }
+
+        $this->showImportTextModal = false;
+        $this->has_parsed = false;
+        $this->parsed_soals_preview = [];
+        $this->raw_text_input = '';
     }
 
 
