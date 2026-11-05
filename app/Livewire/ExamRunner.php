@@ -206,42 +206,56 @@ class ExamRunner extends Component
         }
     }
 
-    public function toggleRagu(): void
+    public function toggleRagu(?int $soalId = null): void
     {
-        $soal = $this->currentSoal;
-        if (!$soal || !$this->sesi) return;
+        $targetId = $soalId ?? $this->currentSoal?->id;
+        if (!$targetId || !$this->sesi) return;
 
-        $currentRagu = $this->userAnswers[$soal->id]['is_ragu'] ?? false;
+        $currentRagu = $this->userAnswers[$targetId]['is_ragu'] ?? false;
         $newRagu = !$currentRagu;
 
-        $this->userAnswers[$soal->id]['is_ragu'] = $newRagu;
+        $this->userAnswers[$targetId]['is_ragu'] = $newRagu;
 
-        UjianJawaban::updateOrCreate(
-            ['ujian_sesi_id' => $this->sesi->id, 'soal_id' => $soal->id],
-            ['is_ragu' => $newRagu]
-        );
+        $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+            ->where('soal_id', $targetId)
+            ->update(['is_ragu' => $newRagu]);
+
+        if (!$updated) {
+            UjianJawaban::create([
+                'ujian_sesi_id' => $this->sesi->id,
+                'soal_id' => $targetId,
+                'is_ragu' => $newRagu,
+            ]);
+        }
     }
 
-    public function pilihJawabanOpsi(string $label): void
+    public function pilihJawabanOpsi(string $label, ?int $soalId = null): void
     {
-        $soal = $this->currentSoal;
-        if (!$soal || !$this->sesi || $this->is_submitted) return;
+        $targetId = $soalId ?? $this->currentSoal?->id;
+        if (!$targetId || !$this->sesi || $this->is_submitted) return;
 
         // Single Choice (Pilihan Ganda & Benar / Salah)
-        $this->userAnswers[$soal->id]['pilihan'] = $label;
+        $this->userAnswers[$targetId]['pilihan'] = $label;
 
-        UjianJawaban::updateOrCreate(
-            ['ujian_sesi_id' => $this->sesi->id, 'soal_id' => $soal->id],
-            ['jawaban_pilihan' => $label]
-        );
+        $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+            ->where('soal_id', $targetId)
+            ->update(['jawaban_pilihan' => json_encode($label)]);
+
+        if (!$updated) {
+            UjianJawaban::create([
+                'ujian_sesi_id' => $this->sesi->id,
+                'soal_id' => $targetId,
+                'jawaban_pilihan' => $label,
+            ]);
+        }
     }
 
-    public function pilihJawabanMulti(string $label): void
+    public function pilihJawabanMulti(string $label, ?int $soalId = null): void
     {
-        $soal = $this->currentSoal;
-        if (!$soal || !$this->sesi || $this->is_submitted) return;
+        $targetId = $soalId ?? $this->currentSoal?->id;
+        if (!$targetId || !$this->sesi || $this->is_submitted) return;
 
-        $current = $this->userAnswers[$soal->id]['pilihan'] ?? [];
+        $current = $this->userAnswers[$targetId]['pilihan'] ?? [];
         if (!is_array($current)) $current = [];
 
         if (in_array($label, $current)) {
@@ -251,51 +265,108 @@ class ExamRunner extends Component
             sort($current);
         }
 
-        $this->userAnswers[$soal->id]['pilihan'] = $current;
+        $this->userAnswers[$targetId]['pilihan'] = $current;
 
-        UjianJawaban::updateOrCreate(
-            ['ujian_sesi_id' => $this->sesi->id, 'soal_id' => $soal->id],
-            ['jawaban_pilihan' => $current]
-        );
+        $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+            ->where('soal_id', $targetId)
+            ->update(['jawaban_pilihan' => json_encode($current)]);
+
+        if (!$updated) {
+            UjianJawaban::create([
+                'ujian_sesi_id' => $this->sesi->id,
+                'soal_id' => $targetId,
+                'jawaban_pilihan' => $current,
+            ]);
+        }
     }
 
     public function simpanJawabanTeks(int|string $soalIdOrTeks, ?string $teks = null): void
     {
         if ($teks === null && is_string($soalIdOrTeks)) {
-            $soal = $this->currentSoal;
-            if (!$soal) return;
-            $soalId = $soal->id;
+            $targetId = $this->currentSoal?->id;
+            if (!$targetId) return;
             $teks = $soalIdOrTeks;
         } else {
-            $soalId = (int) $soalIdOrTeks;
+            $targetId = (int) $soalIdOrTeks;
             $teks = $teks ?? '';
         }
 
-        if (!$this->sesi || $this->is_submitted) return;
+        if (!$targetId || !$this->sesi || $this->is_submitted) return;
 
-        $this->userAnswers[$soalId]['teks'] = $teks;
+        $this->userAnswers[$targetId]['teks'] = $teks;
 
-        UjianJawaban::updateOrCreate(
-            ['ujian_sesi_id' => $this->sesi->id, 'soal_id' => $soalId],
-            ['jawaban_teks' => $teks]
-        );
+        $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+            ->where('soal_id', $targetId)
+            ->update(['jawaban_teks' => $teks]);
+
+        if (!$updated) {
+            UjianJawaban::create([
+                'ujian_sesi_id' => $this->sesi->id,
+                'soal_id' => $targetId,
+                'jawaban_teks' => $teks,
+            ]);
+        }
     }
 
-    public function simpanMatching(int $index, string $pilihanKanan): void
+    public function simpanMatching(int $index, string $pilihanKanan, ?int $soalId = null): void
     {
-        $soal = $this->currentSoal;
-        if (!$soal || !$this->sesi || $this->is_submitted) return;
+        $targetId = $soalId ?? $this->currentSoal?->id;
+        if (!$targetId || !$this->sesi || $this->is_submitted) return;
 
-        $current = $this->userAnswers[$soal->id]['pilihan'] ?? [];
+        $current = $this->userAnswers[$targetId]['pilihan'] ?? [];
         if (!is_array($current)) $current = [];
 
         $current[$index] = $pilihanKanan;
-        $this->userAnswers[$soal->id]['pilihan'] = $current;
+        $this->userAnswers[$targetId]['pilihan'] = $current;
 
-        UjianJawaban::updateOrCreate(
-            ['ujian_sesi_id' => $this->sesi->id, 'soal_id' => $soal->id],
-            ['jawaban_pilihan' => $current]
-        );
+        $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+            ->where('soal_id', $targetId)
+            ->update(['jawaban_pilihan' => json_encode($current)]);
+
+        if (!$updated) {
+            UjianJawaban::create([
+                'ujian_sesi_id' => $this->sesi->id,
+                'soal_id' => $targetId,
+                'jawaban_pilihan' => $current,
+            ]);
+        }
+    }
+
+    public function syncBatchJawaban(array $batch): void
+    {
+        if (!$this->sesi || $this->is_submitted || empty($batch)) return;
+
+        foreach ($batch as $item) {
+            $soalId = (int) ($item['soal_id'] ?? 0);
+            if (!$soalId) continue;
+
+            $updateData = [];
+            if (array_key_exists('pilihan', $item)) {
+                $this->userAnswers[$soalId]['pilihan'] = $item['pilihan'];
+                $updateData['jawaban_pilihan'] = json_encode($item['pilihan']);
+            }
+            if (array_key_exists('teks', $item)) {
+                $this->userAnswers[$soalId]['teks'] = $item['teks'];
+                $updateData['jawaban_teks'] = $item['teks'];
+            }
+            if (array_key_exists('is_ragu', $item)) {
+                $this->userAnswers[$soalId]['is_ragu'] = (bool) $item['is_ragu'];
+                $updateData['is_ragu'] = (bool) $item['is_ragu'];
+            }
+
+            if (!empty($updateData)) {
+                $updated = UjianJawaban::where('ujian_sesi_id', $this->sesi->id)
+                    ->where('soal_id', $soalId)
+                    ->update($updateData);
+
+                if (!$updated) {
+                    UjianJawaban::create(array_merge([
+                        'ujian_sesi_id' => $this->sesi->id,
+                        'soal_id' => $soalId,
+                    ], $updateData));
+                }
+            }
+        }
     }
 
     public function setZoom(string $level): void

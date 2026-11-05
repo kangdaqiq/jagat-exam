@@ -1,48 +1,29 @@
+@php
+    $soalIds = $this->soals->pluck('id')->values()->toArray();
+    $soalTypes = $this->soals->pluck('tipe_soal', 'id')->toArray();
+@endphp
+
 <div
-    x-data="{
-        init() {
-            // Keyboard shortcuts
-            window.addEventListener('keydown', (e) => {
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-                const key = e.key.toUpperCase();
-                if (['A', 'B', 'C', 'D', 'E'].includes(key)) {
-                    $wire.pilihJawabanOpsi(key);
-                } else if (e.key === 'ArrowRight') {
-                    $wire.nextSoal();
-                } else if (e.key === 'ArrowLeft') {
-                    $wire.prevSoal();
-                } else if (key === 'R') {
-                    $wire.toggleRagu();
-                }
-            });
-
-            // Kunci browser history agar siswa tidak bisa kembali ke halaman login/portal
-            history.pushState(null, document.title, location.href);
-            window.addEventListener('popstate', function () {
-                history.pushState(null, document.title, location.href);
-            });
-
-            // Tab/focus violation detection (hanya pemicu jika bukan preview mode)
-            @if(!$is_preview)
-            window.isLegitNavigation = false;
-            window.addEventListener('beforeunload', () => {
-                window.isLegitNavigation = true;
-            });
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden && !window.isLegitNavigation && !@this.isSubmitted) {
-                    if (window.AndroidExam && typeof window.AndroidExam.triggerViolation === 'function') {
-                        window.AndroidExam.triggerViolation('Siswa beralih aplikasi atau membuka notifikasi');
-                    }
-                    $wire.triggerViolation();
-                }
-            });
-            @endif
-        }
-    }"
+    x-data="examRunner({
+        initialIndex: {{ $currentIndex }},
+        totalSoals: {{ $this->soals->count() }},
+        soalIds: @js($soalIds),
+        soalTypes: @js($soalTypes),
+        initialAnswers: @js($userAnswers),
+        tokenSesi: '{{ $sesi ? $sesi->token_sesi : ($bankSoal->kode_bank ?? "preview") }}',
+        isPreview: {{ $is_preview ? 'true' : 'false' }}
+    })"
     style="min-height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; color: #1e293b; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;"
 >
     {{-- CSS Khusus untuk Responsive, Mobile Optimization, & Timer --}}
     <style>
+        [x-cloak] { display: none !important; }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         /* Timer Layout */
         .exam-timer {
             display: inline-flex !important;
@@ -238,7 +219,7 @@
                 padding: 8px 12px !important;
             }
             .exam-topbar-title {
-                max-width: 130px !important;
+                max-width: 110px !important;
                 font-size: 12px !important;
             }
             .exam-topbar-badge {
@@ -247,19 +228,22 @@
                 font-size: 10px !important;
             }
             .exam-timer {
-                padding: 6px 10px !important;
+                padding: 6px 9px !important;
                 font-size: 13px !important;
                 gap: 4px !important;
             }
             .exam-zoom-controls {
-                display: none !important; /* sembunyikan zoom di mobile kecil agar header tidak sesak */
+                display: none !important;
+            }
+            .status-label {
+                display: none !important;
             }
             .exam-btn-daftar-soal-mobile {
                 padding: 6px 10px !important;
                 font-size: 11px !important;
             }
             .exam-btn-daftar-soal-mobile span.btn-label {
-                display: none !important; /* tampilkan hanya ikon + badge angka di layar sangat sempit */
+                display: none !important;
             }
             .exam-main-container {
                 padding: 10px 10px !important;
@@ -303,10 +287,6 @@
                 width: 100% !important;
             }
             .exam-mobile-overlay {
-                align-items: flex-end !important;
-                padding: 0 !important;
-            }
-        }
                 align-items: flex-end !important;
                 padding: 0 !important;
             }
@@ -451,7 +431,7 @@
     </div>
 
 {{-- ===================================================================== --}}
-{{-- KASUS 3: RUNNER AKTIF (LEMBAR SOAL CBT)                                --}}
+{{-- KASUS 3: RUNNER AKTIF (LEMBAR SOAL CBT BERBASIS CLIENT-SIDE)          --}}
 {{-- ===================================================================== --}}
 @else
     {{-- ----------------------------------------------------------------- --}}
@@ -466,11 +446,11 @@
                     CBT
                 </div>
                 <div style="min-width: 0;">
-                    <div class="exam-topbar-title" style="font-size: 13px; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">
+                    <div class="exam-topbar-title" style="font-size: 13px; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;">
                         {{ $bankSoal->judul }}
                     </div>
                     <div style="font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 5px;">
-                        <span style="font-weight: 700; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">{{ $sesi->nama_peserta }}</span>
+                        <span style="font-weight: 700; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">{{ $sesi->nama_peserta }}</span>
                         @if($is_preview)
                             <span>&bull;</span>
                             <span style="padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: 9px;">PREVIEW</span>
@@ -479,67 +459,94 @@
                 </div>
             </div>
 
-            {{-- Tengah: Countdown Timer Modern (Presisi Wall-clock & Imun dari Livewire Morph) --}}
-            <div
-                wire:ignore
-                x-data="{
-                    endTimestamp: {{ $sesi && $sesi->waktu_selesai ? $sesi->waktu_selesai->timestamp : (now()->addHour()->timestamp) }},
-                    remainingSeconds: {{ $sesi ? $sesi->sisaDetik() : 3600 }},
-                    submitted: false,
+            {{-- Tengah: Status Autosave/Offline & Countdown Timer Modern --}}
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                {{-- Status Jaringan & Autosave --}}
+                <div style="display: flex; align-items: center;">
+                    {{-- Status Hijau (Online & Tersinkron) --}}
+                    <div x-show="isOnline && !isSyncing && pendingSync.length === 0" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 11px; font-weight: 700;" title="Semua jawaban tersinkron ke server">
+                        <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                        <span class="status-label">Tersambung</span>
+                    </div>
 
-                    init() {
-                        this.updateTimer();
-                        if (window.__examTimerInterval) {
-                            clearInterval(window.__examTimerInterval);
-                        }
-                        window.__examTimerInterval = setInterval(() => {
+                    {{-- Status Biru (Sedang Menyinkronkan ke Server) --}}
+                    <div x-show="isSyncing" x-cloak style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700;">
+                        <svg style="animation: spin 1s linear infinite; width: 11px; height: 11px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
+                        <span class="status-label">Menyimpan...</span>
+                    </div>
+
+                    {{-- Status Kuning/Oranye (Offline / Antrean Tersimpan di Browser) --}}
+                    <div x-show="!isOnline || pendingSync.length > 0" x-cloak style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #fffbeb; border: 1.5px solid #fde68a; color: #b45309; font-size: 11px; font-weight: 700;" :title="'Ada ' + pendingSync.length + ' jawaban tersimpan aman di perangkat (offline)'">
+                        <span style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+                        <span class="status-label">Offline (<span x-text="pendingSync.length"></span>)</span>
+                    </div>
+                </div>
+
+                {{-- Countdown Timer Modern (Presisi Wall-clock & Imun dari Livewire Morph) --}}
+                <div
+                    wire:ignore
+                    x-data="{
+                        endTimestamp: {{ $sesi && $sesi->waktu_selesai ? $sesi->waktu_selesai->timestamp : (now()->addHour()->timestamp) }},
+                        remainingSeconds: {{ $sesi ? $sesi->sisaDetik() : 3600 }},
+                        submitted: false,
+
+                        init() {
                             this.updateTimer();
-                        }, 1000);
-                    },
-
-                    updateTimer() {
-                        const nowSec = Math.floor(Date.now() / 1000);
-                        this.remainingSeconds = Math.max(0, this.endTimestamp - nowSec);
-
-                        if (this.remainingSeconds <= 0 && !this.submitted) {
-                            this.submitted = true;
                             if (window.__examTimerInterval) {
                                 clearInterval(window.__examTimerInterval);
                             }
-                            $wire.autoSubmitOnTimeout();
-                        }
-                    },
+                            window.__examTimerInterval = setInterval(() => {
+                                this.updateTimer();
+                            }, 1000);
+                        },
 
-                    formatTimer() {
-                        const h = Math.floor(this.remainingSeconds / 3600);
-                        const m = Math.floor((this.remainingSeconds % 3600) / 60);
-                        const s = this.remainingSeconds % 60;
-                        if (h > 0) {
-                            return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                        updateTimer() {
+                            const nowSec = Math.floor(Date.now() / 1000);
+                            this.remainingSeconds = Math.max(0, this.endTimestamp - nowSec);
+
+                            if (this.remainingSeconds <= 0 && !this.submitted) {
+                                this.submitted = true;
+                                if (window.__examTimerInterval) {
+                                    clearInterval(window.__examTimerInterval);
+                                }
+                                $wire.autoSubmitOnTimeout();
+                            }
+                        },
+
+                        formatTimer() {
+                            const h = Math.floor(this.remainingSeconds / 3600);
+                            const m = Math.floor((this.remainingSeconds % 3600) / 60);
+                            const s = this.remainingSeconds % 60;
+                            if (h > 0) {
+                                return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                            }
+                            return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
                         }
-                        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-                    }
-                }"
-                class="exam-timer"
-                :class="remainingSeconds < 300 ? 'timer-warning animate-pulse' : 'timer-normal'"
-                title="Sisa Waktu Ujian"
-            >
-                <svg width="16" height="16" style="flex-shrink: 0;" fill="none" viewBox="0 0 24 24" :stroke="remainingSeconds < 300 ? '#dc2626' : '#475569'">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span x-text="formatTimer()" style="display: inline-block; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums;">00:00</span>
+                    }"
+                    class="exam-timer"
+                    :class="remainingSeconds < 300 ? 'timer-warning animate-pulse' : 'timer-normal'"
+                    title="Sisa Waktu Ujian"
+                >
+                    <svg width="16" height="16" style="flex-shrink: 0;" fill="none" viewBox="0 0 24 24" :stroke="remainingSeconds < 300 ? '#dc2626' : '#475569'">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span x-text="formatTimer()" style="display: inline-block; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums;">00:00</span>
+                </div>
             </div>
 
             {{-- Kanan: Font Zoom (Desktop/Tablet) & Tombol Buka Daftar Soal (Mobile) --}}
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                {{-- Zoom Font Switcher (Sembunyi otomatis di mobile kecil) --}}
+                {{-- Zoom Font Switcher (Client-side, 0ms, Sembunyi otomatis di mobile kecil) --}}
                 <div class="exam-zoom-controls" style="display: flex; align-items: center; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; padding: 2px; gap: 1px;">
-                    <button type="button" wire:click="setZoom('sm')"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 11px; font-weight: 700; cursor: pointer; background: {{ $zoomLevel === 'sm' ? '#fff' : 'transparent' }}; color: {{ $zoomLevel === 'sm' ? '#2563eb' : '#64748b' }}; box-shadow: {{ $zoomLevel === 'sm' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }};">A-</button>
-                    <button type="button" wire:click="setZoom('md')"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: 700; cursor: pointer; background: {{ $zoomLevel === 'md' ? '#fff' : 'transparent' }}; color: {{ $zoomLevel === 'md' ? '#2563eb' : '#64748b' }}; box-shadow: {{ $zoomLevel === 'md' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }};">A</button>
-                    <button type="button" wire:click="setZoom('lg')"
-                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; background: {{ $zoomLevel === 'lg' ? '#fff' : 'transparent' }}; color: {{ $zoomLevel === 'lg' ? '#2563eb' : '#64748b' }}; box-shadow: {{ $zoomLevel === 'lg' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }};">A+</button>
+                    <button type="button" @click="zoomLevel = 'sm'"
+                        :style="zoomLevel === 'sm' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
+                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 11px; font-weight: 700; cursor: pointer;">A-</button>
+                    <button type="button" @click="zoomLevel = 'md'"
+                        :style="zoomLevel === 'md' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
+                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: 700; cursor: pointer;">A</button>
+                    <button type="button" @click="zoomLevel = 'lg'"
+                        :style="zoomLevel === 'lg' ? 'background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #64748b;'"
+                        style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer;">A+</button>
                 </div>
 
                 {{-- Tombol Reload / Segarkan Halaman jika soal macet --}}
@@ -559,7 +566,7 @@
                 {{-- Tombol Daftar Soal (Khusus Mobile/Tablet) --}}
                 <button
                     type="button"
-                    wire:click="$toggle('showDaftarSoalMobile')"
+                    @click="showDaftarSoalMobile = !showDaftarSoalMobile"
                     class="exam-btn-daftar-soal-mobile"
                     style="align-items: center; gap: 5px; padding: 7px 11px; border-radius: 10px; border: 1.5px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
                 >
@@ -568,7 +575,7 @@
                     </svg>
                     <span class="btn-label">Soal</span>
                     <span style="display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 10px; font-weight: 800;">
-                        {{ $this->recap['dijawab'] }}/{{ $this->recap['total'] }}
+                        <span x-text="answeredCount"></span>/{{ $this->soals->count() }}
                     </span>
                 </button>
             </div>
@@ -581,290 +588,292 @@
     <main class="exam-main-container">
 
         {{-- ============================================================= --}}
-        {{-- KOLOM KIRI: Lembar Soal Aktif                                 --}}
+        {{-- KOLOM KIRI: Lembar Soal (Semua Soal Pre-Rendered di DOM)      --}}
         {{-- ============================================================= --}}
-        <section class="exam-question-box" wire:key="soal-box-{{ $soal?->id ?? $currentIndex }}">
-            @php
-                $soal = $this->currentSoal;
-                $ansData = $soal ? ($this->userAnswers[$soal->id] ?? null) : null;
-                $selectedOpsi = $ansData['pilihan'] ?? null;
-                $isRagu = (bool) ($ansData['is_ragu'] ?? false);
-                $fontSizeSoal = $zoomLevel === 'lg' ? '17px' : ($zoomLevel === 'sm' ? '13px' : '15px');
-                $fontSizeOpsi = $zoomLevel === 'lg' ? '15px' : ($zoomLevel === 'sm' ? '12px' : '14px');
-            @endphp
-
-            @if($soal)
-                {{-- Header Soal --}}
-                <div class="exam-question-header" style="padding: 14px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; background: #f8fafc; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8;">NO.</span>
-                        <span style="font-size: 24px; font-weight: 900; color: #1e293b; line-height: 1;">{{ $currentIndex + 1 }}</span>
-                        <span style="font-size: 12px; color: #94a3b8;">/ {{ $this->soals->count() }}</span>
-                        <span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-                            {{ $soal->tipe_soal === 'pilihan_ganda' ? 'background: #dbeafe; color: #1d4ed8;' : '' }}
-                            {{ $soal->tipe_soal === 'pg_kompleks' ? 'background: #ede9fe; color: #6d28d9;' : '' }}
-                            {{ $soal->tipe_soal === 'benar_salah' ? 'background: #d1fae5; color: #065f46;' : '' }}
-                            {{ $soal->tipe_soal === 'menjodohkan' ? 'background: #fef3c7; color: #92400e;' : '' }}
-                            {{ in_array($soal->tipe_soal, ['isian','essay']) ? 'background: #f1f5f9; color: #475569;' : '' }}
-                        ">
-                            {{ str_replace('_', ' ', $soal->tipe_soal) }}
-                        </span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        @if($isRagu)
-                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: 10px;">
+        <section class="exam-question-box">
+            @forelse($this->soals as $idx => $soal)
+                <div
+                    x-show="currentIndex === {{ $idx }}"
+                    x-cloak
+                    wire:key="soal-container-{{ $soal->id }}"
+                    style="display: flex; flex-direction: column; width: 100%;"
+                >
+                    {{-- Header Soal --}}
+                    <div class="exam-question-header" style="padding: 14px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; background: #f8fafc; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8;">NO.</span>
+                            <span style="font-size: 24px; font-weight: 900; color: #1e293b; line-height: 1;">{{ $idx + 1 }}</span>
+                            <span style="font-size: 12px; color: #94a3b8;">/ {{ $this->soals->count() }}</span>
+                            <span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+                                {{ $soal->tipe_soal === 'pilihan_ganda' ? 'background: #dbeafe; color: #1d4ed8;' : '' }}
+                                {{ $soal->tipe_soal === 'pg_kompleks' ? 'background: #ede9fe; color: #6d28d9;' : '' }}
+                                {{ $soal->tipe_soal === 'benar_salah' ? 'background: #d1fae5; color: #065f46;' : '' }}
+                                {{ $soal->tipe_soal === 'menjodohkan' ? 'background: #fef3c7; color: #92400e;' : '' }}
+                                {{ in_array($soal->tipe_soal, ['isian','essay']) ? 'background: #f1f5f9; color: #475569;' : '' }}
+                            ">
+                                {{ str_replace('_', ' ', $soal->tipe_soal) }}
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span
+                                x-show="isRagu({{ $soal->id }})"
+                                x-cloak
+                                style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: 10px;"
+                            >
                                 <span style="width: 5px; height: 5px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
                                 Ragu
                             </span>
+                            <span style="font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap;">{{ (float) $soal->bobot_nilai }} Poin</span>
+                        </div>
+                    </div>
+
+                    {{-- Isi Pokok Soal & Stimulus --}}
+                    <div class="exam-question-body">
+                        {{-- Media Stimulus --}}
+                        @if($soal->media_type === 'image' && $soal->media_file)
+                            <div style="padding: 6px; border-radius: 14px; border: 1px solid #e2e8f0; background: #f8fafc; max-width: 480px; margin: 0 auto; width: 100%; box-sizing: border-box;">
+                                <img src="{{ Storage::url($soal->media_file) }}" alt="Gambar Stimulus" style="border-radius: 10px; width: 100%; max-height: 260px; object-fit: contain;" />
+                            </div>
+                        @elseif($soal->media_type === 'audio' && $soal->media_file)
+                            <div style="padding: 12px 14px; border-radius: 14px; border: 1px solid #ddd6fe; background: #f5f3ff; display: flex; align-items: center; gap: 10px; max-width: 400px; width: 100%;">
+                                <audio controls src="{{ Storage::url($soal->media_file) }}" style="width: 100%;"></audio>
+                            </div>
                         @endif
-                        <span style="font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap;">{{ (float) $soal->bobot_nilai }} Poin</span>
-                    </div>
-                </div>
 
-                {{-- Isi Pokok Soal & Stimulus --}}
-                <div class="exam-question-body">
-                    {{-- Media Stimulus --}}
-                    @if($soal->media_type === 'image' && $soal->media_file)
-                        <div wire:ignore wire:key="media-img-{{ $soal->id }}" style="padding: 6px; border-radius: 14px; border: 1px solid #e2e8f0; background: #f8fafc; max-width: 480px; margin: 0 auto; width: 100%; box-sizing: border-box;">
-                            <img src="{{ Storage::url($soal->media_file) }}" alt="Gambar Stimulus" style="border-radius: 10px; width: 100%; max-height: 260px; object-fit: contain;" />
-                        </div>
-                    @elseif($soal->media_type === 'audio' && $soal->media_file)
-                        <div wire:ignore wire:key="media-audio-{{ $soal->id }}" style="padding: 12px 14px; border-radius: 14px; border: 1px solid #ddd6fe; background: #f5f3ff; display: flex; align-items: center; gap: 10px; max-width: 400px; width: 100%;">
-                            <audio controls src="{{ Storage::url($soal->media_file) }}" style="width: 100%;"></audio>
-                        </div>
-                    @endif
-
-                    {{-- Teks Soal (KaTeX & Arabic - Diimunkan dari Livewire Morph saat menjawab) --}}
-                    <div class="katex-content" wire:ignore wire:key="soal-stem-{{ $soal->id }}" style="font-size: {{ $fontSizeSoal }}; color: #1e293b; line-height: 1.75; font-weight: 400; overflow-wrap: break-word; word-break: break-word;">
-                        {!! $soal->pertanyaan !!}
-                    </div>
-
-                    {{-- Pemisah --}}
-                    <div style="border-top: 1px solid #f1f5f9;"></div>
-
-                    {{-- ------------------------------------------------- --}}
-                    {{-- OPSI JAWABAN SESUAI TIPE SOAL                     --}}
-                    {{-- ------------------------------------------------- --}}
-
-                    {{-- TIPE 1: Pilihan Ganda & Benar/Salah --}}
-                    @if(in_array($soal->tipe_soal, ['pilihan_ganda', 'benar_salah']))
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            @foreach($soal->opsiJawabans as $opsi)
-                                @php $isSelected = ($selectedOpsi === $opsi->label); @endphp
-                                <div
-                                    wire:key="opt-{{ $soal->id }}-{{ $opsi->label }}"
-                                    wire:click="pilihJawabanOpsi('{{ $opsi->label }}')"
-                                    class="exam-option-card"
-                                    style="{{ $isSelected
-                                        ? 'border: 2px solid #2563eb; background: #eff6ff; box-shadow: 0 2px 8px rgba(37,99,235,0.12);'
-                                        : 'border: 1.5px solid #e2e8f0; background: #fff;' }}"
-                                >
-                                    {{-- Huruf A, B, C, D --}}
-                                    <div class="exam-option-badge" style="
-                                        width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
-                                        display: flex; align-items: center; justify-content: center;
-                                        font-weight: 800; font-size: 14px; transition: all 0.15s;
-                                        {{ $isSelected
-                                            ? 'background: #2563eb; color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,0.3);'
-                                            : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;' }}
-                                    ">
-                                        {{ $opsi->label }}
-                                    </div>
-
-                                    {{-- Teks Opsi (wire:ignore menjaga rumus KaTeX tetap utuh saat opsi diklik) --}}
-                                    <div class="katex-content" wire:ignore wire:key="opt-txt-{{ $soal->id }}-{{ $opsi->label }}" style="flex: 1; font-size: {{ $fontSizeOpsi }}; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;">
-                                        {!! $opsi->teks_opsi !!}
-                                    </div>
-
-                                    {{-- Lingkaran Radio / Centang --}}
-                                    <div style="
-                                        width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
-                                        display: flex; align-items: center; justify-content: center;
-                                        {{ $isSelected
-                                            ? 'background: #2563eb; border: 2px solid #2563eb;'
-                                            : 'border: 2px solid #cbd5e1; background: #fff;' }}
-                                    ">
-                                        @if($isSelected)
-                                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
+                        {{-- Teks Pertanyaan (KaTeX & Arabic) --}}
+                        <div
+                            class="katex-content"
+                            :style="{ fontSize: zoomLevel === 'lg' ? '17px' : (zoomLevel === 'sm' ? '13px' : '15px') }"
+                            style="color: #1e293b; line-height: 1.75; font-weight: 400; overflow-wrap: break-word; word-break: break-word;"
+                        >
+                            {!! $soal->pertanyaan !!}
                         </div>
 
-                    {{-- TIPE 2: PG Kompleks (Multi Choice) --}}
-                    @elseif($soal->tipe_soal === 'pg_kompleks')
-                        @php $multiArr = is_array($selectedOpsi) ? $selectedOpsi : []; @endphp
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <p style="font-size: 11px; font-weight: 700; color: #6d28d9; margin: 0;">Pilihlah semua jawaban yang benar (boleh lebih dari satu):</p>
-                            @foreach($soal->opsiJawabans as $opsi)
-                                @php $isSelected = in_array($opsi->label, $multiArr); @endphp
-                                <div
-                                    wire:key="opt-multi-{{ $soal->id }}-{{ $opsi->label }}"
-                                    wire:click="pilihJawabanMulti('{{ $opsi->label }}')"
-                                    class="exam-option-card"
-                                    style="{{ $isSelected
-                                        ? 'border: 2px solid #7c3aed; background: #f5f3ff; box-shadow: 0 2px 8px rgba(124,58,237,0.1);'
-                                        : 'border: 1.5px solid #e2e8f0; background: #fff;' }}"
-                                >
-                                    <div class="exam-option-badge" style="
-                                        width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
-                                        display: flex; align-items: center; justify-content: center;
-                                        font-weight: 800; font-size: 14px;
-                                        {{ $isSelected
-                                            ? 'background: #7c3aed; color: #fff;'
-                                            : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;' }}
-                                    ">
-                                        {{ $opsi->label }}
-                                    </div>
-                                    <div class="katex-content" wire:ignore wire:key="opt-multi-txt-{{ $soal->id }}-{{ $opsi->label }}" style="flex: 1; font-size: {{ $fontSizeOpsi }}; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;">
-                                        {!! $opsi->teks_opsi !!}
-                                    </div>
-                                    <div style="
-                                        width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
-                                        display: flex; align-items: center; justify-content: center;
-                                        {{ $isSelected
-                                            ? 'background: #7c3aed; border: 2px solid #7c3aed;'
-                                            : 'border: 2px solid #cbd5e1; background: #fff;' }}
-                                    ">
-                                        @if($isSelected)
-                                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
+                        {{-- Pemisah --}}
+                        <div style="border-top: 1px solid #f1f5f9;"></div>
 
-                    {{-- TIPE 3: Menjodohkan --}}
-                    @elseif($soal->tipe_soal === 'menjodohkan')
-                        @php
-                            $matchMap = is_array($selectedOpsi) ? $selectedOpsi : [];
-                            $pilihanKananList = $soal->opsiJawabans->pluck('pasangan_matching')->filter()->unique()->values();
-                        @endphp
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <p style="font-size: 11px; font-weight: 700; color: #92400e; margin: 0;">Pasangkan pernyataan kiri dengan pilihan yang tepat di kanan:</p>
-                            @foreach($soal->opsiJawabans as $index => $opsi)
-                                <div wire:key="match-{{ $index }}" style="padding: 12px 14px; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; display: flex; flex-direction: column; gap: 8px;">
-                                    <div style="display: flex; align-items: flex-start; gap: 8px;">
-                                        <span style="width: 22px; text-align: center; font-weight: 700; color: #94a3b8; font-size: 12px; flex-shrink: 0; margin-top: 2px;">{{ $index + 1 }}.</span>
-                                        <span class="katex-content" wire:ignore wire:key="match-txt-{{ $soal->id }}-{{ $index }}" style="font-size: {{ $fontSizeOpsi }}; font-weight: 600; color: #1e293b; flex: 1;">{!! $opsi->teks_opsi !!}</span>
-                                    </div>
-                                    <select
-                                        wire:change="simpanMatching({{ $index }}, $event.target.value)"
-                                        style="width: 100%; font-size: 13px; font-weight: 600; border-radius: 10px; border: 1.5px solid #cbd5e1; background: #fff; padding: 9px 12px; color: #1e293b; outline: none; min-height: 42px;"
+                        {{-- ------------------------------------------------- --}}
+                        {{-- OPSI JAWABAN SESUAI TIPE SOAL (REAKTIF 0MS)       --}}
+                        {{-- ------------------------------------------------- --}}
+
+                        {{-- TIPE 1: Pilihan Ganda & Benar/Salah --}}
+                        @if(in_array($soal->tipe_soal, ['pilihan_ganda', 'benar_salah']))
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                @foreach($soal->opsiJawabans as $opsi)
+                                    <div
+                                        @click="pilihOpsi({{ $soal->id }}, '{{ $opsi->label }}')"
+                                        class="exam-option-card"
+                                        :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
+                                            ? 'border: 2px solid #2563eb; background: #eff6ff; box-shadow: 0 2px 8px rgba(37,99,235,0.12);'
+                                            : 'border: 1.5px solid #e2e8f0; background: #fff;'"
                                     >
-                                        <option value="">-- Pilih Pasangan --</option>
-                                        @foreach($pilihanKananList as $pk)
-                                            <option value="{{ $pk }}" @selected(($matchMap[$index] ?? '') === $pk)>{{ $pk }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endforeach
-                        </div>
+                                        {{-- Huruf A, B, C, D --}}
+                                        <div
+                                            class="exam-option-badge"
+                                            :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
+                                                ? 'background: #2563eb; color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,0.3); border: none;'
+                                                : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;'"
+                                            style="width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; transition: all 0.15s;"
+                                        >
+                                            {{ $opsi->label }}
+                                        </div>
 
-                    {{-- TIPE 4: Isian Singkat --}}
-                    @elseif($soal->tipe_soal === 'isian')
-                        <div wire:key="isian-box-{{ $soal->id }}" style="display: flex; flex-direction: column; gap: 8px;">
-                            <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Ketik Jawaban Anda:</label>
-                            <input
-                                wire:key="isian-input-{{ $soal->id }}"
-                                x-data="{ val: @js($ansData['teks'] ?? '') }"
-                                x-model="val"
-                                type="text"
-                                @input.debounce.300ms="$wire.simpanJawabanTeks({{ $soal->id }}, $event.target.value)"
-                                placeholder="Ketik jawaban singkat / angka di sini..."
-                                style="width: 100%; box-sizing: border-box; font-size: {{ $fontSizeSoal }}; font-weight: 700; border-radius: 12px; border: 1.5px solid #cbd5e1; padding: 12px 14px; outline: none; color: #1e293b; background: #fff; min-height: 46px;"
-                                onfocus="this.style.borderColor='#3b82f6'"
-                                onblur="this.style.borderColor='#cbd5e1'"
-                            />
-                            <p style="font-size: 11px; color: #94a3b8;">Jawaban tersimpan otomatis saat Anda mengetik.</p>
-                        </div>
+                                        {{-- Teks Opsi --}}
+                                        <div
+                                            class="katex-content"
+                                            :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }"
+                                            style="flex: 1; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;"
+                                        >
+                                            {!! $opsi->teks_opsi !!}
+                                        </div>
 
-                    {{-- TIPE 5: Essay / Uraian --}}
-                    @elseif($soal->tipe_soal === 'essay')
-                        <div wire:key="essay-box-{{ $soal->id }}" style="display: flex; flex-direction: column; gap: 8px;">
-                            <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Tuliskan Lembar Jawaban Uraian Anda:</label>
-                            <textarea
-                                wire:key="essay-textarea-{{ $soal->id }}"
-                                x-data="{ val: @js($ansData['teks'] ?? '') }"
-                                x-model="val"
-                                rows="6"
-                                @input.debounce.300ms="$wire.simpanJawabanTeks({{ $soal->id }}, $event.target.value)"
-                                placeholder="Tuliskan argumen, rumus, atau penjelasan rinci Anda di sini..."
-                                style="width: 100%; box-sizing: border-box; font-size: {{ $fontSizeOpsi }}; border-radius: 12px; border: 1.5px solid #cbd5e1; padding: 12px 14px; outline: none; color: #1e293b; background: #fff; line-height: 1.65; resize: vertical; font-family: inherit;"
-                                onfocus="this.style.borderColor='#3b82f6'"
-                                onblur="this.style.borderColor='#cbd5e1'"
-                            ></textarea>
-                            <p style="font-size: 11px; color: #94a3b8;">Jawaban tersimpan otomatis saat Anda mengetik.</p>
-                        </div>
-                    @endif
-                </div>
+                                        {{-- Lingkaran Radio / Centang --}}
+                                        <div
+                                            :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
+                                                ? 'background: #2563eb; border: 2px solid #2563eb;'
+                                                : 'border: 2px solid #cbd5e1; background: #fff;'"
+                                            style="width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;"
+                                        >
+                                            <template x-if="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'">
+                                                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </template>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
 
-                {{-- ----------------------------------------------------------------- --}}
-                {{-- FOOTER NAVIGASI (RESPONSIVE & MOBILE-OPTIMIZED)                    --}}
-                {{-- ----------------------------------------------------------------- --}}
-                <div class="exam-nav-footer">
-                    {{-- Tombol Sebelumnya --}}
-                    <button
-                        type="button"
-                        wire:click="prevSoal"
-                        @disabled($currentIndex === 0)
-                        class="exam-nav-btn exam-nav-btn-prev"
-                    >
-                        <span>&laquo; Sebelumnya</span>
-                    </button>
+                        {{-- TIPE 2: PG Kompleks (Multi Choice) --}}
+                        @elseif($soal->tipe_soal === 'pg_kompleks')
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <p style="font-size: 11px; font-weight: 700; color: #6d28d9; margin: 0;">Pilihlah semua jawaban yang benar (boleh lebih dari satu):</p>
+                                @foreach($soal->opsiJawabans as $opsi)
+                                    <div
+                                        @click="pilihMulti({{ $soal->id }}, '{{ $opsi->label }}')"
+                                        class="exam-option-card"
+                                        :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
+                                            ? 'border: 2px solid #7c3aed; background: #f5f3ff; box-shadow: 0 2px 8px rgba(124,58,237,0.1);'
+                                            : 'border: 1.5px solid #e2e8f0; background: #fff;'"
+                                    >
+                                        <div
+                                            class="exam-option-badge"
+                                            :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
+                                                ? 'background: #7c3aed; color: #fff; border: none;'
+                                                : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;'"
+                                            style="width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;"
+                                        >
+                                            {{ $opsi->label }}
+                                        </div>
+                                        <div
+                                            class="katex-content"
+                                            :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }"
+                                            style="flex: 1; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;"
+                                        >
+                                            {!! $opsi->teks_opsi !!}
+                                        </div>
+                                        <div
+                                            :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
+                                                ? 'background: #7c3aed; border: 2px solid #7c3aed;'
+                                                : 'border: 2px solid #cbd5e1; background: #fff;'"
+                                            style="width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;"
+                                        >
+                                            <template x-if="Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')">
+                                                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </template>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
 
-                    {{-- Tombol Ragu-Ragu --}}
-                    <button
-                        type="button"
-                        wire:click="toggleRagu"
-                        class="exam-nav-btn exam-nav-btn-ragu {{ $isRagu ? 'is-active' : '' }}"
-                    >
-                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="{{ $isRagu ? 'white' : '#d97706' }}" style="flex-shrink: 0;">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Ragu-Ragu</span>
-                    </button>
+                        {{-- TIPE 3: Menjodohkan --}}
+                        @elseif($soal->tipe_soal === 'menjodohkan')
+                            @php
+                                $pilihanKananList = $soal->opsiJawabans->pluck('pasangan_matching')->filter()->unique()->values();
+                            @endphp
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <p style="font-size: 11px; font-weight: 700; color: #92400e; margin: 0;">Pasangkan pernyataan kiri dengan pilihan yang tepat di kanan:</p>
+                                @foreach($soal->opsiJawabans as $mIdx => $opsi)
+                                    <div style="padding: 12px 14px; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; display: flex; flex-direction: column; gap: 8px;">
+                                        <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                            <span style="width: 22px; text-align: center; font-weight: 700; color: #94a3b8; font-size: 12px; flex-shrink: 0; margin-top: 2px;">{{ $mIdx + 1 }}.</span>
+                                            <span class="katex-content" :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }" style="font-weight: 600; color: #1e293b; flex: 1;">{!! $opsi->teks_opsi !!}</span>
+                                        </div>
+                                        <select
+                                            @change="simpanMatching({{ $soal->id }}, {{ $mIdx }}, $event.target.value)"
+                                            :value="(answers[{{ $soal->id }}]?.pilihan || {})[{{ $mIdx }}] || ''"
+                                            style="width: 100%; font-size: 13px; font-weight: 600; border-radius: 10px; border: 1.5px solid #cbd5e1; background: #fff; padding: 9px 12px; color: #1e293b; outline: none; min-height: 42px;"
+                                        >
+                                            <option value="">-- Pilih Pasangan --</option>
+                                            @foreach($pilihanKananList as $pk)
+                                                <option value="{{ $pk }}">{{ $pk }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endforeach
+                            </div>
 
-                    {{-- Tombol Berikutnya / Selesai --}}
-                    @if($currentIndex < $this->soals->count() - 1)
+                        {{-- TIPE 4: Isian Singkat --}}
+                        @elseif($soal->tipe_soal === 'isian')
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Ketik Jawaban Anda:</label>
+                                <input
+                                    :value="answers[{{ $soal->id }}]?.teks || ''"
+                                    type="text"
+                                    @input.debounce.400ms="simpanTeks({{ $soal->id }}, $event.target.value)"
+                                    placeholder="Ketik jawaban singkat / angka di sini..."
+                                    :style="{ fontSize: zoomLevel === 'lg' ? '17px' : (zoomLevel === 'sm' ? '13px' : '15px') }"
+                                    style="width: 100%; box-sizing: border-box; font-weight: 700; border-radius: 12px; border: 1.5px solid #cbd5e1; padding: 12px 14px; outline: none; color: #1e293b; background: #fff; min-height: 46px;"
+                                    onfocus="this.style.borderColor='#3b82f6'"
+                                    onblur="this.style.borderColor='#cbd5e1'"
+                                />
+                                <p style="font-size: 11px; color: #94a3b8;">Jawaban tersimpan otomatis secara real-time saat Anda mengetik.</p>
+                            </div>
+
+                        {{-- TIPE 5: Essay / Uraian --}}
+                        @elseif($soal->tipe_soal === 'essay')
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Tuliskan Lembar Jawaban Uraian Anda:</label>
+                                <textarea
+                                    :value="answers[{{ $soal->id }}]?.teks || ''"
+                                    rows="6"
+                                    @input.debounce.400ms="simpanTeks({{ $soal->id }}, $event.target.value)"
+                                    placeholder="Tuliskan argumen, rumus, atau penjelasan rinci Anda di sini..."
+                                    :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }"
+                                    style="width: 100%; box-sizing: border-box; border-radius: 12px; border: 1.5px solid #cbd5e1; padding: 12px 14px; outline: none; color: #1e293b; background: #fff; line-height: 1.65; resize: vertical; font-family: inherit;"
+                                    onfocus="this.style.borderColor='#3b82f6'"
+                                    onblur="this.style.borderColor='#cbd5e1'"
+                                ></textarea>
+                                <p style="font-size: 11px; color: #94a3b8;">Jawaban tersimpan otomatis secara real-time saat Anda mengetik.</p>
+                            </div>
+                        @endif
+                    </div>
+
+                    {{-- ----------------------------------------------------------------- --}}
+                    {{-- FOOTER NAVIGASI (RESPONSIVE & CLIENT-SIDE INSTANT)                --}}
+                    {{-- ----------------------------------------------------------------- --}}
+                    <div class="exam-nav-footer">
+                        {{-- Tombol Sebelumnya --}}
                         <button
                             type="button"
-                            wire:click="nextSoal"
-                            class="exam-nav-btn exam-nav-btn-next"
+                            @click="prevSoal()"
+                            :disabled="currentIndex === 0"
+                            class="exam-nav-btn exam-nav-btn-prev"
                         >
-                            <span>Berikutnya &raquo;</span>
+                            <span>&laquo; Sebelumnya</span>
                         </button>
-                    @else
+
+                        {{-- Tombol Ragu-Ragu --}}
                         <button
                             type="button"
-                            wire:click="bukaKonfirmasiSelesai"
-                            class="exam-nav-btn exam-nav-btn-finish"
+                            @click="toggleRagu({{ $soal->id }})"
+                            :class="isRagu({{ $soal->id }}) ? 'is-active' : ''"
+                            class="exam-nav-btn exam-nav-btn-ragu"
                         >
-                            <span>Selesai Ujian &#10003;</span>
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" :stroke="isRagu({{ $soal->id }}) ? 'white' : '#d97706'" style="flex-shrink: 0;">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Ragu-Ragu</span>
                         </button>
-                    @endif
+
+                        {{-- Tombol Berikutnya / Selesai --}}
+                        @if($idx < $this->soals->count() - 1)
+                            <button
+                                type="button"
+                                @click="nextSoal()"
+                                class="exam-nav-btn exam-nav-btn-next"
+                            >
+                                <span>Berikutnya &raquo;</span>
+                            </button>
+                        @else
+                            <button
+                                type="button"
+                                @click="showConfirmSubmitModal = true"
+                                class="exam-nav-btn exam-nav-btn-finish"
+                            >
+                                <span>Selesai Ujian &#10003;</span>
+                            </button>
+                        @endif
+                    </div>
                 </div>
-            @else
+            @empty
                 <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 3rem; color: #94a3b8; font-size: 14px;">
-                    Tidak ada soal tersedia.
+                    Tidak ada butir soal tersedia.
                 </div>
-            @endif
+            @endforelse
         </section>
 
         {{-- ============================================================= --}}
-        {{-- KOLOM KANAN: Sidebar Grid Nomor Soal (Desktop Murni CSS)       --}}
+        {{-- KOLOM KANAN: Sidebar Grid Nomor Soal (Desktop Murni CSS/JS)   --}}
         {{-- ============================================================= --}}
         <aside class="exam-sidebar-desktop" style="background: #fff; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden; position: sticky; top: 72px;">
             {{-- Header sidebar --}}
             <div style="padding: 14px 18px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; background: #f8fafc;">
                 <span style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #1e293b;">Daftar Nomor Soal</span>
                 <span style="font-size: 12px; font-weight: 800; color: #2563eb; background: #dbeafe; padding: 2px 8px; border-radius: 999px;">
-                    {{ $this->recap['dijawab'] }} / {{ $this->recap['total'] }}
+                    <span x-text="answeredCount"></span> / {{ $this->soals->count() }}
                 </span>
             </div>
 
@@ -872,38 +881,18 @@
             <div style="padding: 16px; max-height: calc(100vh - 300px); overflow-y: auto;">
                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;">
                     @foreach($this->soals as $idx => $s)
-                        @php
-                            $ans = $this->userAnswers[$s->id] ?? null;
-                            $isCurrent = ($idx === $currentIndex);
-                            $isRaguItem = (bool) ($ans['is_ragu'] ?? false);
-                            $hasAnswer = false;
-                            if ($ans) {
-                                if (in_array($s->tipe_soal, ['pilihan_ganda', 'benar_salah'])) {
-                                    $hasAnswer = !empty($ans['pilihan']);
-                                } elseif ($s->tipe_soal === 'pg_kompleks') {
-                                    $hasAnswer = is_array($ans['pilihan']) && count($ans['pilihan']) > 0;
-                                } elseif ($s->tipe_soal === 'menjodohkan') {
-                                    $hasAnswer = is_array($ans['pilihan']) && count($ans['pilihan']) > 0;
-                                } else {
-                                    $hasAnswer = filled(trim($ans['teks'] ?? ''));
-                                }
-                            }
-                        @endphp
                         <button
                             type="button"
-                            wire:key="grid-no-{{ $idx }}"
-                            wire:click="selectSoal({{ $idx }})"
-                            style="
-                                height: 42px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px;
-                                display: flex; align-items: center; justify-content: center;
-                                cursor: pointer; transition: all 0.15s;
-                                {{ $isCurrent ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3);' : '' }}
-                                {{ $isRaguItem
+                            @click="goToSoal({{ $idx }})"
+                            :style="
+                                (currentIndex === {{ $idx }} ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3); ' : '') +
+                                (isRagu({{ $s->id }})
                                     ? 'background: #f59e0b; color: #fff;'
-                                    : ($hasAnswer
+                                    : (isAnswered({{ $s->id }})
                                         ? 'background: #059669; color: #fff;'
-                                        : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;') }}
+                                        : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;'))
                             "
+                            style="height: 42px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;"
                         >
                             {{ $idx + 1 }}
                         </button>
@@ -917,21 +906,21 @@
                             <span style="width: 14px; height: 14px; border-radius: 4px; background: #059669; display: inline-block;"></span>
                             <span>Sudah Dijawab</span>
                         </div>
-                        <span style="font-weight: 800; color: #059669;">{{ $this->recap['dijawab'] }}</span>
+                        <span style="font-weight: 800; color: #059669;" x-text="answeredCount"></span>
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="width: 14px; height: 14px; border-radius: 4px; background: #f59e0b; display: inline-block;"></span>
                             <span>Ragu-Ragu</span>
                         </div>
-                        <span style="font-weight: 800; color: #f59e0b;">{{ $this->recap['ragu'] }}</span>
+                        <span style="font-weight: 800; color: #f59e0b;" x-text="raguCount"></span>
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="width: 14px; height: 14px; border-radius: 4px; background: #f1f5f9; border: 1.5px solid #cbd5e1; display: inline-block;"></span>
                             <span>Belum Dijawab</span>
                         </div>
-                        <span style="font-weight: 800; color: #64748b;">{{ $this->recap['belum'] }}</span>
+                        <span style="font-weight: 800; color: #64748b;" x-text="belumCount"></span>
                     </div>
                 </div>
             </div>
@@ -940,7 +929,7 @@
             <div style="padding: 14px 18px; border-top: 1px solid #f1f5f9; background: #f8fafc;">
                 <button
                     type="button"
-                    wire:click="bukaKonfirmasiSelesai"
+                    @click="showConfirmSubmitModal = true"
                     style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3); transition: opacity 0.15s; min-height: 44px;"
                     onmouseover="this.style.opacity='0.9'"
                     onmouseout="this.style.opacity='1'"
@@ -954,151 +943,137 @@
     {{-- ----------------------------------------------------------------- --}}
     {{-- DRAWER MODAL MOBILE: Grid Nomor Soal (Smooth Touch Sheet)          --}}
     {{-- ----------------------------------------------------------------- --}}
-    @if($showDaftarSoalMobile)
-        <div class="exam-mobile-overlay" style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;">
-            <div class="exam-mobile-sheet" style="background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); padding: 20px 18px; max-height: 90vh; overflow-y: auto; max-width: 440px;">
-                {{-- Mobile Pull Handle --}}
-                <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 99px; margin: 0 auto 12px;"></div>
+    <div
+        x-show="showDaftarSoalMobile"
+        x-cloak
+        class="exam-mobile-overlay"
+        style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+    >
+        <div class="exam-mobile-sheet" style="background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); padding: 20px 18px; max-height: 90vh; overflow-y: auto; max-width: 440px;">
+            {{-- Mobile Pull Handle --}}
+            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 99px; margin: 0 auto 12px;"></div>
 
-                <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; margin-bottom: 14px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #1e293b; margin: 0;">Daftar Nomor Soal</h3>
-                        <span style="font-size: 11px; font-weight: 800; color: #2563eb; background: #dbeafe; padding: 2px 7px; border-radius: 999px;">
-                            {{ $this->recap['dijawab'] }} / {{ $this->recap['total'] }}
-                        </span>
-                    </div>
-                    <button type="button" wire:click="$set('showDaftarSoalMobile', false)" style="background: none; border: none; font-size: 24px; font-weight: 700; color: #94a3b8; cursor: pointer; line-height: 1; padding: 4px;">&times;</button>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #1e293b; margin: 0;">Daftar Nomor Soal</h3>
+                    <span style="font-size: 11px; font-weight: 800; color: #2563eb; background: #dbeafe; padding: 2px 7px; border-radius: 999px;">
+                        <span x-text="answeredCount"></span> / {{ $this->soals->count() }}
+                    </span>
                 </div>
+                <button type="button" @click="showDaftarSoalMobile = false" style="background: none; border: none; font-size: 24px; font-weight: 700; color: #94a3b8; cursor: pointer; line-height: 1; padding: 4px;">&times;</button>
+            </div>
 
-                {{-- Grid Nomor --}}
-                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px;">
-                    @foreach($this->soals as $idx => $s)
-                        @php
-                            $ans = $this->userAnswers[$s->id] ?? null;
-                            $isCurrent = ($idx === $currentIndex);
-                            $isRaguItem = (bool) ($ans['is_ragu'] ?? false);
-                            $hasAnswer = false;
-                            if ($ans) {
-                                if (in_array($s->tipe_soal, ['pilihan_ganda', 'benar_salah'])) {
-                                    $hasAnswer = !empty($ans['pilihan']);
-                                } elseif (in_array($s->tipe_soal, ['pg_kompleks', 'menjodohkan'])) {
-                                    $hasAnswer = is_array($ans['pilihan']) && count($ans['pilihan']) > 0;
-                                } else {
-                                    $hasAnswer = filled(trim($ans['teks'] ?? ''));
-                                }
-                            }
-                        @endphp
-                        <button
-                            type="button"
-                            wire:key="grid-m-{{ $idx }}"
-                            wire:click="selectSoal({{ $idx }}); $set('showDaftarSoalMobile', false);"
-                            style="
-                                height: 44px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px;
-                                display: flex; align-items: center; justify-content: center; cursor: pointer;
-                                {{ $isCurrent ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3);' : '' }}
-                                {{ $isRaguItem
-                                    ? 'background: #f59e0b; color: #fff;'
-                                    : ($hasAnswer
-                                        ? 'background: #059669; color: #fff;'
-                                        : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;') }}
-                            "
-                        >
-                            {{ $idx + 1 }}
-                        </button>
-                    @endforeach
-                </div>
-
-                {{-- Legend Warna --}}
-                <div style="padding: 10px 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-around; gap: 6px; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 16px;">
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <span style="width: 10px; height: 10px; border-radius: 3px; background: #059669; display: inline-block;"></span>
-                        <span>Dijawab ({{ $this->recap['dijawab'] }})</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <span style="width: 10px; height: 10px; border-radius: 3px; background: #f59e0b; display: inline-block;"></span>
-                        <span>Ragu ({{ $this->recap['ragu'] }})</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <span style="width: 10px; height: 10px; border-radius: 3px; background: #f1f5f9; border: 1px solid #cbd5e1; display: inline-block;"></span>
-                        <span>Kosong ({{ $this->recap['belum'] }})</span>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 8px;">
+            {{-- Grid Nomor --}}
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px;">
+                @foreach($this->soals as $idx => $s)
                     <button
                         type="button"
-                        wire:click="$set('showDaftarSoalMobile', false)"
-                        style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
+                        @click="goToSoal({{ $idx }}); showDaftarSoalMobile = false;"
+                        :style="
+                            (currentIndex === {{ $idx }} ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3); ' : '') +
+                            (isRagu({{ $s->id }})
+                                ? 'background: #f59e0b; color: #fff;'
+                                : (isAnswered({{ $s->id }})
+                                    ? 'background: #059669; color: #fff;'
+                                    : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;'))
+                        "
+                        style="height: 44px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
                     >
-                        Tutup
+                        {{ $idx + 1 }}
                     </button>
-                    <button
-                        type="button"
-                        wire:click="bukaKonfirmasiSelesai"
-                        style="flex: 1.5; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 10px rgba(5,150,105,0.3); min-height: 44px;"
-                    >
-                        Selesai &amp; Kumpulkan &#10003;
-                    </button>
+                @endforeach
+            </div>
+
+            {{-- Legend Warna --}}
+            <div style="padding: 10px 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-around; gap: 6px; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="width: 10px; height: 10px; border-radius: 3px; background: #059669; display: inline-block;"></span>
+                    <span>Dijawab (<span x-text="answeredCount"></span>)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="width: 10px; height: 10px; border-radius: 3px; background: #f59e0b; display: inline-block;"></span>
+                    <span>Ragu (<span x-text="raguCount"></span>)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="width: 10px; height: 10px; border-radius: 3px; background: #f1f5f9; border: 1px solid #cbd5e1; display: inline-block;"></span>
+                    <span>Kosong (<span x-text="belumCount"></span>)</span>
                 </div>
             </div>
-        </div>
-    @endif
 
-    {{-- ----------------------------------------------------------------- --}}
-    {{-- MODAL KONFIRMASI SELESAI UJIAN                                     --}}
-    {{-- ----------------------------------------------------------------- --}}
-    @if($showConfirmSubmitModal)
-        <div style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;">
-            <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); padding: 24px 20px; text-align: center;">
-                <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
-                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#059669">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-
-                <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 6px;">Konfirmasi Selesai Ujian</h3>
-                <p style="font-size: 12px; color: #64748b; margin: 0 0 16px;">Periksa kembali ringkasan jawaban Anda sebelum menyerahkan lembar ujian.</p>
-
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 14px;">
-                    <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
-                        <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Dijawab</span>
-                        <span style="font-size: 18px; font-weight: 900; color: #059669;">{{ $this->recap['dijawab'] }}</span>
-                    </div>
-                    <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
-                        <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Ragu</span>
-                        <span style="font-size: 18px; font-weight: 900; color: #f59e0b;">{{ $this->recap['ragu'] }}</span>
-                    </div>
-                    <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
-                        <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Kosong</span>
-                        <span style="font-size: 18px; font-weight: 900; color: #ef4444;">{{ $this->recap['belum'] }}</span>
-                    </div>
-                </div>
-
-                @if($this->recap['belum'] > 0 || $this->recap['ragu'] > 0)
-                    <div style="padding: 10px 12px; border-radius: 12px; background: #fffbeb; border: 1px solid #fcd34d; font-size: 11px; color: #78350f; text-align: left; margin-bottom: 14px;">
-                        <strong>Perhatian:</strong> Masih ada <strong>{{ $this->recap['belum'] }} soal kosong</strong> dan <strong>{{ $this->recap['ragu'] }} soal ragu</strong>.
-                    </div>
-                @endif
-
-                <div style="display: flex; gap: 8px;">
-                    <button
-                        type="button"
-                        wire:click="tutupKonfirmasiSelesai"
-                        style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
-                    >
-                        Cek Kembali
-                    </button>
-                    <button
-                        type="button"
-                        wire:click="submitUjianFinal"
-                        style="flex: 1.2; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3); min-height: 44px;"
-                    >
-                        Kirim Jawaban &#10003;
-                    </button>
-                </div>
+            <div style="display: flex; gap: 8px;">
+                <button
+                    type="button"
+                    @click="showDaftarSoalMobile = false"
+                    style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
+                >
+                    Tutup
+                </button>
+                <button
+                    type="button"
+                    @click="showDaftarSoalMobile = false; showConfirmSubmitModal = true;"
+                    style="flex: 1.5; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 10px rgba(5,150,105,0.3); min-height: 44px;"
+                >
+                    Selesai &amp; Kumpulkan &#10003;
+                </button>
             </div>
         </div>
-    @endif
+    </div>
+
+    {{-- ----------------------------------------------------------------- --}}
+    {{-- MODAL KONFIRMASI SELESAI UJIAN (REAKTIF & OTOMATIS FLUSH SYNC)     --}}
+    {{-- ----------------------------------------------------------------- --}}
+    <div
+        x-show="showConfirmSubmitModal"
+        x-cloak
+        style="position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+    >
+        <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); padding: 24px 20px; text-align: center;">
+            <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#059669">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+
+            <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 6px;">Konfirmasi Selesai Ujian</h3>
+            <p style="font-size: 12px; color: #64748b; margin: 0 0 16px;">Periksa kembali ringkasan jawaban Anda sebelum menyerahkan lembar ujian.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 14px;">
+                <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
+                    <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Dijawab</span>
+                    <span style="font-size: 18px; font-weight: 900; color: #059669;" x-text="answeredCount"></span>
+                </div>
+                <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
+                    <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Ragu</span>
+                    <span style="font-size: 18px; font-weight: 900; color: #f59e0b;" x-text="raguCount"></span>
+                </div>
+                <div style="padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0;">
+                    <span style="display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Kosong</span>
+                    <span style="font-size: 18px; font-weight: 900; color: #ef4444;" x-text="belumCount"></span>
+                </div>
+            </div>
+
+            <div x-show="belumCount > 0 || raguCount > 0" style="padding: 10px 12px; border-radius: 12px; background: #fffbeb; border: 1px solid #fcd34d; font-size: 11px; color: #78350f; text-align: left; margin-bottom: 14px;">
+                <strong>Perhatian:</strong> Masih ada <strong x-text="belumCount + ' soal kosong'"></strong> dan <strong x-text="raguCount + ' soal ragu'"></strong>.
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button
+                    type="button"
+                    @click="showConfirmSubmitModal = false"
+                    style="flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-size: 12px; font-weight: 700; color: #475569; background: #fff; cursor: pointer; min-height: 44px;"
+                >
+                    Cek Kembali
+                </button>
+                <button
+                    type="button"
+                    @click="submitFinal()"
+                    style="flex: 1.2; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3); min-height: 44px;"
+                >
+                    Kirim Jawaban &#10003;
+                </button>
+            </div>
+        </div>
+    </div>
 
     {{-- ----------------------------------------------------------------- --}}
     {{-- MODAL PERINGATAN KECURANGAN                                        --}}
@@ -1106,7 +1081,7 @@
     @if($showViolationModal)
         <div style="position: fixed; inset: 0; z-index: 50; background: rgba(127,29,29,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 16px;">
             <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; border: 2px solid #ef4444; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 24px 20px; text-align: center;">
-                <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; animation: bounce 1s infinite;">
+                <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
                     <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
@@ -1132,3 +1107,323 @@
     @endif
 @endif
 </div>
+
+{{-- ===================================================================== --}}
+{{-- SCRIPT: ALPINE EXAM RUNNER LOGIC (CLIENT-SIDE NAVIGATION & OFFLINE)  --}}
+{{-- ===================================================================== --}}
+<script>
+function examRunner(config) {
+    return {
+        currentIndex: config.initialIndex || 0,
+        totalSoals: config.totalSoals || 0,
+        soalIds: config.soalIds || [],
+        soalTypes: config.soalTypes || {},
+        answers: config.initialAnswers || {},
+        tokenSesi: config.tokenSesi || 'token',
+        isPreview: Boolean(config.isPreview),
+
+        zoomLevel: 'md',
+        showDaftarSoalMobile: false,
+        showConfirmSubmitModal: false,
+
+        isOnline: navigator.onLine,
+        isSyncing: false,
+        pendingSync: [],
+        storageKey: 'cbt_answers_' + (config.tokenSesi || 'default'),
+        queueKey: 'cbt_queue_' + (config.tokenSesi || 'default'),
+
+        get currentSoalId() {
+            return this.soalIds[this.currentIndex] || null;
+        },
+
+        init() {
+            // Restore dari localStorage jika ada data lokal tersimpan
+            try {
+                const local = localStorage.getItem(this.storageKey);
+                if (local) {
+                    const parsed = JSON.parse(local);
+                    for (const id in parsed) {
+                        this.answers[id] = Object.assign({}, this.answers[id] || {}, parsed[id]);
+                    }
+                }
+                const queue = localStorage.getItem(this.queueKey);
+                if (queue) {
+                    this.pendingSync = JSON.parse(queue);
+                }
+            } catch (e) {
+                console.warn('Gagal memuat cache localStorage:', e);
+            }
+
+            // Sync antrean yang belum terkirim saat startup
+            if (navigator.onLine && this.pendingSync.length > 0) {
+                this.flushQueue();
+            }
+
+            // Event listener Online / Offline browser
+            window.addEventListener('online', () => {
+                this.isOnline = true;
+                this.flushQueue();
+            });
+            window.addEventListener('offline', () => {
+                this.isOnline = false;
+            });
+
+            // Sinkronisasi otomatis berkala setiap 15 detik jika ada antrean
+            setInterval(() => {
+                if (this.isOnline && this.pendingSync.length > 0 && !this.isSyncing) {
+                    this.flushQueue();
+                }
+            }, 15000);
+
+            // Render rumus matematika KaTeX saat halaman selesai dimuat
+            this.$nextTick(() => {
+                if (typeof renderMathInElement === 'function') {
+                    renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            });
+
+            // Keyboard navigation (0ms instantaneous)
+            window.addEventListener('keydown', (e) => {
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+                const key = e.key.toUpperCase();
+                if (['A', 'B', 'C', 'D', 'E'].includes(key)) {
+                    if (this.currentSoalId) {
+                        this.pilihOpsi(this.currentSoalId, key);
+                    }
+                } else if (e.key === 'ArrowRight') {
+                    this.nextSoal();
+                } else if (e.key === 'ArrowLeft') {
+                    this.prevSoal();
+                } else if (key === 'R') {
+                    if (this.currentSoalId) {
+                        this.toggleRagu(this.currentSoalId);
+                    }
+                }
+            });
+
+            // Kunci browser history
+            history.pushState(null, document.title, location.href);
+            window.addEventListener('popstate', function () {
+                history.pushState(null, document.title, location.href);
+            });
+
+            // Tab/focus violation detection (jika bukan mode preview)
+            @if(!$is_preview)
+            window.isLegitNavigation = false;
+            window.addEventListener('beforeunload', () => {
+                window.isLegitNavigation = true;
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && !window.isLegitNavigation && !@this.is_submitted) {
+                    if (window.AndroidExam && typeof window.AndroidExam.triggerViolation === 'function') {
+                        window.AndroidExam.triggerViolation('Siswa beralih aplikasi atau membuka notifikasi');
+                    }
+                    $wire.triggerViolation();
+                }
+            });
+            @endif
+        },
+
+        goToSoal(index) {
+            if (index >= 0 && index < this.totalSoals) {
+                this.currentIndex = index;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        },
+
+        nextSoal() {
+            if (this.currentIndex < this.totalSoals - 1) {
+                this.goToSoal(this.currentIndex + 1);
+            }
+        },
+
+        prevSoal() {
+            if (this.currentIndex > 0) {
+                this.goToSoal(this.currentIndex - 1);
+            }
+        },
+
+        ensureAnswer(soalId) {
+            if (!this.answers[soalId]) {
+                this.answers[soalId] = { pilihan: null, teks: null, is_ragu: false };
+            }
+        },
+
+        saveLocal() {
+            try {
+                localStorage.setItem(this.storageKey, JSON.stringify(this.answers));
+                localStorage.setItem(this.queueKey, JSON.stringify(this.pendingSync));
+            } catch (e) {
+                console.warn('Gagal menyimpan cache localStorage:', e);
+            }
+        },
+
+        queueSync(item) {
+            this.pendingSync = this.pendingSync.filter(q => q.soal_id !== item.soal_id);
+            this.pendingSync.push(item);
+            this.saveLocal();
+        },
+
+        async flushQueue() {
+            if (this.pendingSync.length === 0 || this.isSyncing) return;
+            this.isSyncing = true;
+            const batch = [...this.pendingSync];
+            try {
+                await $wire.syncBatchJawaban(batch);
+                const syncedIds = new Set(batch.map(b => b.soal_id));
+                this.pendingSync = this.pendingSync.filter(q => !syncedIds.has(q.soal_id));
+                this.isOnline = true;
+                this.saveLocal();
+            } catch (err) {
+                console.warn('Sinkronisasi latar gagal, disimpan di antrean lokal:', err);
+                this.isOnline = false;
+            } finally {
+                this.isSyncing = false;
+            }
+        },
+
+        pilihOpsi(soalId, label) {
+            this.ensureAnswer(soalId);
+            this.answers[soalId].pilihan = label;
+            this.saveLocal();
+
+            this.queueSync({
+                soal_id: soalId,
+                pilihan: label,
+                teks: this.answers[soalId].teks || null,
+                is_ragu: Boolean(this.answers[soalId].is_ragu)
+            });
+            this.flushQueue();
+        },
+
+        pilihMulti(soalId, label) {
+            this.ensureAnswer(soalId);
+            let current = this.answers[soalId].pilihan;
+            if (!Array.isArray(current)) current = [];
+            if (current.includes(label)) {
+                current = current.filter(x => x !== label);
+            } else {
+                current.push(label);
+                current.sort();
+            }
+            this.answers[soalId].pilihan = current;
+            this.saveLocal();
+
+            this.queueSync({
+                soal_id: soalId,
+                pilihan: current,
+                teks: this.answers[soalId].teks || null,
+                is_ragu: Boolean(this.answers[soalId].is_ragu)
+            });
+            this.flushQueue();
+        },
+
+        simpanTeks(soalId, teks) {
+            this.ensureAnswer(soalId);
+            this.answers[soalId].teks = teks;
+            this.saveLocal();
+
+            this.queueSync({
+                soal_id: soalId,
+                pilihan: this.answers[soalId].pilihan || null,
+                teks: teks,
+                is_ragu: Boolean(this.answers[soalId].is_ragu)
+            });
+            this.flushQueue();
+        },
+
+        simpanMatching(soalId, index, value) {
+            this.ensureAnswer(soalId);
+            let current = this.answers[soalId].pilihan;
+            if (typeof current !== 'object' || current === null || Array.isArray(current)) {
+                current = {};
+            }
+            current[index] = value;
+            this.answers[soalId].pilihan = current;
+            this.saveLocal();
+
+            this.queueSync({
+                soal_id: soalId,
+                pilihan: current,
+                teks: this.answers[soalId].teks || null,
+                is_ragu: Boolean(this.answers[soalId].is_ragu)
+            });
+            this.flushQueue();
+        },
+
+        toggleRagu(soalId) {
+            this.ensureAnswer(soalId);
+            this.answers[soalId].is_ragu = !this.answers[soalId].is_ragu;
+            this.saveLocal();
+
+            this.queueSync({
+                soal_id: soalId,
+                pilihan: this.answers[soalId].pilihan || null,
+                teks: this.answers[soalId].teks || null,
+                is_ragu: Boolean(this.answers[soalId].is_ragu)
+            });
+            this.flushQueue();
+        },
+
+        isAnswered(soalId) {
+            const a = this.answers[soalId];
+            if (!a) return false;
+            const tipe = this.soalTypes[soalId];
+            if (tipe === 'pilihan_ganda' || tipe === 'benar_salah') {
+                return Boolean(a.pilihan);
+            }
+            if (tipe === 'pg_kompleks') {
+                return Array.isArray(a.pilihan) && a.pilihan.length > 0;
+            }
+            if (tipe === 'menjodohkan') {
+                if (Array.isArray(a.pilihan)) return a.pilihan.length > 0;
+                return Boolean(a.pilihan && Object.keys(a.pilihan).length > 0);
+            }
+            return Boolean(a.teks && a.teks.trim().length > 0);
+        },
+
+        isRagu(soalId) {
+            return Boolean(this.answers[soalId] && this.answers[soalId].is_ragu);
+        },
+
+        get answeredCount() {
+            let count = 0;
+            for (const id of this.soalIds) {
+                if (this.isAnswered(id)) count++;
+            }
+            return count;
+        },
+
+        get raguCount() {
+            let count = 0;
+            for (const id of this.soalIds) {
+                if (this.isRagu(id)) count++;
+            }
+            return count;
+        },
+
+        get belumCount() {
+            return Math.max(0, this.totalSoals - this.answeredCount);
+        },
+
+        async submitFinal() {
+            if (this.pendingSync.length > 0) {
+                await this.flushQueue();
+            }
+            try {
+                localStorage.removeItem(this.storageKey);
+                localStorage.removeItem(this.queueKey);
+            } catch (e) {}
+            $wire.submitUjianFinal();
+        }
+    };
+}
+</script>
