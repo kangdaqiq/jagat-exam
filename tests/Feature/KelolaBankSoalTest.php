@@ -342,6 +342,75 @@ class KelolaBankSoalTest extends TestCase
         $opsiC = $firstSoal->opsiJawabans->where('label', 'C')->first();
         $this->assertTrue((bool) $opsiC->is_jawaban_benar);
     }
+
+    public function test_parser_accurately_handles_markdown_sections_and_mixed_pg_essay(): void
+    {
+        $rawMarkdown = <<<MD
+# SOAL PENDIDIKAN AGAMA ISLAM
+Kelas: X SMK\
+Petunjuk: Kerjakan dengan baik.
+
+1. Bab 1 – Meraih Kesuksesan
+2. Bab 2 – Memahami Hakikat
+
+## A. Pilihan Ganda
+1\. Dalam QS. Al-Maidah ayat 48, manusia diperintahkan berlomba dalam kebaikan. Istilah tersebut adalah ....
+A. Tawakal\
+B. Fastabiqul khairat\
+C. Takabur\
+D. Tasamuh\
+E. Uzlah
+
+2\. Menolong teman tanpa pamrih adalah contoh ....
+A. Persaingan tidak sehat\
+B. Fastabiqul khairat\
+C. Riya\
+D. Sum'ah\
+E. Hasad
+
+20. Perhatikan pernyataan berikut!
+1. Menggunakan uang sesuai kebutuhan.
+2. Selalu memamerkan kekayaan.
+3. Bersyukur atas rezeki.
+Perilaku yang baik ditunjukkan oleh ....
+A. 1 dan 3\
+B. 2 dan 3\
+C. 1, 2, dan 3\
+D. 2 saja\
+E. 3 saja
+
+## B. Essay
+1\. Jelaskan pengertian fastabiqul khairat!
+2\. Jelaskan pengertian etos kerja dalam Islam!
+
+## C. Kunci Jawaban
+Kunci jawaban guru.
+MD;
+
+        $service = app(\App\Services\AiQuestionService::class);
+        $results = $service->fallbackLocalParse($rawMarkdown, 2.0);
+
+        // 3 PG + 2 Essay = 5 Soal (Bab 1, Bab 2, dan Kunci Jawaban diabaikan)
+        $this->assertCount(5, $results);
+
+        $this->assertEquals('pilihan_ganda', $results[0]['tipe_soal']);
+        $this->assertStringContainsString('QS. Al-Maidah ayat 48', $results[0]['pertanyaan']);
+        $this->assertCount(5, $results[0]['opsi_jawabans']);
+
+        // Soal 20 tidak boleh pecah oleh 1, 2, 3 di dalamnya
+        $this->assertEquals('pilihan_ganda', $results[2]['tipe_soal']);
+        $this->assertStringContainsString('Perhatikan pernyataan berikut', $results[2]['pertanyaan']);
+        $this->assertStringContainsString('Menggunakan uang sesuai kebutuhan', $results[2]['pertanyaan']);
+        $this->assertCount(5, $results[2]['opsi_jawabans']);
+
+        // Essay
+        $this->assertEquals('essay', $results[3]['tipe_soal']);
+        $this->assertStringContainsString('pengertian fastabiqul khairat', $results[3]['pertanyaan']);
+        $this->assertEmpty($results[3]['opsi_jawabans']);
+
+        $this->assertEquals('essay', $results[4]['tipe_soal']);
+        $this->assertEquals('essay', $results[4]['tipe_soal']);
+    }
 }
 
 
