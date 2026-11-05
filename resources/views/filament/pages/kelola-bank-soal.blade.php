@@ -1525,7 +1525,7 @@
                         </div>
                     </div>
 
-                    {{-- Pilihan Model AI Gemini (Hanya Lini Modern v2 ke Atas) --}}
+                    {{-- Pilihan Model AI Gemini (Lini Gemini 3.5 & 3.1) --}}
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
@@ -1539,11 +1539,11 @@
                             wire:model="ai_model"
                             class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
                         >
-                            <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash (Rekomendasi Utama - Cepat &amp; Cerdas)</option>
-                            <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS &amp; Rumit)</option>
-                            <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Alternatif Cepat &amp; Stabil)</option>
-                            <option value="gemini-2.0-flash-lite">🌱 Gemini 2.0 Flash-Lite (Hemat Kuota &amp; Ringan)</option>
-                            <option value="gemini-flash-latest">✨ Gemini Flash Latest (Otomatis Versi Terbaru)</option>
+                            <option value="gemini-3.5-flash">⚡ Gemini 3.5 Flash (Rekomendasi Utama - Cepat &amp; Cerdas)</option>
+                            <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Sangat Cepat &amp; Hemat Kuota)</option>
+                            <option value="gemini-3.5-pro">🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS &amp; Rumit)</option>
+                            <option value="gemini-3.1-flash">🚀 Gemini 3.1 Flash (Alternatif Cepat &amp; Stabil)</option>
+                            <option value="gemini-3.1-pro">🔬 Gemini 3.1 Pro (Analisis &amp; Evaluasi Kompleks)</option>
                         </select>
                     </div>
 

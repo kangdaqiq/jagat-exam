@@ -61,7 +61,7 @@ class EditBankSoal extends Page
     public int $ai_jumlah = 5; // 1-50
     public string $ai_instruksi = '';
     public string $ai_api_key = '';
-    public string $ai_model = 'gemini-2.5-flash';
+    public string $ai_model = 'gemini-3.5-flash';
     public bool $ai_simpan_api_key = true;
     public bool $is_generating_ai = false;
 
@@ -385,7 +385,7 @@ class EditBankSoal extends Page
         $this->ai_mode = $mode;
         $this->ai_tipe_soal = $this->tipe_soal;
         if (empty($this->ai_model)) {
-            $this->ai_model = config('ai.gemini.model', 'gemini-2.5-flash');
+            $this->ai_model = config('ai.gemini.model', 'gemini-3.5-flash');
         }
         if (empty($this->ai_api_key)) {
             $this->ai_api_key = config('ai.gemini.api_key', '');
@@ -436,7 +436,7 @@ class EditBankSoal extends Page
                 'instruksi_tambahan' => $this->ai_instruksi,
                 'api_key' => $apiKey ?: null,
                 'provider' => 'gemini',
-                'model' => $this->ai_model ?: 'gemini-2.5-flash',
+                'model' => $this->ai_model ?: 'gemini-3.5-flash',
             ]);
 
             if (empty($generatedItems)) {
@@ -540,7 +540,7 @@ class EditBankSoal extends Page
                 $this->opsi_jawabans,
                 filled($apiKey) ? $apiKey : null,
                 'gemini',
-                $this->ai_model ?: 'gemini-2.5-flash'
+                $this->ai_model ?: 'gemini-3.5-flash'
             );
 
             $this->pembahasan = $pembahasan;
