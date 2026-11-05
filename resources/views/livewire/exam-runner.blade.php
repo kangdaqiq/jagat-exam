@@ -189,6 +189,149 @@
             transition: all 0.15s;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            border: 1.5px solid #e2e8f0;
+            background: #fff;
+            box-sizing: border-box;
+        }
+        .exam-option-card:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+        }
+        .exam-option-card.is-selected {
+            border: 2px solid #2563eb !important;
+            background: #eff6ff !important;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.12) !important;
+        }
+        .exam-option-card.is-selected-multi {
+            border: 2px solid #7c3aed !important;
+            background: #f5f3ff !important;
+            box-shadow: 0 2px 8px rgba(124,58,237,0.1) !important;
+        }
+
+        .exam-option-badge {
+            width: 34px !important;
+            height: 34px !important;
+            border-radius: 10px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-weight: 800 !important;
+            font-size: 14px !important;
+            transition: all 0.15s !important;
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            box-sizing: border-box !important;
+        }
+        .exam-option-badge.is-selected {
+            background: #2563eb !important;
+            color: #fff !important;
+            box-shadow: 0 2px 6px rgba(37,99,235,0.3) !important;
+            border: none !important;
+        }
+        .exam-option-badge.is-selected-multi {
+            background: #7c3aed !important;
+            color: #fff !important;
+            box-shadow: 0 2px 6px rgba(124,58,237,0.3) !important;
+            border: none !important;
+        }
+
+        .exam-radio-indicator {
+            width: 20px !important;
+            height: 20px !important;
+            border-radius: 50% !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid #cbd5e1;
+            background: #fff;
+            box-sizing: border-box !important;
+            transition: all 0.15s;
+        }
+        .exam-radio-indicator.is-selected {
+            background: #2563eb !important;
+            border: 2px solid #2563eb !important;
+        }
+
+        .exam-checkbox-indicator {
+            width: 20px !important;
+            height: 20px !important;
+            border-radius: 6px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid #cbd5e1;
+            background: #fff;
+            box-sizing: border-box !important;
+            transition: all 0.15s;
+        }
+        .exam-checkbox-indicator.is-selected {
+            background: #7c3aed !important;
+            border: 2px solid #7c3aed !important;
+        }
+
+        /* Question Grid Number Buttons */
+        .exam-grid-btn {
+            height: 42px !important;
+            border-radius: 12px !important;
+            font-weight: 800 !important;
+            font-size: 13px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            transition: all 0.15s !important;
+            user-select: none !important;
+            box-sizing: border-box !important;
+            padding: 0 !important;
+        }
+        .exam-grid-btn.is-active {
+            box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3) !important;
+        }
+        .exam-grid-btn.is-ragu {
+            background: #f59e0b !important;
+            color: #ffffff !important;
+            border: none !important;
+        }
+        .exam-grid-btn.is-answered {
+            background: #059669 !important;
+            color: #ffffff !important;
+            border: none !important;
+        }
+        .exam-grid-btn.is-unanswered {
+            background: #f1f5f9 !important;
+            color: #475569 !important;
+            border: 1.5px solid #e2e8f0 !important;
+        }
+        .exam-grid-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Mobile Drawer / Overlay */
+        .exam-mobile-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 50 !important;
+            background: rgba(15,23,42,0.65) !important;
+            backdrop-filter: blur(4px) !important;
+            display: flex !important;
+            align-items: flex-end !important;
+            justify-content: center !important;
+            padding: 0 !important;
+        }
+        .exam-mobile-sheet {
+            background: #fff !important;
+            border-radius: 24px 24px 0 0 !important;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.2) !important;
+            padding: 20px 18px 24px !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+            max-width: 480px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
         }
 
         /* Media Queries untuk Desktop (>= 1024px) */
@@ -664,17 +807,12 @@
                                     <div
                                         @click="pilihOpsi({{ $soal->id }}, '{{ $opsi->label }}')"
                                         class="exam-option-card"
-                                        :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
-                                            ? 'border: 2px solid #2563eb; background: #eff6ff; box-shadow: 0 2px 8px rgba(37,99,235,0.12);'
-                                            : 'border: 1.5px solid #e2e8f0; background: #fff;'"
+                                        :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
                                     >
                                         {{-- Huruf A, B, C, D --}}
                                         <div
                                             class="exam-option-badge"
-                                            :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
-                                                ? 'background: #2563eb; color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,0.3); border: none;'
-                                                : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;'"
-                                            style="width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; transition: all 0.15s;"
+                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
                                         >
                                             {{ $opsi->label }}
                                         </div>
@@ -688,12 +826,10 @@
                                             {!! $opsi->teks_opsi !!}
                                         </div>
 
-                                        {{-- Lingkaran Radio / Centang --}}
+                                        {{-- Lingkaran Radio Bulat --}}
                                         <div
-                                            :style="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'
-                                                ? 'background: #2563eb; border: 2px solid #2563eb;'
-                                                : 'border: 2px solid #cbd5e1; background: #fff;'"
-                                            style="width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;"
+                                            class="exam-radio-indicator"
+                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
                                         >
                                             <template x-if="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'">
                                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
@@ -713,16 +849,11 @@
                                     <div
                                         @click="pilihMulti({{ $soal->id }}, '{{ $opsi->label }}')"
                                         class="exam-option-card"
-                                        :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
-                                            ? 'border: 2px solid #7c3aed; background: #f5f3ff; box-shadow: 0 2px 8px rgba(124,58,237,0.1);'
-                                            : 'border: 1.5px solid #e2e8f0; background: #fff;'"
+                                        :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
                                     >
                                         <div
                                             class="exam-option-badge"
-                                            :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
-                                                ? 'background: #7c3aed; color: #fff; border: none;'
-                                                : 'background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;'"
-                                            style="width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;"
+                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
                                         >
                                             {{ $opsi->label }}
                                         </div>
@@ -734,10 +865,8 @@
                                             {!! $opsi->teks_opsi !!}
                                         </div>
                                         <div
-                                            :style="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}'))
-                                                ? 'background: #7c3aed; border: 2px solid #7c3aed;'
-                                                : 'border: 2px solid #cbd5e1; background: #fff;'"
-                                            style="width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;"
+                                            class="exam-checkbox-indicator"
+                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
                                         >
                                             <template x-if="Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')">
                                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
@@ -888,15 +1017,13 @@
                         <button
                             type="button"
                             @click="goToSoal({{ $idx }})"
-                            :style="
-                                (currentIndex === {{ $idx }} ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3); ' : '') +
-                                (isRagu({{ $s->id }})
-                                    ? 'background: #f59e0b; color: #fff;'
-                                    : (isAnswered({{ $s->id }})
-                                        ? 'background: #059669; color: #fff;'
-                                        : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;'))
-                            "
-                            style="height: 42px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;"
+                            class="exam-grid-btn"
+                            :class="{
+                                'is-active': currentIndex === {{ $idx }},
+                                'is-ragu': isRagu({{ $s->id }}),
+                                'is-answered': !isRagu({{ $s->id }}) && isAnswered({{ $s->id }}),
+                                'is-unanswered': !isRagu({{ $s->id }}) && !isAnswered({{ $s->id }})
+                            }"
                         >
                             {{ $idx + 1 }}
                         </button>
@@ -979,15 +1106,14 @@
                     <button
                         type="button"
                         @click="goToSoal({{ $idx }}); showDaftarSoalMobile = false;"
-                        :style="
-                            (currentIndex === {{ $idx }} ? 'box-shadow: 0 0 0 3px #2563eb, 0 2px 8px rgba(37,99,235,0.3); ' : '') +
-                            (isRagu({{ $s->id }})
-                                ? 'background: #f59e0b; color: #fff;'
-                                : (isAnswered({{ $s->id }})
-                                    ? 'background: #059669; color: #fff;'
-                                    : 'background: #f1f5f9; color: #475569; border: 1.5px solid #e2e8f0;'))
-                        "
-                        style="height: 44px; border-radius: 12px; border: none; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+                        class="exam-grid-btn"
+                        :class="{
+                            'is-active': currentIndex === {{ $idx }},
+                            'is-ragu': isRagu({{ $s->id }}),
+                            'is-answered': !isRagu({{ $s->id }}) && isAnswered({{ $s->id }}),
+                            'is-unanswered': !isRagu({{ $s->id }}) && !isAnswered({{ $s->id }})
+                        }"
+                        style="height: 44px !important;"
                     >
                         {{ $idx + 1 }}
                     </button>
@@ -995,17 +1121,17 @@
             </div>
 
             {{-- Legend Warna --}}
-            <div style="padding: 10px 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-around; gap: 6px; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="padding: 10px 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 4px; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 16px; overflow-x: auto;">
+                <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
                     <span style="width: 10px; height: 10px; border-radius: 3px; background: #059669; display: inline-block;"></span>
                     <span>Dijawab (<span x-text="answeredCount"></span>)</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
                     <span style="width: 10px; height: 10px; border-radius: 3px; background: #f59e0b; display: inline-block;"></span>
                     <span>Ragu (<span x-text="raguCount"></span>)</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <span style="width: 10px; height: 10px; border-radius: 3px; background: #f1f5f9; border: 1px solid #cbd5e1; display: inline-block;"></span>
+                <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                    <span style="width: 10px; height: 10px; border-radius: 3px; background: #cbd5e1; display: inline-block;"></span>
                     <span>Kosong (<span x-text="belumCount"></span>)</span>
                 </div>
             </div>
