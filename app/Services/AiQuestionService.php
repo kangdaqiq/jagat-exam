@@ -10,16 +10,16 @@ use Illuminate\Support\Facades\Log;
 class AiQuestionService
 {
     /**
-     * Daftar model Google Gemini yang didukung (Lini Gemini 3.5 & 3.1)
+     * Daftar model Google Gemini yang didukung (Lini Gemini 3.6, 3.5 & Flash)
      */
     public static function getAvailableGeminiModels(): array
     {
         return [
-            'gemini-3.5-flash' => '⚡ Gemini 3.5 Flash (Rekomendasi Utama - Cepat & Cerdas)',
-            'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Sangat Cepat & Hemat Kuota)',
-            'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS & Rumit)',
-            'gemini-3.1-flash' => '🚀 Gemini 3.1 Flash (Alternatif Cepat & Stabil)',
-            'gemini-3.1-pro' => '🔬 Gemini 3.1 Pro (Analisis & Evaluasi Kompleks)',
+            'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Sangat Cepat & Paling Stabil - Rekomendasi Utama)',
+            'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash (Cepat & Andal)',
+            'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)',
+            'gemini-flash-latest' => '🔄 Gemini Flash Latest (Versi Terbaru Otomatis)',
+            'gemini-2.5-pro' => '🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal Kompleks)',
         ];
     }
 
@@ -150,154 +150,230 @@ class AiQuestionService
     }
 
     /**
-     * Fallback parser lokal berbasis pola teks (regex) jika AI offline atau testing
+     * Fallback parser lokal berbasis pemrosesan teks cerdas & regex jika AI offline atau testing
      */
     public function fallbackLocalParse(string $rawText, float $defaultBobot = 2.0): array
     {
-        $rawText = str_replace(["\r\n", "\r"], "\n", trim($rawText));
-        if (empty($rawText)) {
+        // 1. Normalisasi Markdown, Karakter Khusus & HTML Entities
+        $text = html_entity_decode($rawText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Unescape dot setelah angka atau huruf: 1\. -> 1. atau A\. -> A.
+        $text = preg_replace('/(?<=^|\s|\n)([A-Za-z]|\d+)\\\([\.\)])/', '$1$2', $text);
+        // Hapus trailing backslash Markdown line break di akhir baris
+        $text = preg_replace('/\\\\\s*$/m', '', $text);
+        $text = str_replace(["\r\n", "\r"], "\n", trim($text));
+
+        if (empty($text)) {
             return [];
         }
 
-        // Split text menjadi blok per butir soal (misal: "1. ", "1) ", "Soal 1", "### Soal 1", dll)
-        $pattern = '/(?=(?:^|\n)\s*(?:(?:Soal\s*(?:No\.?)?\s*)?\d+[\.\)]|#+\s*(?:Soal\s*)?\d+))/i';
-        $blocks = preg_split($pattern, $rawText, -1, PREG_SPLIT_NO_EMPTY);
+        // 2. Deteksi apakah teks memiliki bagian-bagian (Sections) seperti "## A. Pilihan Ganda", "## B. Essay", dll
+        $sectionPattern = '/(?=(?:^|\n)\s*#{1,3}\s*(?:[A-Z]\.?\s*)?(?:Pilihan\s*Ganda|PG|Multiple\s*Choice|Essay|Uraian|Isian|Menjodohkan|Kunci\s*Jawaban|Pedoman\s*Penilaian))/i';
+        $rawSections = preg_split($sectionPattern, $text, -1, PREG_SPLIT_NO_EMPTY);
 
-        if (count($blocks) <= 1 && !preg_match('/^\s*(?:(?:Soal\s*(?:No\.?)?\s*)?\d+[\.\)]|#+\s*(?:Soal\s*)?\d+)/i', $rawText)) {
-            $blocks = [$rawText];
-        }
+        $parsedSections = [];
+        if (count($rawSections) > 1) {
+            foreach ($rawSections as $sec) {
+                $sec = trim($sec);
+                if (empty($sec)) continue;
 
-        $results = [];
+                $firstLine = trim(strtok($sec, "\n"));
 
-        foreach ($blocks as $block) {
-            $block = trim($block);
-            if (empty($block)) continue;
-
-            // Bersihkan nomor urut soal di awal (seperti "1. ", "Soal 1: ", dll)
-            $cleanedBlock = preg_replace('/^(?:#+\s*)?(?:Soal\s*(?:No\.?)?\s*)?\d+[\.\):\s-]+\s*/i', '', $block);
-
-            // Ekstrak Pembahasan / Penjelasan jika ada
-            $pembahasan = '';
-            if (preg_match('/(?:^|\n)\s*(?:Pembahasan|Penjelasan|Alasan|Keterangan)\s*[:=-]\s*([\s\S]*)$/i', $cleanedBlock, $pMatch)) {
-                $pembahasan = trim($pMatch[1]);
-                $cleanedBlock = trim(substr($cleanedBlock, 0, strrpos($cleanedBlock, $pMatch[0])));
-            }
-
-            // Ekstrak Kunci Jawaban jika ada
-            $kunci = null;
-            if (preg_match('/(?:^|\n)\s*(?:Kunci\s*(?:Jawaban)?|Jawaban\s*(?:Benar)?|Answer)\s*[:=-]\s*([A-Ea-e1-5]|Benar|Salah|[^\n]+)/i', $cleanedBlock, $kMatch)) {
-                $kunciRaw = trim($kMatch[1]);
-                $cleanedBlock = trim(str_replace($kMatch[0], '', $cleanedBlock));
-                $kunci = strtoupper(substr($kunciRaw, 0, 1));
-            }
-
-            // Ekstrak pilihan jawaban (A, B, C, D, E)
-            $lines = explode("\n", $cleanedBlock);
-            $questionLines = [];
-            $options = [];
-            $currentLabel = null;
-            $currentOptionText = '';
-            $isParsingOptions = false;
-
-            foreach ($lines as $line) {
-                $trimmedLine = trim($line);
-                if (empty($trimmedLine) && !$isParsingOptions) {
-                    $questionLines[] = '';
+                // Lewati judul dokumen awal / preamble
+                if (preg_match('/^#{1,3}\s*(?:SOAL|PETUNJUK|MATERI|KISI|UJIAN|PENILAIAN)/i', $firstLine) && !preg_match('/Pilihan\s*Ganda|PG|Essay|Uraian/i', $firstLine)) {
                     continue;
                 }
 
-                // Cek apakah baris ini adalah opsi jawaban: misal "A. ", "A) ", "(A) ", "- A. "
-                if (preg_match('/^(?:[-*•]\s*)?(?:\(?([A-Ea-e])[\.\)]|\b([A-Ea-e])\.\s+)\s*(.*)$/', $trimmedLine, $optMatch)) {
-                    $isParsingOptions = true;
+                // Lewati kunci jawaban guru / pedoman penilaian di akhir
+                if (preg_match('/Kunci\s*Jawaban|Pedoman\s*Penilaian|Rubrik/i', $firstLine)) {
+                    continue;
+                }
+
+                $type = 'pilihan_ganda';
+                if (preg_match('/Essay|Uraian/i', $firstLine)) {
+                    $type = 'essay';
+                } elseif (preg_match('/Isian/i', $firstLine)) {
+                    $type = 'isian';
+                } elseif (preg_match('/Benar\s*Salah/i', $firstLine)) {
+                    $type = 'benar_salah';
+                }
+
+                // Hapus header section dan petunjuk umum jika ada
+                $body = preg_replace('/^#{1,3}[^\n]+\n(?:Petunjuk[^\n]+\n)?/i', '', $sec);
+                $parsedSections[] = [
+                    'type' => $type,
+                    'content' => trim($body),
+                ];
+            }
+        } else {
+            // Tanpa section eksplisit, bersihkan judul dokumen di awal sebelum soal No 1
+            if (preg_match('/(?:^|\n)\s*1[\.\)]\s+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
+                $text = substr($text, $m[0][1]);
+            }
+            $parsedSections[] = [
+                'type' => 'auto',
+                'content' => $text,
+            ];
+        }
+
+        $allSoals = [];
+
+        foreach ($parsedSections as $section) {
+            $secContent = $section['content'];
+            $secType = $section['type'];
+
+            // Split per nomor urut soal bertahap: 1., 2., 3., dst
+            $lines = explode("\n", $secContent);
+            $questionBlocks = [];
+            $currentBlock = [];
+            $expectedNumber = 1;
+
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+
+                // Cek apakah baris diawali nomor soal yang diharapkan (misal 1., 2., 3...)
+                if (preg_match('/^(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)]\s+(.*)$/i', $trimmed, $nMatch)) {
+                    $num = (int) $nMatch[1];
+                    if ($num === $expectedNumber || ($expectedNumber === 1 && $num >= 1 && $num <= 2)) {
+                        if (!empty($currentBlock)) {
+                            $questionBlocks[] = implode("\n", $currentBlock);
+                            $currentBlock = [];
+                        }
+                        $expectedNumber = $num + 1;
+                    }
+                }
+
+                $currentBlock[] = $line;
+            }
+
+            if (!empty($currentBlock)) {
+                $questionBlocks[] = implode("\n", $currentBlock);
+            }
+
+            foreach ($questionBlocks as $block) {
+                $block = trim($block);
+                if (empty($block)) continue;
+
+                if (!preg_match('/^(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)]\s+(.*)$/s', $block, $numMatch)) {
+                    continue;
+                }
+
+                $body = trim($numMatch[2]);
+
+                // Ekstrak Pembahasan jika ada
+                $pembahasan = '';
+                if (preg_match('/(?:^|\n)\s*(?:Pembahasan|Penjelasan|Alasan|Keterangan)\s*[:=-]\s*([\s\S]*)$/i', $body, $pMatch)) {
+                    $pembahasan = trim($pMatch[1]);
+                    $body = trim(substr($body, 0, strrpos($body, $pMatch[0])));
+                }
+
+                // Ekstrak Kunci Jawaban jika ada di bawah soal
+                $kunci = null;
+                if (preg_match('/(?:^|\n)\s*(?:Kunci\s*(?:Jawaban)?|Jawaban\s*(?:Benar)?|Answer)\s*[:=-]\s*([A-Ea-e1-5]|Benar|Salah|[^\n]+)/i', $body, $kMatch)) {
+                    $kunciRaw = trim($kMatch[1]);
+                    $body = trim(str_replace($kMatch[0], '', $body));
+                    $kunci = strtoupper(substr($kunciRaw, 0, 1));
+                }
+
+                // Tentukan tipe
+                $tipe = $secType;
+
+                // Pisahkan teks pertanyaan dan opsi (hanya jika BUKAN essay)
+                $lines = explode("\n", $body);
+                $questionLines = [];
+                $options = [];
+                $currentLabel = null;
+                $currentOptionText = '';
+                $isParsingOptions = false;
+
+                if ($tipe !== 'essay') {
+                    foreach ($lines as $line) {
+                        $trimmed = trim($line);
+
+                        // Opsi A, B, C, D, E
+                        if (preg_match('/^(?:[-*•]\s*)?(?:\(?([A-Ea-e])[\.\)]|\b([A-Ea-e])\.\s+)\s*(.*)$/', $trimmed, $optMatch)) {
+                            $isParsingOptions = true;
+                            if ($currentLabel !== null) {
+                                $options[] = [
+                                    'label' => $currentLabel,
+                                    'teks' => trim($currentOptionText),
+                                ];
+                            }
+                            $currentLabel = strtoupper(!empty($optMatch[1]) ? $optMatch[1] : $optMatch[2]);
+                            $currentOptionText = trim($optMatch[3]);
+                        } elseif ($isParsingOptions) {
+                            $currentOptionText .= "\n" . $trimmed;
+                        } else {
+                            $questionLines[] = $line;
+                        }
+                    }
+
                     if ($currentLabel !== null) {
                         $options[] = [
                             'label' => $currentLabel,
                             'teks' => trim($currentOptionText),
                         ];
                     }
-                    $currentLabel = strtoupper(!empty($optMatch[1]) ? $optMatch[1] : $optMatch[2]);
-                    $currentOptionText = trim($optMatch[3]);
-                } elseif ($isParsingOptions) {
-                    $currentOptionText .= "\n" . $trimmedLine;
                 } else {
-                    $questionLines[] = $line;
+                    $questionLines = $lines;
                 }
-            }
 
-            if ($currentLabel !== null) {
-                $options[] = [
-                    'label' => $currentLabel,
-                    'teks' => trim($currentOptionText),
-                ];
-            }
+                $pertanyaanText = trim(implode("\n", $questionLines));
+                if (empty($pertanyaanText) && empty($options)) {
+                    continue;
+                }
 
-            $pertanyaanText = trim(implode("\n", $questionLines));
-            if (empty($pertanyaanText) && empty($options)) {
-                continue;
-            }
+                if ($tipe === 'auto') {
+                    $tipe = !empty($options) ? 'pilihan_ganda' : 'essay';
+                }
 
-            $tipeSoal = 'pilihan_ganda';
-            $opsiJawabans = [];
+                $opsiJawabans = [];
+                if (!empty($options)) {
+                    $hasCorrect = false;
+                    foreach ($options as $opt) {
+                        $lbl = $opt['label'];
+                        $teksOpsi = $opt['teks'];
+                        $isBenar = false;
 
-            if (!empty($options)) {
-                $hasCorrect = false;
-                foreach ($options as $idx => $opt) {
-                    $lbl = $opt['label'];
-                    $teksOpsi = $opt['teks'];
-                    $isBenar = false;
+                        if ($kunci && $lbl === $kunci) {
+                            $isBenar = true;
+                        } elseif (preg_match('/\((?:kunci|benar|jawaban benar)\)/i', $teksOpsi)) {
+                            $isBenar = true;
+                            $teksOpsi = trim(preg_replace('/\((?:kunci|benar|jawaban benar)\)/i', '', $teksOpsi));
+                        }
 
-                    if ($kunci && $lbl === $kunci) {
-                        $isBenar = true;
-                    } elseif (preg_match('/\((?:kunci|benar|jawaban benar)\)/i', $teksOpsi)) {
-                        $isBenar = true;
-                        $teksOpsi = trim(preg_replace('/\((?:kunci|benar|jawaban benar)\)/i', '', $teksOpsi));
+                        if ($isBenar) $hasCorrect = true;
+
+                        $opsiJawabans[] = [
+                            'label' => $lbl,
+                            'teks_opsi' => $teksOpsi,
+                            'gambar_opsi' => null,
+                            'is_jawaban_benar' => $isBenar,
+                            'pasangan_matching' => null,
+                        ];
                     }
 
-                    if ($isBenar) $hasCorrect = true;
-
-                    $opsiJawabans[] = [
-                        'label' => $lbl,
-                        'teks_opsi' => $teksOpsi,
-                        'gambar_opsi' => null,
-                        'is_jawaban_benar' => $isBenar,
-                        'pasangan_matching' => null,
-                    ];
+                    if (!$hasCorrect && !empty($opsiJawabans) && $tipe === 'pilihan_ganda') {
+                        $opsiJawabans[0]['is_jawaban_benar'] = true;
+                    }
                 }
 
-                if (!$hasCorrect && !empty($opsiJawabans)) {
-                    $opsiJawabans[0]['is_jawaban_benar'] = true;
+                if (!str_starts_with($pertanyaanText, '<p>')) {
+                    $pertanyaanText = '<p>' . nl2br(htmlspecialchars($pertanyaanText)) . '</p>';
                 }
 
-                if (count($options) === 2 && (
-                    str_contains(strtolower($options[0]['teks']), 'benar') ||
-                    str_contains(strtolower($options[1]['teks']), 'salah')
-                )) {
-                    $tipeSoal = 'benar_salah';
-                }
-            } else {
-                if (!empty($kunci) && strlen($kunci) <= 30) {
-                    $tipeSoal = 'isian';
-                } else {
-                    $tipeSoal = 'essay';
-                }
+                $allSoals[] = [
+                    'tipe_soal' => $tipe,
+                    'bobot_nilai' => $defaultBobot,
+                    'pertanyaan' => $pertanyaanText,
+                    'opsi_jawabans' => $opsiJawabans,
+                    'kunci_isian' => ($tipe === 'isian') ? ($kunci ?? '') : '',
+                    'rubrik_essay' => ($tipe === 'essay') ? ($pembahasan ?: 'Pedoman penilaian essay...') : '',
+                    'pembahasan' => $pembahasan,
+                ];
             }
-
-            if (!str_starts_with($pertanyaanText, '<p>')) {
-                $pertanyaanText = '<p>' . nl2br(htmlspecialchars($pertanyaanText)) . '</p>';
-            }
-
-            $results[] = [
-                'tipe_soal' => $tipeSoal,
-                'bobot_nilai' => $defaultBobot,
-                'pertanyaan' => $pertanyaanText,
-                'opsi_jawabans' => $opsiJawabans,
-                'kunci_isian' => ($tipeSoal === 'isian') ? ($kunci ?? '') : '',
-                'rubrik_essay' => ($tipeSoal === 'essay') ? ($pembahasan ?: 'Pedoman penilaian essay...') : '',
-                'pembahasan' => $pembahasan,
-            ];
         }
 
-        return $results;
+        return $allSoals;
     }
 
     /**
@@ -404,15 +480,15 @@ PROMPT;
         $prompt .= "4. Kembalikan teks pembahasan langsung tanpa format JSON.";
 
         if ($provider === 'gemini') {
-            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.5-flash');
+            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.6-flash');
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
             $candidateModels = array_values(array_unique([
                 $primaryModel,
+                'gemini-3.6-flash',
                 'gemini-3.5-flash',
                 'gemini-3.5-flash-lite',
-                'gemini-3.5-pro',
-                'gemini-3.1-flash',
-                'gemini-3.1-pro',
+                'gemini-flash-latest',
+                'gemini-2.5-pro',
             ]));
             $lastError = null;
 
@@ -468,16 +544,16 @@ PROMPT;
      */
     protected function callGemini(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
     {
-        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.5-flash');
+        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
         $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
 
         $candidateModels = array_values(array_unique([
             $primaryModel,
+            'gemini-3.6-flash',
             'gemini-3.5-flash',
             'gemini-3.5-flash-lite',
-            'gemini-3.5-pro',
-            'gemini-3.1-flash',
-            'gemini-3.1-pro',
+            'gemini-flash-latest',
+            'gemini-2.5-pro',
         ]));
 
         $payload = [
@@ -490,8 +566,9 @@ PROMPT;
                 ]
             ],
             'generationConfig' => [
-                'temperature' => 0.7,
+                'temperature' => 0.5,
                 'responseMimeType' => 'application/json',
+                'maxOutputTokens' => 8192,
             ],
         ];
 
@@ -500,7 +577,7 @@ PROMPT;
         foreach ($candidateModels as $model) {
             try {
                 $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
-                $response = Http::timeout(90)->post($url, $payload);
+                $response = Http::timeout(120)->post($url, $payload);
 
                 if ($response->successful()) {
                     $rawText = $response->json('candidates.0.content.parts.0.text');
