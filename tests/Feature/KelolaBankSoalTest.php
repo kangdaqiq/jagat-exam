@@ -190,15 +190,15 @@ class KelolaBankSoalTest extends TestCase
         $this->actingAs($this->admin);
 
         $models = \App\Services\AiQuestionService::getAvailableGeminiModels();
-        $this->assertArrayHasKey('gemini-2.5-flash', $models);
-        $this->assertArrayHasKey('gemini-2.5-pro', $models);
-        $this->assertArrayHasKey('gemini-2.0-flash', $models);
+        $this->assertArrayHasKey('gemini-3.5-flash', $models);
+        $this->assertArrayHasKey('gemini-3.5-flash-lite', $models);
+        $this->assertArrayHasKey('gemini-3.5-pro', $models);
 
         $component = Livewire::test(EditBankSoal::class, ['record' => $this->bankSoal->id]);
 
         $component->call('openAiModal', 'current')
-            ->assertSet('ai_model', 'gemini-2.5-flash')
-            ->set('ai_model', 'gemini-2.0-flash')
+            ->assertSet('ai_model', 'gemini-3.5-flash')
+            ->set('ai_model', 'gemini-3.5-flash-lite')
             ->set('ai_topik', 'Fotosintesis dan Klorofil')
             ->call('generateWithAi')
             ->assertHasNoErrors();
