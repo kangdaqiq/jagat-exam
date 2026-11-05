@@ -24,12 +24,12 @@
 
             // Tab/focus violation detection (hanya pemicu jika bukan preview mode)
             @if(!$is_preview)
-            let isLegitNavigation = false;
+            window.isLegitNavigation = false;
             window.addEventListener('beforeunload', () => {
-                isLegitNavigation = true;
+                window.isLegitNavigation = true;
             });
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden && !isLegitNavigation && !@this.isSubmitted) {
+                if (document.hidden && !window.isLegitNavigation && !@this.isSubmitted) {
                     if (window.AndroidExam && typeof window.AndroidExam.triggerViolation === 'function') {
                         window.AndroidExam.triggerViolation('Siswa beralih aplikasi atau membuka notifikasi');
                     }
@@ -541,6 +541,20 @@
                     <button type="button" wire:click="setZoom('lg')"
                         style="padding: 4px 8px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; background: {{ $zoomLevel === 'lg' ? '#fff' : 'transparent' }}; color: {{ $zoomLevel === 'lg' ? '#2563eb' : '#64748b' }}; box-shadow: {{ $zoomLevel === 'lg' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }};">A+</button>
                 </div>
+
+                {{-- Tombol Reload / Segarkan Halaman jika soal macet --}}
+                <button
+                    type="button"
+                    onclick="if (typeof window.isLegitNavigation !== 'undefined') { window.isLegitNavigation = true; } window.location.reload();"
+                    style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;"
+                    onmouseover="this.style.color='#2563eb'; this.style.borderColor='#93c5fd';"
+                    onmouseout="this.style.color='#64748b'; this.style.borderColor='#e2e8f0';"
+                    title="Segarkan / Muat Ulang Halaman jika soal macet"
+                >
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
 
                 {{-- Tombol Daftar Soal (Khusus Mobile/Tablet) --}}
                 <button
