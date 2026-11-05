@@ -103,9 +103,6 @@
                     Lupa password atau belum memiliki akun? Hubungi Guru Pengawas / Proktor CBT di sekolah Anda.
                 </p>
                 <div style="margin-top: 10px;">
-                    <a href="/admin/login" style="font-size: 11px; font-weight: 700; color: #2563eb; text-decoration: none;">
-                        &larr; Login Guru / Administrator
-                    </a>
                 </div>
             </div>
         </div>
