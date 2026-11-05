@@ -10,17 +10,16 @@ use Illuminate\Support\Facades\Log;
 class AiQuestionService
 {
     /**
-     * Daftar model Google Gemini yang didukung
+     * Daftar model Google Gemini yang didukung (Lini Gemini 2.0 & 2.5)
      */
     public static function getAvailableGeminiModels(): array
     {
         return [
-            'gemini-2.5-flash' => 'Gemini 2.5 Flash (Direkomendasikan - Sangat Cepat & Cerdas)',
-            'gemini-2.0-flash' => 'Gemini 2.0 Flash (Alternatif Cepat & Stabil)',
-            'gemini-2.5-pro' => 'Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS & Rumit)',
-            'gemini-2.0-flash-lite' => 'Gemini 2.0 Flash-Lite (Hemat Kuota & Ringan)',
-            'gemini-1.5-flash' => 'Gemini 1.5 Flash (Paling Tahan Beban Saat Model Baru Sibuk)',
-            'gemini-1.5-pro' => 'Gemini 1.5 Pro (Generasi 1.5 Pro - Akurasi Tinggi)',
+            'gemini-2.5-flash' => '⚡ Gemini 2.5 Flash (Rekomendasi Utama - Cepat & Cerdas)',
+            'gemini-2.5-pro' => '🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS & Rumit)',
+            'gemini-2.0-flash' => '🚀 Gemini 2.0 Flash (Alternatif Cepat & Stabil)',
+            'gemini-2.0-flash-lite' => '🌱 Gemini 2.0 Flash-Lite (Hemat Kuota & Ringan)',
+            'gemini-flash-latest' => '✨ Gemini Flash Latest (Versi Terbaru Otomatis)',
         ];
     }
 
@@ -134,8 +133,6 @@ class AiQuestionService
                 'gemini-2.0-flash',
                 'gemini-2.5-pro',
                 'gemini-2.0-flash-lite',
-                'gemini-1.5-flash',
-                'gemini-1.5-pro',
                 'gemini-flash-latest'
             ]));
             $lastError = null;
@@ -201,8 +198,6 @@ class AiQuestionService
             'gemini-2.0-flash',
             'gemini-2.5-pro',
             'gemini-2.0-flash-lite',
-            'gemini-1.5-flash',
-            'gemini-1.5-pro',
             'gemini-flash-latest'
         ]));
 

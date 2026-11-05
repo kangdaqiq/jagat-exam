@@ -62,7 +62,6 @@ class EditBankSoal extends Page
     public string $ai_instruksi = '';
     public string $ai_api_key = '';
     public string $ai_model = 'gemini-2.5-flash';
-    public string $ai_custom_model = '';
     public bool $ai_simpan_api_key = true;
     public bool $is_generating_ai = false;
 
@@ -427,11 +426,6 @@ class EditBankSoal extends Page
 
             $jumlahToGenerate = $this->ai_mode === 'current' ? 1 : $this->ai_jumlah;
 
-            $targetModel = $this->ai_model === 'custom' ? trim($this->ai_custom_model) : $this->ai_model;
-            if (empty($targetModel)) {
-                $targetModel = config('ai.gemini.model', 'gemini-2.5-flash');
-            }
-
             $generatedItems = $aiService->generateSoals([
                 'topik' => $this->ai_topik,
                 'mapel' => $this->record->mapel?->nama_mapel ?? 'Mata Pelajaran',
@@ -442,7 +436,7 @@ class EditBankSoal extends Page
                 'instruksi_tambahan' => $this->ai_instruksi,
                 'api_key' => $apiKey ?: null,
                 'provider' => 'gemini',
-                'model' => $targetModel,
+                'model' => $this->ai_model ?: 'gemini-2.5-flash',
             ]);
 
             if (empty($generatedItems)) {
@@ -541,13 +535,12 @@ class EditBankSoal extends Page
 
         try {
             $apiKey = trim($this->ai_api_key);
-            $targetModel = $this->ai_model === 'custom' ? trim($this->ai_custom_model) : $this->ai_model;
             $pembahasan = $aiService->generatePembahasan(
                 $this->pertanyaan,
                 $this->opsi_jawabans,
                 filled($apiKey) ? $apiKey : null,
                 'gemini',
-                $targetModel ?: null
+                $this->ai_model ?: 'gemini-2.5-flash'
             );
 
             $this->pembahasan = $pembahasan;

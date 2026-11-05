@@ -1525,45 +1525,26 @@
                         </div>
                     </div>
 
-                    {{-- Pilihan Model AI Gemini --}}
+                    {{-- Pilihan Model AI Gemini (Hanya Lini Modern v2 ke Atas) --}}
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                 Model AI Google Gemini
                             </label>
                             <span class="text-[11px] text-gray-400">
-                                Ganti model jika server AI Google sedang sibuk
+                                Ganti model jika salah satu sedang sibuk
                             </span>
                         </div>
                         <select
-                            wire:model.live="ai_model"
+                            wire:model="ai_model"
                             class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
                         >
-                            <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash (Rekomendasi - Cepat, Cerdas &amp; Akurat)</option>
-                            <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Alternatif Cepat &amp; Stabil)</option>
+                            <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash (Rekomendasi Utama - Cepat &amp; Cerdas)</option>
                             <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS &amp; Rumit)</option>
+                            <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Alternatif Cepat &amp; Stabil)</option>
                             <option value="gemini-2.0-flash-lite">🌱 Gemini 2.0 Flash-Lite (Hemat Kuota &amp; Ringan)</option>
-                            <option value="gemini-1.5-flash">🛡️ Gemini 1.5 Flash (Paling Tahan Beban Saat Model Baru Sibuk)</option>
-                            <option value="gemini-1.5-pro">💎 Gemini 1.5 Pro (Generasi 1.5 Pro - Akurasi Klasik)</option>
-                            <option value="custom">✏️ Model Kustom / Versi Lainnya (Input Manual)...</option>
+                            <option value="gemini-flash-latest">✨ Gemini Flash Latest (Otomatis Versi Terbaru)</option>
                         </select>
-
-                        @if($ai_model === 'custom')
-                            <div class="mt-2 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-950/20">
-                                <label class="block text-[11px] font-bold text-indigo-900 dark:text-indigo-300 mb-1">
-                                    Ketik Nama Model Gemini:
-                                </label>
-                                <input
-                                    type="text"
-                                    wire:model="ai_custom_model"
-                                    placeholder="Contoh: gemini-2.0-flash-exp, gemini-3.1, gemini-3.5, gemini-3.8..."
-                                    class="w-full text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-2.5 font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
-                                <span class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
-                                    💡 Masukkan kode model yang terdaftar di Google AI Studio akun Anda.
-                                </span>
-                            </div>
-                        @endif
                     </div>
 
                     {{-- 2. Topik / Materi Soal --}}
