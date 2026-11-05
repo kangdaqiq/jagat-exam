@@ -226,20 +226,21 @@ class AiQuestionService
             $lines = explode("\n", $secContent);
             $questionBlocks = [];
             $currentBlock = [];
-            $expectedNumber = 1;
+            $lastQuestionNumber = 0;
 
             foreach ($lines as $line) {
                 $trimmed = trim($line);
 
-                // Cek apakah baris diawali nomor soal yang diharapkan (misal 1., 2., 3...)
+                // Cek apakah baris diawali nomor soal:
+                // Harus lebih besar dari nomor soal sebelumnya dalam section yang sama (mencegah nomor 1, 2, 3 di dalam soal terpecah)
                 if (preg_match('/^(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)]\s+(.*)$/i', $trimmed, $nMatch)) {
                     $num = (int) $nMatch[1];
-                    if ($num === $expectedNumber || ($expectedNumber === 1 && $num >= 1 && $num <= 2)) {
+                    if (($lastQuestionNumber === 0 && $num <= 2) || ($num > $lastQuestionNumber && $num <= $lastQuestionNumber + 50)) {
                         if (!empty($currentBlock)) {
                             $questionBlocks[] = implode("\n", $currentBlock);
                             $currentBlock = [];
                         }
-                        $expectedNumber = $num + 1;
+                        $lastQuestionNumber = $num;
                     }
                 }
 
