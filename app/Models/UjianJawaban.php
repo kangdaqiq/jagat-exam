@@ -16,6 +16,7 @@ class UjianJawaban extends Model
         'ujian_sesi_id',
         'soal_id',
         'nomor_urut',
+        'urutan_opsi',
         'jawaban_pilihan',
         'jawaban_teks',
         'is_ragu',
@@ -26,6 +27,7 @@ class UjianJawaban extends Model
     protected function casts(): array
     {
         return [
+            'urutan_opsi' => 'array',
             'jawaban_pilihan' => 'array',
             'is_ragu' => 'boolean',
             'is_benar' => 'boolean',

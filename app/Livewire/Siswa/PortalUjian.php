@@ -119,13 +119,27 @@ class PortalUjian extends Component
                 'user_agent' => request()->userAgent(),
             ]);
 
-            // Siapkan draft jawaban untuk setiap butir soal
-            $soals = $bankSoal->soals()->orderBy('nomor_urut', 'asc')->get();
-            foreach ($soals as $idx => $s) {
+            // Siapkan butir soal (acak atau urut sesuai pengaturan ujian / bank soal)
+            $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+            $acakSoal = $ujian->acak_soal ?? $bankSoal->acak_soal ?? true;
+            $acakOpsi = $ujian->acak_opsi ?? $bankSoal->acak_opsi ?? true;
+
+            if ($acakSoal) {
+                $soals = $soals->shuffle();
+            }
+
+            foreach ($soals->values() as $idx => $s) {
+                $urutanOpsi = null;
+                // Hanya acak opsi untuk tipe pilihan ganda dan pg kompleks (Benar/Salah tidak diacak)
+                if ($acakOpsi && in_array($s->tipe_soal, ['pilihan_ganda', 'pg_kompleks']) && $s->opsiJawabans->isNotEmpty()) {
+                    $urutanOpsi = $s->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
+                }
+
                 UjianJawaban::create([
                     'ujian_sesi_id' => $sesi->id,
                     'soal_id' => $s->id,
                     'nomor_urut' => $idx + 1,
+                    'urutan_opsi' => $urutanOpsi,
                     'jawaban_pilihan' => null,
                     'jawaban_teks' => null,
                     'is_ragu' => false,

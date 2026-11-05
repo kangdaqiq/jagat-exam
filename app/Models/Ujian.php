@@ -26,6 +26,8 @@ class Ujian extends Model
         'waktu_mulai',
         'waktu_selesai',
         'durasi_menit',
+        'acak_soal',
+        'acak_opsi',
         'status',
         'token_ujian',
         'token_generated_at',
@@ -85,6 +87,8 @@ class Ujian extends Model
         return [
             'tanggal' => 'date',
             'durasi_menit' => 'integer',
+            'acak_soal' => 'boolean',
+            'acak_opsi' => 'boolean',
             'token_generated_at' => 'datetime',
         ];
     }

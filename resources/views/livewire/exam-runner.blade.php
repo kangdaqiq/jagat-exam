@@ -892,17 +892,18 @@
                         @if(in_array($soal->tipe_soal, ['pilihan_ganda', 'benar_salah']))
                             <div style="display: flex; flex-direction: column; gap: 10px;">
                                 @foreach($soal->opsiJawabans as $opsi)
+                                    @php $optLabel = $opsi->display_label ?? $opsi->label; @endphp
                                     <div
-                                        @click="pilihOpsi({{ $soal->id }}, '{{ $opsi->label }}')"
+                                        @click="pilihOpsi({{ $soal->id }}, '{{ $optLabel }}')"
                                         class="exam-option-card"
-                                        :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
+                                        :class="answers[{{ $soal->id }}]?.pilihan === '{{ $optLabel }}' ? 'is-selected' : ''"
                                     >
                                         {{-- Huruf A, B, C, D --}}
                                         <div
                                             class="exam-option-badge"
-                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
+                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $optLabel }}' ? 'is-selected' : ''"
                                         >
-                                            {{ $opsi->label }}
+                                            {{ $optLabel }}
                                         </div>
 
                                         {{-- Teks Opsi --}}
@@ -917,9 +918,9 @@
                                         {{-- Lingkaran Radio Bulat --}}
                                         <div
                                             class="exam-radio-indicator"
-                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}' ? 'is-selected' : ''"
+                                            :class="answers[{{ $soal->id }}]?.pilihan === '{{ $optLabel }}' ? 'is-selected' : ''"
                                         >
-                                            <template x-if="answers[{{ $soal->id }}]?.pilihan === '{{ $opsi->label }}'">
+                                            <template x-if="answers[{{ $soal->id }}]?.pilihan === '{{ $optLabel }}'">
                                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
                                                 </svg>
@@ -934,16 +935,17 @@
                             <div style="display: flex; flex-direction: column; gap: 10px;">
                                 <p style="font-size: 11px; font-weight: 700; color: #6d28d9; margin: 0;">Pilihlah semua jawaban yang benar (boleh lebih dari satu):</p>
                                 @foreach($soal->opsiJawabans as $opsi)
+                                    @php $optLabel = $opsi->display_label ?? $opsi->label; @endphp
                                     <div
-                                        @click="pilihMulti({{ $soal->id }}, '{{ $opsi->label }}')"
+                                        @click="pilihMulti({{ $soal->id }}, '{{ $optLabel }}')"
                                         class="exam-option-card"
-                                        :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
+                                        :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $optLabel }}')) ? 'is-selected-multi' : ''"
                                     >
                                         <div
                                             class="exam-option-badge"
-                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
+                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $optLabel }}')) ? 'is-selected-multi' : ''"
                                         >
-                                            {{ $opsi->label }}
+                                            {{ $optLabel }}
                                         </div>
                                         <div
                                             class="katex-content"
@@ -954,9 +956,9 @@
                                         </div>
                                         <div
                                             class="exam-checkbox-indicator"
-                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')) ? 'is-selected-multi' : ''"
+                                            :class="(Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $optLabel }}')) ? 'is-selected-multi' : ''"
                                         >
-                                            <template x-if="Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $opsi->label }}')">
+                                            <template x-if="Array.isArray(answers[{{ $soal->id }}]?.pilihan) && answers[{{ $soal->id }}].pilihan.includes('{{ $optLabel }}')">
                                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
                                                 </svg>

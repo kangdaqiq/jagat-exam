@@ -81,11 +81,27 @@ class UjianForm
                                 ->afterStateUpdated(function ($state, $set) {
                                     if ($state) {
                                         $bank = BankSoal::find($state);
-                                        if ($bank && !empty($bank->durasi_menit)) {
-                                            $set('durasi_menit', $bank->durasi_menit);
+                                        if ($bank) {
+                                            if (!empty($bank->durasi_menit)) {
+                                                $set('durasi_menit', $bank->durasi_menit);
+                                            }
+                                            $set('acak_soal', $bank->acak_soal ?? true);
+                                            $set('acak_opsi', $bank->acak_opsi ?? true);
                                         }
                                     }
                                 }),
+                        ]),
+
+                        Grid::make(2)->schema([
+                            Toggle::make('acak_soal')
+                                ->label('Acak Urutan Butir Soal')
+                                ->helperText('Setiap siswa menerima urutan butir soal yang berbeda-beda.')
+                                ->default(true),
+
+                            Toggle::make('acak_opsi')
+                                ->label('Acak Pilihan Opsi (A-E)')
+                                ->helperText('Posisi pilihan ganda (A, B, C, D, E) diacak secara unik untuk setiap siswa.')
+                                ->default(true),
                         ]),
                     ]),
 

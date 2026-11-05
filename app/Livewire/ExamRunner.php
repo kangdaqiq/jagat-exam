@@ -139,12 +139,25 @@ class ExamRunner extends Component
         session(["ujian_token_{$this->bankSoal->id}" => $token]);
 
         // Inisialisasi baris jawaban di database untuk setiap butir soal
-        $soals = $this->bankSoal->soals;
-        foreach ($soals as $order => $soal) {
+        $soals = $this->bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+        $acakSoal = $this->bankSoal->acak_soal ?? true;
+        $acakOpsi = $this->bankSoal->acak_opsi ?? true;
+
+        if ($acakSoal) {
+            $soals = $soals->shuffle();
+        }
+
+        foreach ($soals->values() as $order => $soal) {
+            $urutanOpsi = null;
+            if ($acakOpsi && in_array($soal->tipe_soal, ['pilihan_ganda', 'pg_kompleks']) && $soal->opsiJawabans->isNotEmpty()) {
+                $urutanOpsi = $soal->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
+            }
+
             UjianJawaban::create([
                 'ujian_sesi_id' => $this->sesi->id,
                 'soal_id' => $soal->id,
                 'nomor_urut' => $order + 1,
+                'urutan_opsi' => $urutanOpsi,
                 'jawaban_pilihan' => null,
                 'jawaban_teks' => null,
                 'is_ragu' => false,
@@ -174,7 +187,50 @@ class ExamRunner extends Component
 
     public function getSoalsProperty()
     {
-        return $this->bankSoal->soals;
+        if ($this->sesi) {
+            $jawabans = $this->sesi->jawabans()->orderBy('nomor_urut', 'asc')->get();
+            if ($jawabans->isNotEmpty()) {
+                $soalIds = $jawabans->pluck('soal_id')->toArray();
+                $loadedSoals = $this->bankSoal->soals()->with('opsiJawabans')->whereIn('id', $soalIds)->get()->keyBy('id');
+                $orderedSoals = collect();
+
+                foreach ($jawabans as $j) {
+                    $originalSoal = $loadedSoals->get($j->soal_id);
+                    if (!$originalSoal) continue;
+
+                    $soal = clone $originalSoal;
+
+                    if (!empty($j->urutan_opsi) && is_array($j->urutan_opsi)) {
+                        $urutan = $j->urutan_opsi;
+                        $shuffledOpsi = $soal->opsiJawabans->sortBy(function ($item) use ($urutan) {
+                            $pos = array_search($item->id, $urutan);
+                            return $pos !== false ? $pos : 999;
+                        })->values();
+
+                        foreach ($shuffledOpsi as $i => $opt) {
+                            $opt->display_label = chr(65 + $i);
+                        }
+                        $soal->setRelation('opsiJawabans', $shuffledOpsi);
+                    } else {
+                        foreach ($soal->opsiJawabans as $opt) {
+                            $opt->display_label = $opt->label;
+                        }
+                    }
+
+                    $orderedSoals->push($soal);
+                }
+
+                return $orderedSoals;
+            }
+        }
+
+        $rawSoals = $this->bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+        foreach ($rawSoals as $s) {
+            foreach ($s->opsiJawabans as $opt) {
+                $opt->display_label = $opt->label;
+            }
+        }
+        return $rawSoals;
     }
 
     public function getCurrentSoalProperty()
@@ -449,17 +505,49 @@ class ExamRunner extends Component
             $skor = 0.0;
 
             if ($soal->tipe_soal === 'pilihan_ganda' || $soal->tipe_soal === 'benar_salah') {
-                $kunci = $soal->opsiJawabans->firstWhere('is_jawaban_benar', true);
-                if ($kunci && $jawaban->jawaban_pilihan === $kunci->label) {
-                    $isBenar = true;
-                    $skor = $bobot;
+                $selectedLabel = is_array($jawaban->jawaban_pilihan) ? ($jawaban->jawaban_pilihan[0] ?? null) : $jawaban->jawaban_pilihan;
+
+                if (!empty($jawaban->urutan_opsi) && is_array($jawaban->urutan_opsi) && $selectedLabel) {
+                    $labelIndex = ord(strtoupper($selectedLabel)) - 65;
+                    $selectedOpsiId = $jawaban->urutan_opsi[$labelIndex] ?? null;
+                    if ($selectedOpsiId) {
+                        $selectedOpsi = $soal->opsiJawabans->firstWhere('id', $selectedOpsiId);
+                        if ($selectedOpsi && $selectedOpsi->is_jawaban_benar) {
+                            $isBenar = true;
+                            $skor = $bobot;
+                        }
+                    }
+                } else {
+                    $kunci = $soal->opsiJawabans->firstWhere('is_jawaban_benar', true);
+                    if ($kunci && $selectedLabel === $kunci->label) {
+                        $isBenar = true;
+                        $skor = $bobot;
+                    }
                 }
             } elseif ($soal->tipe_soal === 'pg_kompleks') {
-                $kuncis = $soal->opsiJawabans->where('is_jawaban_benar', true)->pluck('label')->sort()->values()->toArray();
-                $siswaAns = is_array($jawaban->jawaban_pilihan) ? collect($jawaban->jawaban_pilihan)->sort()->values()->toArray() : [];
-                if ($kuncis === $siswaAns && !empty($kuncis)) {
-                    $isBenar = true;
-                    $skor = $bobot;
+                $siswaAns = is_array($jawaban->jawaban_pilihan) ? $jawaban->jawaban_pilihan : [];
+
+                if (!empty($jawaban->urutan_opsi) && is_array($jawaban->urutan_opsi)) {
+                    $selectedOpsiIds = [];
+                    foreach ($siswaAns as $lbl) {
+                        $idx = ord(strtoupper($lbl)) - 65;
+                        if (isset($jawaban->urutan_opsi[$idx])) {
+                            $selectedOpsiIds[] = (int) $jawaban->urutan_opsi[$idx];
+                        }
+                    }
+                    sort($selectedOpsiIds);
+                    $correctOpsiIds = $soal->opsiJawabans->where('is_jawaban_benar', true)->pluck('id')->map(fn($id) => (int)$id)->sort()->values()->toArray();
+                    if (!empty($correctOpsiIds) && $selectedOpsiIds === $correctOpsiIds) {
+                        $isBenar = true;
+                        $skor = $bobot;
+                    }
+                } else {
+                    $kuncis = $soal->opsiJawabans->where('is_jawaban_benar', true)->pluck('label')->sort()->values()->toArray();
+                    $sortedSiswaAns = collect($siswaAns)->sort()->values()->toArray();
+                    if ($kuncis === $sortedSiswaAns && !empty($kuncis)) {
+                        $isBenar = true;
+                        $skor = $bobot;
+                    }
                 }
             } elseif ($soal->tipe_soal === 'isian') {
                 $kunciIsian = strtolower(trim($soal->kunci_isian ?? ''));

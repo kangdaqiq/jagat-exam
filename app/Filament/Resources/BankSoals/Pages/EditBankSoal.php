@@ -798,6 +798,18 @@ class EditBankSoal extends Page
                             ->suffix('poin'),
                     ]),
 
+                    Grid::make(2)->schema([
+                        Toggle::make('acak_soal')
+                            ->label('Acak Urutan Soal')
+                            ->helperText('Urutan nomor butir soal diacak untuk tiap siswa.')
+                            ->default(true),
+
+                        Toggle::make('acak_opsi')
+                            ->label('Acak Opsi Pilihan Ganda')
+                            ->helperText('Posisi pilihan jawaban (A, B, C, D, E) diacak untuk tiap siswa.')
+                            ->default(true),
+                    ]),
+
                     Textarea::make('deskripsi')
                         ->label('Petunjuk Pengerjaan Ujian')
                         ->rows(3),
@@ -809,6 +821,8 @@ class EditBankSoal extends Page
                     'tingkat' => $this->record->tingkat,
                     'total_bobot' => $this->record->total_bobot,
                     'deskripsi' => $this->record->deskripsi,
+                    'acak_soal' => $this->record->acak_soal ?? true,
+                    'acak_opsi' => $this->record->acak_opsi ?? true,
                 ])
                 ->action(function (array $data): void {
                     $this->record->update($data);

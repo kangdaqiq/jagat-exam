@@ -24,6 +24,8 @@ class BankSoal extends Model
         'tingkat',
         'jurusan',
         'deskripsi',
+        'acak_soal',
+        'acak_opsi',
         'total_bobot',
         'is_active',
     ];
@@ -32,6 +34,8 @@ class BankSoal extends Model
     {
         return [
             'is_active' => 'boolean',
+            'acak_soal' => 'boolean',
+            'acak_opsi' => 'boolean',
             'total_bobot' => 'decimal:2',
         ];
     }

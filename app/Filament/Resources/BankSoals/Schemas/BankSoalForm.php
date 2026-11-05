@@ -116,6 +116,16 @@ class BankSoalForm
                                 ->helperText('Bank soal aktif dapat dijadwalkan pada sesi ujian.')
                                 ->default(true),
 
+                            Toggle::make('acak_soal')
+                                ->label('Acak Urutan Soal')
+                                ->helperText('Urutan nomor butir soal diacak otomatis untuk setiap siswa.')
+                                ->default(true),
+
+                            Toggle::make('acak_opsi')
+                                ->label('Acak Opsi Pilihan Ganda')
+                                ->helperText('Posisi pilihan jawaban (A, B, C, D, E) diacak untuk tiap siswa.')
+                                ->default(true),
+
                             TextInput::make('total_bobot')
                                 ->label('Target Total Bobot')
                                 ->numeric()
