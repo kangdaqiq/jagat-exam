@@ -850,7 +850,10 @@
                         @else
                             <button
                                 type="button"
-                                @click="showConfirmSubmitModal = true"
+                                @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
+                                :disabled="answeredCount < totalSoals"
+                                :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : ''"
+                                :title="answeredCount < totalSoals ? 'Harap jawab seluruh ' + totalSoals + ' butir soal terlebih dahulu (' + belumCount + ' butir belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
                                 class="exam-nav-btn exam-nav-btn-finish"
                             >
                                 <span>Selesai Ujian &#10003;</span>
@@ -929,13 +932,19 @@
             <div style="padding: 14px 18px; border-top: 1px solid #f1f5f9; background: #f8fafc;">
                 <button
                     type="button"
-                    @click="showConfirmSubmitModal = true"
-                    style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3); transition: opacity 0.15s; min-height: 44px;"
-                    onmouseover="this.style.opacity='0.9'"
-                    onmouseout="this.style.opacity='1'"
+                    @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
+                    :disabled="answeredCount < totalSoals"
+                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3);'"
+                    :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
+                    style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; transition: all 0.15s; min-height: 44px;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
                 </button>
+                <template x-if="answeredCount < totalSoals">
+                    <p style="margin: 7px 0 0; font-size: 11px; font-weight: 700; color: #dc2626; text-align: center; line-height: 1.4;">
+                        Jawab <span x-text="belumCount"></span> soal lagi untuk mengumpulkan.
+                    </p>
+                </template>
             </div>
         </aside>
     </main>
@@ -1010,8 +1019,11 @@
                 </button>
                 <button
                     type="button"
-                    @click="showDaftarSoalMobile = false; showConfirmSubmitModal = true;"
-                    style="flex: 1.5; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 10px rgba(5,150,105,0.3); min-height: 44px;"
+                    @click="if (answeredCount >= totalSoals) { showDaftarSoalMobile = false; showConfirmSubmitModal = true; }"
+                    :disabled="answeredCount < totalSoals"
+                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 10px rgba(5,150,105,0.3);'"
+                    :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
+                    style="flex: 1.5; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; min-height: 44px; transition: all 0.15s;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
                 </button>
@@ -1052,8 +1064,11 @@
                 </div>
             </div>
 
-            <div x-show="belumCount > 0 || raguCount > 0" style="padding: 10px 12px; border-radius: 12px; background: #fffbeb; border: 1px solid #fcd34d; font-size: 11px; color: #78350f; text-align: left; margin-bottom: 14px;">
-                <strong>Perhatian:</strong> Masih ada <strong x-text="belumCount + ' soal kosong'"></strong> dan <strong x-text="raguCount + ' soal ragu'"></strong>.
+            <div x-show="belumCount > 0" style="padding: 10px 12px; border-radius: 12px; background: #fee2e2; border: 1.5px solid #fca5a5; font-size: 11px; color: #991b1b; text-align: left; margin-bottom: 14px;">
+                <strong>Perhatian:</strong> Ujian belum dapat dikumpulkan karena masih ada <strong x-text="belumCount + ' soal kosong yang belum dijawab'"></strong>.
+            </div>
+            <div x-show="belumCount === 0 && raguCount > 0" style="padding: 10px 12px; border-radius: 12px; background: #fffbeb; border: 1.5px solid #fcd34d; font-size: 11px; color: #78350f; text-align: left; margin-bottom: 14px;">
+                <strong>Catatan:</strong> Semua soal sudah dijawab, namun masih ada <strong x-text="raguCount + ' butir ragu-ragu'"></strong>.
             </div>
 
             <div style="display: flex; gap: 8px;">
@@ -1066,8 +1081,10 @@
                 </button>
                 <button
                     type="button"
-                    @click="submitFinal()"
-                    style="flex: 1.2; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3); min-height: 44px;"
+                    @click="if (answeredCount >= totalSoals) submitFinal()"
+                    :disabled="answeredCount < totalSoals"
+                    :style="answeredCount < totalSoals ? 'background: #94a3b8 !important; opacity: 0.6; cursor: not-allowed; box-shadow: none !important;' : 'background: #059669; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.3);'"
+                    style="flex: 1.2; padding: 11px; border-radius: 12px; border: none; font-size: 12px; font-weight: 800; color: #fff; min-height: 44px; transition: all 0.15s;"
                 >
                     Kirim Jawaban &#10003;
                 </button>
