@@ -1525,6 +1525,29 @@
                         </div>
                     </div>
 
+                    {{-- Pilihan Model AI Gemini --}}
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                Model AI Google Gemini
+                            </label>
+                            <span class="text-[11px] text-gray-400">
+                                Ganti model jika server AI Google sedang sibuk
+                            </span>
+                        </div>
+                        <select
+                            wire:model="ai_model"
+                            class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                            <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash (Rekomendasi - Cepat, Cerdas &amp; Akurat)</option>
+                            <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Alternatif Cepat &amp; Stabil)</option>
+                            <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS &amp; Rumit)</option>
+                            <option value="gemini-2.0-flash-lite">🌱 Gemini 2.0 Flash-Lite (Hemat Kuota &amp; Ringan)</option>
+                            <option value="gemini-1.5-flash">🛡️ Gemini 1.5 Flash (Paling Tahan Beban Saat Model Baru Sibuk)</option>
+                            <option value="gemini-1.5-pro">💎 Gemini 1.5 Pro (Generasi 1.5 Pro - Akurasi Klasik)</option>
+                        </select>
+                    </div>
+
                     {{-- 2. Topik / Materi Soal --}}
                     <div>
                         <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">

@@ -185,17 +185,26 @@ class KelolaBankSoalTest extends TestCase
             ->assertHasErrors(['ai_jumlah']);
     }
 
-    public function test_ai_agent_can_generate_pembahasan(): void
+    public function test_ai_agent_supports_model_selection_and_available_models(): void
     {
         $this->actingAs($this->admin);
 
+        $models = \App\Services\AiQuestionService::getAvailableGeminiModels();
+        $this->assertArrayHasKey('gemini-2.5-flash', $models);
+        $this->assertArrayHasKey('gemini-2.0-flash', $models);
+        $this->assertArrayHasKey('gemini-1.5-flash', $models);
+
         $component = Livewire::test(EditBankSoal::class, ['record' => $this->bankSoal->id]);
 
-        $component->set('pertanyaan', '<p>Jika $x^2 - 4 = 0$, tentukan nilai $x$?</p>')
-            ->call('generatePembahasanWithAi')
+        $component->call('openAiModal', 'current')
+            ->assertSet('ai_model', 'gemini-2.5-flash')
+            ->set('ai_model', 'gemini-1.5-flash')
+            ->set('ai_topik', 'Fotosintesis dan Klorofil')
+            ->call('generateWithAi')
             ->assertHasNoErrors();
 
-        $this->assertNotEmpty($component->get('pembahasan'));
+        $firstSoal = $this->bankSoal->fresh()->soals()->first();
+        $this->assertStringContainsString('Fotosintesis', $firstSoal->pertanyaan);
     }
 }
 

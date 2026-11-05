@@ -10,6 +10,21 @@ use Illuminate\Support\Facades\Log;
 class AiQuestionService
 {
     /**
+     * Daftar model Google Gemini yang didukung
+     */
+    public static function getAvailableGeminiModels(): array
+    {
+        return [
+            'gemini-2.5-flash' => 'Gemini 2.5 Flash (Direkomendasikan - Sangat Cepat & Cerdas)',
+            'gemini-2.0-flash' => 'Gemini 2.0 Flash (Alternatif Cepat & Stabil)',
+            'gemini-2.5-pro' => 'Gemini 2.5 Pro (Penalaran Mendalam / Soal HOTS & Rumit)',
+            'gemini-2.0-flash-lite' => 'Gemini 2.0 Flash-Lite (Hemat Kuota & Ringan)',
+            'gemini-1.5-flash' => 'Gemini 1.5 Flash (Paling Tahan Beban Saat Model Baru Sibuk)',
+            'gemini-1.5-pro' => 'Gemini 1.5 Pro (Generasi 1.5 Pro - Akurasi Tinggi)',
+        ];
+    }
+
+    /**
      * Generate butir soal menggunakan AI (Google Gemini atau OpenAI)
      *
      * @param array $params
@@ -80,7 +95,7 @@ class AiQuestionService
     /**
      * Generate pembahasan mendalam untuk butir soal yang sudah ada
      */
-    public function generatePembahasan(string $pertanyaan, array $opsi = [], ?string $apiKey = null, string $provider = 'gemini'): string
+    public function generatePembahasan(string $pertanyaan, array $opsi = [], ?string $apiKey = null, string $provider = 'gemini', ?string $model = null): string
     {
         $key = $apiKey ?: ($provider === 'gemini' ? config('ai.gemini.api_key') : config('ai.openai.api_key'));
 
@@ -111,9 +126,18 @@ class AiQuestionService
         $prompt .= "4. Kembalikan teks pembahasan langsung tanpa format JSON.";
 
         if ($provider === 'gemini') {
-            $primaryModel = config('ai.gemini.model', 'gemini-2.5-flash');
+            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-2.5-flash');
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
-            $candidateModels = array_values(array_unique([$primaryModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest']));
+            $candidateModels = array_values(array_unique([
+                $primaryModel,
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-2.5-pro',
+                'gemini-2.0-flash-lite',
+                'gemini-1.5-flash',
+                'gemini-1.5-pro',
+                'gemini-flash-latest'
+            ]));
             $lastError = null;
 
             foreach ($candidateModels as $model) {
@@ -175,8 +199,10 @@ class AiQuestionService
             $primaryModel,
             'gemini-2.5-flash',
             'gemini-2.0-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash-lite',
             'gemini-1.5-flash',
-            'gemini-2.5-flash-lite',
+            'gemini-1.5-pro',
             'gemini-flash-latest'
         ]));
 
