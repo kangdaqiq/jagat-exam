@@ -775,7 +775,10 @@ class EditBankSoal extends Page
                 ->modalDescription('Sistem akan membagi bobot seluruh butir soal menjadi total 100 poin dengan rasio Objektif : Essay/Isian = 75 : 25 (atau 100% jika hanya ada satu jenis soal).')
                 ->action(function () {
                     $this->record->autoDistributeBobot();
-                    $this->loadRecord();
+                    $this->record->refresh();
+                    if ($this->selectedSoalId) {
+                        $this->selectSoal($this->selectedSoalId);
+                    }
                     Notification::make()->title('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (75:25)')->success()->send();
                 }),
 
