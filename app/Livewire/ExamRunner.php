@@ -9,6 +9,7 @@ use App\Models\UjianSesi;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 
 #[Layout('layouts.exam')]
@@ -332,18 +333,20 @@ class ExamRunner extends Component
         }
     }
 
+    #[Renderless]
     public function syncBatchJawaban(array $batch): void
     {
         if (!$this->sesi || $this->is_submitted || empty($batch)) return;
 
         foreach ($batch as $item) {
+            if (!is_array($item)) continue;
             $soalId = (int) ($item['soal_id'] ?? 0);
             if (!$soalId) continue;
 
             $updateData = [];
             if (array_key_exists('pilihan', $item)) {
                 $this->userAnswers[$soalId]['pilihan'] = $item['pilihan'];
-                $updateData['jawaban_pilihan'] = json_encode($item['pilihan']);
+                $updateData['jawaban_pilihan'] = $item['pilihan'] !== null ? json_encode($item['pilihan']) : null;
             }
             if (array_key_exists('teks', $item)) {
                 $this->userAnswers[$soalId]['teks'] = $item['teks'];

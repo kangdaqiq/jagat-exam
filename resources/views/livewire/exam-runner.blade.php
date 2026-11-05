@@ -4,7 +4,8 @@
 @endphp
 
 <div
-    x-data="examRunner({
+    wire:key="exam-runner-root-{{ $sesi ? $sesi->token_sesi : ($bankSoal->kode_bank ?? 'preview') }}"
+    x-data="examRunner($wire, {
         initialIndex: {{ $currentIndex }},
         totalSoals: {{ $this->soals->count() }},
         soalIds: @js($soalIds),
@@ -1129,8 +1130,15 @@
 {{-- SCRIPT: ALPINE EXAM RUNNER LOGIC (CLIENT-SIDE NAVIGATION & OFFLINE)  --}}
 {{-- ===================================================================== --}}
 <script>
-function examRunner(config) {
+function examRunner($wire, config) {
+    if (!config && $wire && typeof $wire === 'object' && !('$set' in $wire)) {
+        config = $wire;
+        $wire = null;
+    }
+    config = config || {};
+
     return {
+        _wire: $wire,
         currentIndex: config.initialIndex || 0,
         totalSoals: config.totalSoals || 0,
         soalIds: config.soalIds || [],
@@ -1148,6 +1156,10 @@ function examRunner(config) {
         pendingSync: [],
         storageKey: 'cbt_answers_' + (config.tokenSesi || 'default'),
         queueKey: 'cbt_queue_' + (config.tokenSesi || 'default'),
+
+        getWire() {
+            return this.$wire || this._wire || (typeof window !== 'undefined' && window.Livewire && this.$el ? window.Livewire.find(this.$el.closest('[wire\\:id]')?.getAttribute('wire:id')) : null);
+        },
 
         get currentSoalId() {
             return this.soalIds[this.currentIndex] || null;
@@ -1239,11 +1251,14 @@ function examRunner(config) {
                 window.isLegitNavigation = true;
             });
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden && !window.isLegitNavigation && !@this.is_submitted) {
+                if (document.hidden && !window.isLegitNavigation) {
                     if (window.AndroidExam && typeof window.AndroidExam.triggerViolation === 'function') {
                         window.AndroidExam.triggerViolation('Siswa beralih aplikasi atau membuka notifikasi');
                     }
-                    $wire.triggerViolation();
+                    const wire = this.getWire();
+                    if (wire && typeof wire.triggerViolation === 'function') {
+                        wire.triggerViolation();
+                    }
                 }
             });
             @endif
@@ -1293,8 +1308,14 @@ function examRunner(config) {
             if (this.pendingSync.length === 0 || this.isSyncing) return;
             this.isSyncing = true;
             const batch = [...this.pendingSync];
+            const wire = this.getWire();
+            if (!wire) {
+                console.warn('Livewire $wire instance belum siap, antrean tetap tersimpan.');
+                this.isSyncing = false;
+                return;
+            }
             try {
-                await $wire.syncBatchJawaban(batch);
+                await wire.syncBatchJawaban(batch);
                 const syncedIds = new Set(batch.map(b => b.soal_id));
                 this.pendingSync = this.pendingSync.filter(q => !syncedIds.has(q.soal_id));
                 this.isOnline = true;
@@ -1304,6 +1325,9 @@ function examRunner(config) {
                 this.isOnline = false;
             } finally {
                 this.isSyncing = false;
+                if (this.pendingSync.length > 0 && this.isOnline) {
+                    setTimeout(() => this.flushQueue(), 100);
+                }
             }
         },
 
@@ -1439,7 +1463,10 @@ function examRunner(config) {
                 localStorage.removeItem(this.storageKey);
                 localStorage.removeItem(this.queueKey);
             } catch (e) {}
-            $wire.submitUjianFinal();
+            const wire = this.getWire();
+            if (wire && typeof wire.submitUjianFinal === 'function') {
+                wire.submitUjianFinal();
+            }
         }
     };
 }
