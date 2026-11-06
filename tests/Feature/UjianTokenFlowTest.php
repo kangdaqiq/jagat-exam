@@ -396,6 +396,17 @@ class UjianTokenFlowTest extends TestCase
         $resDetail = $this->get('/guru/hasil-ujians/' . $ujian->id);
         $resDetail->assertStatus(200);
 
+        // Uji komponen Livewire ViewHasilUjian (filter, sort, exportCsv)
+        $hasilModel = \App\Models\HasilUjian::find($ujian->id);
+        Livewire::actingAs($this->guru)
+            ->test(\App\Filament\Resources\HasilUjians\Pages\ViewHasilUjian::class, ['record' => $hasilModel->id])
+            ->assertSuccessful()
+            ->set('search', 'Siswa')
+            ->call('toggleSort', 'nilai')
+            ->assertSet('sortBy', 'nilai')
+            ->call('exportCsv')
+            ->assertFileDownloaded();
+
         // 2. Admin juga dapat mengakses menu Hasil Ujian di /admin/hasil-ujians
         $this->actingAs($this->admin);
         $resAdmin = $this->get('/admin/hasil-ujians');

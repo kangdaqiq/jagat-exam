@@ -12,6 +12,7 @@ use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Str;
 
 class ViewHasilUjian extends Page
 {
@@ -27,6 +28,9 @@ class ViewHasilUjian extends Page
 
     public string $search = '';
     public string $filterStatus = 'all';
+    public ?int $filterKelas = null;
+    public string $sortBy = 'nama';
+    public string $sortDirection = 'asc';
     public ?int $selectedPesertaId = null;
 
     public function mount(int | string $record): void
@@ -58,7 +62,80 @@ class ViewHasilUjian extends Page
             $query->where('ujian_pesertas.status', $this->filterStatus);
         }
 
-        return $query->orderBy('siswas.nama', 'asc')->get();
+        if (!empty($this->filterKelas)) {
+            $query->where('siswas.kelas_id', $this->filterKelas);
+        }
+
+        if ($this->sortBy === 'nilai') {
+            $query->orderByRaw('ujian_pesertas.nilai ' . ($this->sortDirection === 'asc' ? 'ASC NULLS LAST' : 'DESC NULLS LAST'))
+                  ->orderBy('siswas.nama', 'asc');
+        } elseif ($this->sortBy === 'nis') {
+            $query->orderBy('siswas.nis', $this->sortDirection);
+        } else {
+            $query->orderBy('siswas.nama', $this->sortDirection);
+        }
+
+        return $query->get();
+    }
+
+    public function toggleSort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = $column === 'nilai' ? 'desc' : 'asc';
+        }
+    }
+
+    public function resetFilters(): void
+    {
+        $this->search = '';
+        $this->filterStatus = 'all';
+        $this->filterKelas = null;
+        $this->sortBy = 'nama';
+        $this->sortDirection = 'asc';
+    }
+
+    public function exportCsv()
+    {
+        $pesertas = $this->pesertasList;
+        $examName = Str::slug($this->hasilUjian->nama_ujian, '_');
+        $filename = "rekap_nilai_{$examName}_" . now()->format('Ymd_His') . ".csv";
+
+        return response()->streamDownload(function () use ($pesertas) {
+            $handle = fopen('php://output', 'w');
+            // Write UTF-8 BOM so Microsoft Excel opens Indonesian characters correctly
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($handle, [
+                'No',
+                'NIS',
+                'Nama Siswa',
+                'Kelas',
+                'Status Ujian',
+                'Waktu Mulai',
+                'Waktu Selesai',
+                'Nilai Akhir',
+            ]);
+
+            foreach ($pesertas as $index => $p) {
+                fputcsv($handle, [
+                    $index + 1,
+                    $p->siswa?->nis ?: '-',
+                    $p->siswa?->nama ?: ($p->user?->name ?: '-'),
+                    $p->siswa?->kelas?->nama_kelas ?: '-',
+                    $p->status,
+                    $p->waktu_mulai ? $p->waktu_mulai->format('Y-m-d H:i:s') : '-',
+                    $p->waktu_selesai ? $p->waktu_selesai->format('Y-m-d H:i:s') : '-',
+                    $p->nilai !== null ? (float) $p->nilai : 0,
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function getSelectedPesertaProperty(): ?UjianPeserta
@@ -114,7 +191,7 @@ class ViewHasilUjian extends Page
         }
 
         Notification::make()
-            ->title('Nilai Butir Soal Diperbarui!')
+            ->title('Nilai Butir Soal Diperbarui')
             ->body("Skor berhasil disimpan: {$finalSkor} / {$maxBobot} poin.")
             ->success()
             ->send();
@@ -131,4 +208,3 @@ class ViewHasilUjian extends Page
         ];
     }
 }
-
