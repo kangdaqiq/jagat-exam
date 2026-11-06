@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<html lang="id" class="h-full bg-gray-50">
+<html lang="id" class="h-full bg-slate-50">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#041F45">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <title>{{ $title ?? 'Examuna - Digital Examination System | SMK Assuniyah Tumijajar' }}</title>
@@ -17,6 +20,10 @@
     @vite(['resources/css/app.css'])
 
     <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             -webkit-user-select: none;
@@ -74,7 +81,7 @@
 
     @livewireStyles
 </head>
-<body class="h-full text-gray-900 bg-slate-100 flex flex-col antialiased" oncontextmenu="return false;">
+<body class="h-full text-slate-800 bg-slate-50 flex flex-col antialiased" oncontextmenu="return false;">
     {{ $slot }}
 
     @livewireScripts

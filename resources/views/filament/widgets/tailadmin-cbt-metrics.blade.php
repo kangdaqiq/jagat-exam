@@ -2,6 +2,7 @@
     $metrics = $this->getMetrics();
 @endphp
 
+<x-filament-widgets::widget class="col-span-full" style="grid-column: 1 / -1;">
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6 w-full">
     @foreach ($metrics as $metric)
         <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-[#1a2231] md:p-6 shadow-theme-xs transition-transform duration-200 hover:-translate-y-1 hover:shadow-theme-md">
@@ -65,4 +66,5 @@
         </div>
     @endforeach
 </div>
+</x-filament-widgets::widget>
 

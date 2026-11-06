@@ -20,9 +20,8 @@ class UserForm
                     ->maxLength(255),
 
                 TextInput::make('email')
-                    ->label('Alamat Email')
-                    ->placeholder('guru@sekolah.sch.id')
-                    ->email()
+                    ->label('Username / Alamat Email')
+                    ->placeholder('Contoh: yayuknuriya atau guru@sekolah.sch.id')
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),

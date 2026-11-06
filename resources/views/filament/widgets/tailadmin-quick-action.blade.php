@@ -7,6 +7,7 @@
     $schoolName = $user?->school_name ?: 'SMK Assuniyah Tumijajar';
 @endphp
 
+<x-filament-widgets::widget class="col-span-full" style="grid-column: 1 / -1;">
 <div class="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-[#1a2231]">
     {{-- Decorative Background SVG from TailAdmin --}}
     <div class="absolute -right-10 -top-10 pointer-events-none opacity-5 dark:opacity-10">
@@ -99,3 +100,4 @@
         </div>
     </div>
 </div>
+</x-filament-widgets::widget>

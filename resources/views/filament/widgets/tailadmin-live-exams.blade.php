@@ -4,6 +4,7 @@
     $ujians = $this->getRecentUjians();
 @endphp
 
+<x-filament-widgets::widget class="col-span-full" style="grid-column: 1 / -1;">
 <div class="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-theme-xs dark:border-gray-800 dark:bg-[#1a2231]">
     {{-- Card Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-gray-100 dark:border-gray-800">
@@ -165,4 +166,5 @@
         </table>
     </div>
 </div>
+</x-filament-widgets::widget>
 

@@ -40,9 +40,12 @@ class SiswaLogin extends Component
 
         $input = trim($this->login);
 
-        // Cari user berdasarkan email atau NIP/NIS atau relasi Siswa
+        // Cari user berdasarkan email/username penuh, NIP, prefix username sebelum '@', atau NIS Siswa
         $user = User::where('email', $input)
             ->orWhere('nip', $input)
+            ->when(!str_contains($input, '@'), function ($query) use ($input) {
+                $query->orWhere('email', 'like', $input . '@%');
+            })
             ->orWhereHas('siswa', function ($q) use ($input) {
                 $q->where('nis', $input);
             })
