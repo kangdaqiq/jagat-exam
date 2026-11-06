@@ -7,6 +7,7 @@ use App\Filament\Resources\HasilUjians\HasilUjianResource;
 use App\Filament\Resources\Siswas\SiswaResource;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Filament\Widgets\StatsOverview;
+use App\Filament\Widgets\TailadminQuickActionWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -34,8 +35,30 @@ class GuruPanelProvider extends PanelProvider
             ->path('guru')
             ->login()
             ->brandName('Portal Guru CBT')
+            ->brandLogo(fn () => view('filament.components.brand-logo'))
+            ->brandLogoHeight('2.2rem')
+            ->favicon(asset('images/logo/logo-icon.svg'))
+            ->font('Outfit')
+            ->sidebarCollapsibleOnDesktop()
             ->colors([
-                'primary' => Color::Emerald,
+                'primary' => [
+                    50 => '#ecf3ff',
+                    100 => '#dde9ff',
+                    200 => '#c2d6ff',
+                    300 => '#9cb9ff',
+                    400 => '#7592ff',
+                    500 => '#465fff',
+                    600 => '#3641f5',
+                    700 => '#2a31d8',
+                    800 => '#252dae',
+                    900 => '#262e89',
+                    950 => '#161950',
+                ],
+                'gray' => Color::Slate,
+                'info' => Color::Sky,
+                'success' => Color::Emerald,
+                'warning' => Color::Amber,
+                'danger' => Color::Rose,
             ])
             ->resources([
                 UjianResource::class,
@@ -47,6 +70,7 @@ class GuruPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->widgets([
+                TailadminQuickActionWidget::class,
                 AccountWidget::class,
                 StatsOverview::class,
             ])
