@@ -108,18 +108,9 @@
 
             {{-- Form Title Section --}}
             <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold tracking-wider uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        PORTAL RESMI CBT
-                    </span>
-                    <span class="text-[11px] font-semibold text-slate-400">
-                        Siswa &bull; Guru &bull; Pengawas
-                    </span>
-                </div>
 
                 <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-['Outfit',sans-serif]">
-                    Masuk ke <span class="text-[#0b1e38]">Exam<span class="text-emerald-600">una</span></span>
+                    Masuk
                 </h2>
                 <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1 leading-relaxed">
                     Silakan masukkan kredensial akun Anda (NIS untuk Siswa, NIP / Email untuk Guru & Pengawas) untuk mengakses sistem ujian.
