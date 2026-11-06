@@ -425,6 +425,33 @@ class EditBankSoal extends Page
         $this->showAiModal = false;
     }
 
+    /**
+     * Hapus butir soal dummy bawaan (No. 1 kosong) jika ada,
+     * sebelum batch AI generate atau batch text parser menambahkan soal baru.
+     */
+    protected function cleanupInitialDummySoal(): void
+    {
+        if ($this->record->soals()->count() === 1) {
+            $first = $this->record->soals()->first();
+            if ($first) {
+                $cleanText = trim(strip_tags((string) $first->pertanyaan));
+                $isPlaceholder = in_array($cleanText, [
+                    '',
+                    'Tuliskan butir soal di sini...',
+                    'Tuliskan butir soal di sini',
+                    '&nbsp;',
+                ]);
+                $hasNoCorrectKey = ! $first->opsiJawabans()->where('is_jawaban_benar', true)->exists();
+
+                if ($isPlaceholder && $hasNoCorrectKey) {
+                    $first->opsiJawabans()->delete();
+                    $first->delete();
+                    $this->selectedSoalId = null;
+                }
+            }
+        }
+    }
+
     public function generateWithAi(?AiQuestionService $aiService = null): void
     {
         $aiService = $aiService ?? app(AiQuestionService::class);
@@ -492,7 +519,10 @@ class EditBankSoal extends Page
                     ->success()
                     ->send();
             } else {
-                // Batch mode: Tambahkan butir-butir soal baru ke database
+                // Batch mode: Bersihkan soal dummy bawaan No. 1 jika masih kosong
+                $this->cleanupInitialDummySoal();
+
+                // Tambahkan butir-butir soal baru ke database
                 $startNomor = ((int) $this->record->soals()->max('nomor_urut')) + 1;
                 $firstNewId = null;
 
@@ -723,7 +753,10 @@ class EditBankSoal extends Page
                 ->success()
                 ->send();
         } else {
-            // Batch mode: Tambahkan butir-butir baru ke bank soal
+            // Batch mode: Bersihkan soal dummy bawaan No. 1 jika masih kosong
+            $this->cleanupInitialDummySoal();
+
+            // Tambahkan butir-butir baru ke bank soal
             $startNomor = ((int) $this->record->soals()->max('nomor_urut')) + 1;
             $firstNewId = null;
 

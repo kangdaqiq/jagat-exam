@@ -168,7 +168,7 @@ class KelolaBankSoalTest extends TestCase
         // Awalnya ada 1 soal bawaan
         $this->assertCount(1, $this->bankSoal->fresh()->soals);
 
-        // Generate batch 3 soal baru
+        // Generate batch 3 soal baru (soal dummy bawaan No. 1 otomatis dibersihkan)
         $component->set('ai_mode', 'batch')
             ->set('ai_topik', 'Hukum Termodinamika')
             ->set('ai_tipe_soal', 'pilihan_ganda')
@@ -176,8 +176,9 @@ class KelolaBankSoalTest extends TestCase
             ->call('generateWithAi')
             ->assertHasNoErrors();
 
-        // Total soal sekarang 1 + 3 = 4 soal
-        $this->assertCount(4, $this->bankSoal->fresh()->soals);
+        // Soal dummy No. 1 dihapus, tersisa 3 soal hasil generate bernomor 1, 2, 3
+        $this->assertCount(3, $this->bankSoal->fresh()->soals);
+        $this->assertEquals(1, $this->bankSoal->fresh()->soals()->first()->nomor_urut);
 
         // Validasi tidak boleh lebih dari 50
         $component->set('ai_jumlah', 51)
@@ -290,22 +291,22 @@ class KelolaBankSoalTest extends TestCase
             ->assertSet('showImportTextModal', false)
             ->assertNotified();
 
-        // Total soal sekarang 1 (awal) + 2 (baru) = 3 soal
+        // Soal dummy No. 1 dihapus, tersisa 2 soal hasil parse bernomor 1 dan 2
         $soals = $this->bankSoal->fresh()->soals()->with('opsiJawabans')->orderBy('nomor_urut')->get();
-        $this->assertCount(3, $soals);
+        $this->assertCount(2, $soals);
+
+        $soal1 = $soals[0];
+        $this->assertEquals(1, $soal1->nomor_urut);
+        $this->assertEquals(3.0, (float) $soal1->bobot_nilai);
+        $this->assertStringContainsString('5 x 5', $soal1->pertanyaan);
+
+        // Kunci C benar
+        $opsiC = $soal1->opsiJawabans->where('label', 'C')->first();
+        $this->assertTrue((bool) $opsiC->is_jawaban_benar);
 
         $soal2 = $soals[1];
         $this->assertEquals(2, $soal2->nomor_urut);
-        $this->assertEquals(3.0, (float) $soal2->bobot_nilai);
-        $this->assertStringContainsString('5 x 5', $soal2->pertanyaan);
-
-        // Kunci C benar
-        $opsiC = $soal2->opsiJawabans->where('label', 'C')->first();
-        $this->assertTrue((bool) $opsiC->is_jawaban_benar);
-
-        $soal3 = $soals[2];
-        $this->assertEquals(3, $soal3->nomor_urut);
-        $opsiB = $soal3->opsiJawabans->where('label', 'B')->first();
+        $opsiB = $soal2->opsiJawabans->where('label', 'B')->first();
         $this->assertTrue((bool) $opsiB->is_jawaban_benar);
     }
 

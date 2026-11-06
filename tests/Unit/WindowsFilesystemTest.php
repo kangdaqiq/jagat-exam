@@ -28,3 +28,4 @@ class WindowsFilesystemTest extends TestCase
         $this->assertFileDoesNotExist($path);
     }
 }
+
