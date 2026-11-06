@@ -74,4 +74,42 @@ class Siswa extends Model
 
         return $query->where('user_id', $user->id);
     }
+
+    /**
+     * Reset atau buatkan akun login User untuk siswa ini dengan password baru.
+     */
+    public function resetPassword(string $newPassword): User
+    {
+        if ($this->user) {
+            $user = $this->user;
+            $user->password = \Illuminate\Support\Facades\Hash::make($newPassword);
+            $user->is_active = true;
+            if (empty($user->nip) && !empty($this->nis)) {
+                $user->nip = $this->nis;
+            }
+            $user->save();
+            return $user;
+        }
+
+        $fallbackEmail = $this->nis ? $this->nis . '@siswa.cbt' : 'siswa_' . $this->id . '@siswa.cbt';
+        if (User::where('email', $fallbackEmail)->exists()) {
+            $fallbackEmail = 'siswa_' . $this->id . '_' . time() . '@siswa.cbt';
+        }
+
+        $user = User::create([
+            'name' => $this->nama,
+            'email' => $fallbackEmail,
+            'password' => \Illuminate\Support\Facades\Hash::make($newPassword),
+            'role' => 'siswa',
+            'nip' => $this->nis,
+            'phone' => $this->no_wa,
+            'school_id' => $this->school_id,
+            'school_name' => $this->school_name,
+            'is_active' => true,
+        ]);
+
+        $this->update(['user_id' => $user->id]);
+
+        return $user;
+    }
 }

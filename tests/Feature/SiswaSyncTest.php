@@ -166,5 +166,59 @@ class SiswaSyncTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin/siswas');
         $response->assertSuccessful();
     }
+
+    public function test_can_reset_password_individual_for_siswa(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'siswa',
+            'nip' => '10234',
+            'email' => '10234@siswa.cbt',
+            'password' => \Illuminate\Support\Facades\Hash::make('oldpassword'),
+        ]);
+
+        $siswa = Siswa::create([
+            'user_id' => $user->id,
+            'nis' => '10234',
+            'nama' => 'Ahmad Santoso',
+            'is_active' => true,
+        ]);
+
+        // 1. Reset password ke NIS
+        $siswa->resetPassword('10234');
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('10234', $user->fresh()->password));
+
+        // 2. Siswa bisa login dengan NIS dan password baru
+        $this->assertTrue(\Illuminate\Support\Facades\Auth::attempt(['email' => $user->email, 'password' => '10234']));
+    }
+
+    public function test_can_reset_all_passwords_and_bulk_for_siswas(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email' => 'admin_reset@cbt.com']);
+
+        $user1 = User::factory()->create(['role' => 'siswa', 'nip' => 'NIS01', 'email' => 'nis01@siswa.cbt', 'password' => \Illuminate\Support\Facades\Hash::make('old1')]);
+        $siswa1 = Siswa::create(['user_id' => $user1->id, 'nis' => 'NIS01', 'nama' => 'Siswa 1', 'is_active' => true]);
+
+        $user2 = User::factory()->create(['role' => 'siswa', 'nip' => 'NIS02', 'email' => 'nis02@siswa.cbt', 'password' => \Illuminate\Support\Facades\Hash::make('old2')]);
+        $siswa2 = Siswa::create(['user_id' => $user2->id, 'nis' => 'NIS02', 'nama' => 'Siswa 2', 'is_active' => true]);
+
+        // Uji action resetAllPassword di ListSiswas
+        \Livewire\Livewire::actingAs($admin)
+            ->test(\App\Filament\Resources\Siswas\Pages\ListSiswas::class)
+            ->callAction('resetAllPassword', ['mode' => 'nis'])
+            ->assertHasNoErrors()
+            ->assertNotified('Reset Seluruh Password Selesai');
+
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('NIS01', $user1->fresh()->password));
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('NIS02', $user2->fresh()->password));
+
+        // Uji action individual resetPassword di SiswaTable
+        \Livewire\Livewire::actingAs($admin)
+            ->test(\App\Filament\Resources\Siswas\Pages\ListSiswas::class)
+            ->callTableAction('resetPassword', $siswa1, ['password' => 'rahasia123'])
+            ->assertHasNoTableActionErrors()
+            ->assertNotified('Password Berhasil Direset');
+
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('rahasia123', $user1->fresh()->password));
+    }
 }
 
