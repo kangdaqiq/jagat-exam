@@ -7,6 +7,7 @@ use App\Filament\Resources\HasilUjians\HasilUjianResource;
 use App\Filament\Resources\Siswas\SiswaResource;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Filament\Widgets\StatsOverview;
+use App\Filament\Widgets\TailadminCbtMetricsWidget;
 use App\Filament\Widgets\TailadminQuickActionWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -71,6 +72,7 @@ class GuruPanelProvider extends PanelProvider
             ])
             ->widgets([
                 TailadminQuickActionWidget::class,
+                TailadminCbtMetricsWidget::class,
                 AccountWidget::class,
                 StatsOverview::class,
             ])

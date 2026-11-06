@@ -1,7 +1,7 @@
 <div class="space-y-6">
 
     {{-- 1. HEADER INFORMASI AGENDA UJIAN --}}
-    <div class="p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs">
+    <div class="p-6 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="space-y-1.5">
                 <div class="flex items-center gap-2 flex-wrap">
@@ -62,7 +62,7 @@
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         {{-- Total Peserta --}}
-        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs">
+        <div class="p-4 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Peserta</span>
             <div class="mt-2 flex items-baseline gap-2">
                 <span class="text-2xl font-black text-gray-900 dark:text-white">{{ $totalPeserta }}</span>
@@ -71,7 +71,7 @@
         </div>
 
         {{-- Siswa Selesai --}}
-        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs">
+        <div class="p-4 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sudah Selesai</span>
             <div class="mt-2 flex items-baseline gap-2">
                 <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $selesaiPeserta }}</span>
@@ -80,7 +80,7 @@
         </div>
 
         {{-- Nilai Rata-rata --}}
-        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs">
+        <div class="p-4 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Rata-rata Nilai</span>
             <div class="mt-2 flex items-baseline gap-2">
                 <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
@@ -91,7 +91,7 @@
         </div>
 
         {{-- Tertinggi / Terendah --}}
-        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs">
+        <div class="p-4 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Min &bull; Max</span>
             <div class="mt-2 flex items-baseline gap-2">
                 <span class="text-2xl font-black text-gray-900 dark:text-white">
@@ -106,7 +106,7 @@
     </div>
 
     {{-- 3. FILTER & PENCARIAN SISWA --}}
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+    <div class="bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs p-4 flex flex-col md:flex-row items-center justify-between gap-3">
         <div class="flex items-center gap-2 w-full md:w-auto">
             <input
                 type="text"
@@ -149,11 +149,11 @@
     </div>
 
     {{-- 4. TABEL DAFTAR SISWA & NILAI --}}
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xs overflow-hidden">
+    <div class="bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
                 <thead>
-                    <tr class="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    <tr class="bg-[#f9fafb] dark:bg-[#161f30] border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                         <th class="py-3 px-4 w-12 text-center">No</th>
                         <th class="py-3 px-4">NIS</th>
                         <th class="py-3 px-4">Nama Siswa</th>
@@ -167,7 +167,7 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                     @forelse($this->pesertasList as $index => $peserta)
-                        <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition">
+                        <tr class="hover:bg-[#f9fafb] dark:hover:bg-[#161f30] transition border-b border-gray-100 dark:border-gray-800/60">
                             <td class="py-3 px-4 text-center font-semibold text-gray-400">{{ $index + 1 }}</td>
                             <td class="py-3 px-4 font-mono font-bold text-gray-900 dark:text-white">{{ $peserta->siswa?->nis ?: '-' }}</td>
                             <td class="py-3 px-4 font-bold text-gray-900 dark:text-white">

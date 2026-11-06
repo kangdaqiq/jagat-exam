@@ -1314,20 +1314,242 @@ pre code,
 }
 
 /* ========================================================
-   FILAMENT TAILADMIN CUSTOM THEME OVERRIDES
+   FILAMENT TAILADMIN DEEP THEME INTEGRATION
    ======================================================== */
 
-body, .fi-body, .fi-panel, .fi-sidebar, .fi-topbar, .fi-main {
+/* 1. Global Font: Outfit */
+html, body, .fi-body, .fi-panel, .fi-sidebar, .fi-topbar, .fi-main, .fi-ta, .fi-section, .fi-modal {
     font-family: 'Outfit', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
+/* 2. Neutralize Filament's default ring-1 & box shadows on containers */
+.fi-ta-ctn,
+.fi-section,
+.fi-card,
+.fi-wi-stats-overview-stat,
+.fi-wi-account,
+.fi-modal-window {
+    --tw-ring-offset-shadow: none !important;
+    --tw-ring-shadow: none !important;
+    --tw-ring-color: transparent !important;
+    --tw-ring-offset-width: 0px !important;
+}
+
+/* 3. TailAdmin Table Card Container (.fi-ta-ctn) */
+.fi-ta-ctn {
+    border-radius: 16px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.08), 0px 1px 2px 0px rgba(16, 24, 40, 0.04) !important;
+    overflow: hidden !important;
+}
+
+.dark .fi-ta-ctn {
+    border: 1px solid #1d2939 !important;
+    background-color: #101828 !important;
+    box-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Table Header Toolbar */
+.fi-ta-header {
+    padding: 16px 20px !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #f2f4f7 !important;
+}
+
+.dark .fi-ta-header {
+    background-color: #101828 !important;
+    border-bottom: 1px solid #1d2939 !important;
+}
+
+.fi-ta-header-heading {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #101828 !important;
+    letter-spacing: -0.01em !important;
+}
+
+.dark .fi-ta-header-heading {
+    color: #f9fafb !important;
+}
+
+.fi-ta-header-description {
+    font-size: 13px !important;
+    color: #667085 !important;
+}
+
+.dark .fi-ta-header-description {
+    color: #98a2b3 !important;
+}
+
+/* Table Search Input */
+.fi-ta-search-field .fi-input-wrp {
+    border-radius: 10px !important;
+    border: 1px solid #d0d5dd !important;
+    background-color: #f9fafb !important;
+    box-shadow: none !important;
+    transition: all 0.15s ease !important;
+}
+
+.fi-ta-search-field .fi-input-wrp:focus-within {
+    border-color: #465fff !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 0 0 4px rgba(70, 95, 255, 0.12) !important;
+}
+
+.dark .fi-ta-search-field .fi-input-wrp {
+    border: 1px solid #344054 !important;
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.dark .fi-ta-search-field .fi-input-wrp:focus-within {
+    border-color: #465fff !important;
+    background-color: #1a2231 !important;
+    box-shadow: 0 0 0 4px rgba(70, 95, 255, 0.25) !important;
+}
+
+/* Table Thead */
+.fi-ta-table thead tr {
+    background-color: #f9fafb !important;
+    border-bottom: 1px solid #e4e7ec !important;
+}
+
+.dark .fi-ta-table thead tr {
+    background-color: #161f30 !important;
+    border-bottom: 1px solid #1d2939 !important;
+}
+
+.fi-ta-header-cell {
+    padding: 12px 20px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: #475467 !important;
+    border-bottom: 1px solid #e4e7ec !important;
+}
+
+.dark .fi-ta-header-cell {
+    color: #98a2b3 !important;
+    border-bottom: 1px solid #1d2939 !important;
+    background-color: #161f30 !important;
+}
+
+.fi-ta-header-cell-label {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: inherit !important;
+}
+
+/* Table Rows & Cells */
+.fi-ta-row {
+    border-bottom: 1px solid #f2f4f7 !important;
+    transition: background-color 0.15s ease !important;
+}
+
+.dark .fi-ta-row {
+    border-bottom: 1px solid #1d2939 !important;
+}
+
+.fi-ta-row:hover {
+    background-color: #f9fafb !important;
+}
+
+.dark .fi-ta-row:hover {
+    background-color: #161f30 !important;
+}
+
+.fi-ta-cell {
+    padding: 14px 20px !important;
+    font-size: 14px !important;
+    color: #344054 !important;
+    vertical-align: middle !important;
+}
+
+.dark .fi-ta-cell {
+    color: #d0d5dd !important;
+}
+
+/* Table Pagination */
+.fi-ta-pagination {
+    background-color: #ffffff !important;
+    border-top: 1px solid #e4e7ec !important;
+    padding: 14px 20px !important;
+}
+
+.dark .fi-ta-pagination {
+    background-color: #101828 !important;
+    border-top: 1px solid #1d2939 !important;
+}
+
+.fi-pagination-item {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+
+.fi-pagination-item-active button {
+    background-color: #465fff !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+}
+
+/* 4. TailAdmin Sections & Cards */
+.fi-section, .fi-card {
+    border-radius: 16px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.08), 0px 1px 2px 0px rgba(16, 24, 40, 0.04) !important;
+    overflow: hidden !important;
+}
+
+.dark .fi-section, .dark .fi-card {
+    border: 1px solid #1d2939 !important;
+    background-color: #101828 !important;
+    box-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.4) !important;
+}
+
+.fi-section-header {
+    padding: 18px 24px !important;
+    border-bottom: 1px solid #f2f4f7 !important;
+}
+
+.dark .fi-section-header {
+    border-bottom: 1px solid #1d2939 !important;
+}
+
+.fi-section-header-heading {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #101828 !important;
+}
+
+.dark .fi-section-header-heading {
+    color: #f9fafb !important;
+}
+
+.fi-section-header-description {
+    font-size: 13px !important;
+    color: #667085 !important;
+}
+
+.dark .fi-section-header-description {
+    color: #98a2b3 !important;
+}
+
+.fi-section-content {
+    padding: 24px !important;
+}
+
+/* 5. TailAdmin Sidebar Styling */
 .fi-sidebar {
-    border-right: 1px solid var(--color-gray-200, #e4e7ec) !important;
+    border-right: 1px solid #e4e7ec !important;
     background-color: #ffffff !important;
 }
 
 .dark .fi-sidebar {
-    border-right: 1px solid var(--color-gray-800, #1d2939) !important;
+    border-right: 1px solid #1d2939 !important;
     background-color: #101828 !important;
 }
 
@@ -1356,94 +1578,264 @@ body, .fi-body, .fi-panel, .fi-sidebar, .fi-topbar, .fi-main {
     background-color: #161f30 !important;
 }
 
+/* 6. TailAdmin Topbar / Header */
 .fi-topbar {
-    border-bottom: 1px solid var(--color-gray-200, #e4e7ec) !important;
+    border-bottom: 1px solid #e4e7ec !important;
     background-color: #ffffff !important;
     box-shadow: 0 1px 2px 0 rgba(16, 24, 40, 0.04) !important;
 }
 
 .dark .fi-topbar {
-    border-bottom: 1px solid var(--color-gray-800, #1d2939) !important;
+    border-bottom: 1px solid #1d2939 !important;
     background-color: #101828 !important;
 }
 
-.fi-section, .fi-card, .fi-wi-stats-overview-stat, .fi-ta-ctn {
-    border-radius: 16px !important;
-    border: 1px solid var(--color-gray-200, #e4e7ec) !important;
-    background-color: #ffffff !important;
-    box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.06), 0 1px 2px 0 rgba(16, 24, 40, 0.04) !important;
-}
-
-.dark .fi-section, .dark .fi-card, .dark .fi-wi-stats-overview-stat, .dark .fi-ta-ctn {
-    border: 1px solid var(--color-gray-800, #1d2939) !important;
-    background-color: #1a2231 !important;
-}
-
+/* 7. TailAdmin Stat Widget (.fi-wi-stats-overview-stat) */
 .fi-wi-stats-overview-stat {
-    padding: 20px 24px !important;
+    border-radius: 16px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.08) !important;
+    padding: 22px 24px !important;
     transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .fi-wi-stats-overview-stat:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.08) !important;
+    box-shadow: 0px 4px 12px -2px rgba(16, 24, 40, 0.1) !important;
+}
+
+.dark .fi-wi-stats-overview-stat {
+    border: 1px solid #1d2939 !important;
+    background-color: #101828 !important;
+    box-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .fi-wi-stats-overview-stat:hover {
+    box-shadow: 0px 4px 16px -2px rgba(0, 0, 0, 0.6) !important;
+}
+
+.fi-wi-stats-overview-stat-label {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #667085 !important;
+    letter-spacing: 0.02em !important;
+}
+
+.dark .fi-wi-stats-overview-stat-label {
+    color: #98a2b3 !important;
 }
 
 .fi-wi-stats-overview-stat-value {
-    font-size: 28px !important;
+    font-size: 32px !important;
     font-weight: 800 !important;
-    letter-spacing: -0.02em !important;
     color: #101828 !important;
+    letter-spacing: -0.02em !important;
+    margin-top: 6px !important;
+    line-height: 1.2 !important;
 }
 
 .dark .fi-wi-stats-overview-stat-value {
     color: #f9fafb !important;
 }
 
-.fi-ta-header-cell {
-    background-color: #f9fafb !important;
-    color: #475467 !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.05em !important;
-    border-bottom: 1px solid var(--color-gray-200, #e4e7ec) !important;
+/* Account Widget */
+.fi-wi-account {
+    border-radius: 16px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.08) !important;
+    padding: 20px 24px !important;
 }
 
-.dark .fi-ta-header-cell {
-    background-color: #161f30 !important;
-    color: #98a2b3 !important;
-    border-bottom: 1px solid var(--color-gray-800, #1d2939) !important;
+.dark .fi-wi-account {
+    border: 1px solid #1d2939 !important;
+    background-color: #101828 !important;
 }
 
-.fi-ta-row:hover {
-    background-color: #fcfcfd !important;
-}
-
-.dark .fi-ta-row:hover {
-    background-color: #161f30 !important;
-}
-
-.fi-btn-primary {
-    background-color: #465fff !important;
-    color: #ffffff !important;
+/* 8. TailAdmin Form Inputs */
+.fi-input-wrp {
     border-radius: 10px !important;
-    font-weight: 600 !important;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+    border: 1px solid #d0d5dd !important;
+    background-color: #ffffff !important;
     transition: all 0.15s ease !important;
 }
 
-.fi-btn-primary:hover {
+.dark .fi-input-wrp {
+    border: 1px solid #344054 !important;
+    background-color: #1a2231 !important;
+}
+
+.fi-input-wrp:focus-within {
+    border-color: #465fff !important;
+    box-shadow: 0 0 0 3px rgba(70, 95, 255, 0.14) !important;
+}
+
+.dark .fi-input-wrp:focus-within {
+    border-color: #465fff !important;
+    box-shadow: 0 0 0 3px rgba(70, 95, 255, 0.28) !important;
+}
+
+/* 9. TailAdmin Buttons */
+.fi-btn {
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease !important;
+}
+
+.fi-btn-color-primary, .fi-btn-primary {
+    background-color: #465fff !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+}
+
+.fi-btn-color-primary:hover, .fi-btn-primary:hover {
     background-color: #3641f5 !important;
 }
 
-.fi-btn-outlined {
-    border-radius: 10px !important;
-    border: 1px solid var(--color-gray-300, #d0d5dd) !important;
+.fi-btn-color-gray:not(.fi-btn-outlined) {
+    background-color: #f9fafb !important;
+    color: #344054 !important;
+    border: 1px solid #d0d5dd !important;
 }
 
+.fi-btn-color-gray:hover {
+    background-color: #f2f4f7 !important;
+}
+
+.dark .fi-btn-color-gray:not(.fi-btn-outlined) {
+    background-color: #1a2231 !important;
+    color: #d0d5dd !important;
+    border: 1px solid #344054 !important;
+}
+
+/* 10. TailAdmin Badges */
 .fi-badge {
     border-radius: 9999px !important;
-    font-weight: 600 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
     padding: 2px 10px !important;
+    letter-spacing: 0.02em !important;
+}
+
+.fi-color-primary.fi-badge {
+    background-color: #ecf3ff !important;
+    color: #3641f5 !important;
+}
+.dark .fi-color-primary.fi-badge {
+    background-color: rgba(70, 95, 255, 0.15) !important;
+    color: #7592ff !important;
+}
+
+.fi-color-success.fi-badge {
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+}
+.dark .fi-color-success.fi-badge {
+    background-color: rgba(18, 183, 106, 0.15) !important;
+    color: #32d583 !important;
+}
+
+.fi-color-warning.fi-badge {
+    background-color: #fffaeb !important;
+    color: #b54708 !important;
+}
+.dark .fi-color-warning.fi-badge {
+    background-color: rgba(247, 144, 9, 0.15) !important;
+    color: #fdb022 !important;
+}
+
+.fi-color-danger.fi-badge {
+    background-color: #fef3f2 !important;
+    color: #b42318 !important;
+}
+.dark .fi-color-danger.fi-badge {
+    background-color: rgba(240, 68, 56, 0.15) !important;
+    color: #f97066 !important;
+}
+
+.fi-color-info.fi-badge {
+    background-color: #f0f9ff !important;
+    color: #026aa2 !important;
+}
+.dark .fi-color-info.fi-badge {
+    background-color: rgba(11, 165, 236, 0.15) !important;
+    color: #36bffa !important;
+}
+
+/* 11. TailAdmin Modal Windows */
+.fi-modal-window {
+    border-radius: 20px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0px 20px 25px -5px rgba(16, 24, 40, 0.12), 0px 8px 10px -6px rgba(16, 24, 40, 0.06) !important;
+    overflow: hidden !important;
+}
+
+.dark .fi-modal-window {
+    border: 1px solid #1d2939 !important;
+    background-color: #101828 !important;
+}
+
+.fi-modal-header {
+    padding: 20px 24px !important;
+    border-bottom: 1px solid #f2f4f7 !important;
+}
+
+.dark .fi-modal-header {
+    border-bottom: 1px solid #1d2939 !important;
+}
+
+.fi-modal-heading {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #101828 !important;
+}
+
+.dark .fi-modal-heading {
+    color: #ffffff !important;
+}
+
+.fi-modal-footer {
+    padding: 16px 24px !important;
+    border-top: 1px solid #f2f4f7 !important;
+    background-color: #f9fafb !important;
+}
+
+.dark .fi-modal-footer {
+    border-top: 1px solid #1d2939 !important;
+    background-color: #161f30 !important;
+}
+
+/* 12. TailAdmin Dropdowns */
+.fi-dropdown-panel {
+    border-radius: 14px !important;
+    border: 1px solid #e4e7ec !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 15px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -4px rgba(16, 24, 40, 0.05) !important;
+    padding: 6px !important;
+}
+
+.dark .fi-dropdown-panel {
+    border: 1px solid #1d2939 !important;
+    background-color: #1a2231 !important;
+}
+
+.fi-dropdown-list-item {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 8px 12px !important;
+}
+
+/* 13. Page Heading */
+.fi-header-heading {
+    font-size: 26px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    color: #101828 !important;
+}
+
+.dark .fi-header-heading {
+    color: #f9fafb !important;
 }
