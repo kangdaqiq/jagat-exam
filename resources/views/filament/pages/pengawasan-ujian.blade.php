@@ -122,37 +122,14 @@
                             type="button"
                             wire:click="rilisTokenBaru"
                             wire:confirm="Rilis kode token baru (aktif selama 10 menit ke depan)?"
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#465fff] hover:bg-[#3641f5] text-white shadow-theme-xs transition cursor-pointer"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#465fff] hover:bg-[#3641f5] text-white shadow-theme-xs transition cursor-pointer"
                         >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                             Rilis Token Baru (10 Menit)
                         </button>
-
-                        <button
-                            type="button"
-                            wire:click="selesaikanUjian"
-                            wire:confirm="Apakah Anda yakin ingin menutup dan menyelesaikan sesi ujian ini? Siswa tidak dapat lagi mengerjakan soal."
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-theme-xs transition cursor-pointer"
-                        >
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Tutup & Selesaikan Ujian
-                        </button>
                     @endif
-
-                    <button
-                        type="button"
-                        wire:click="syncPesertaKelas"
-                        class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition cursor-pointer"
-                    >
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                        Sinkron Peserta Kelas
-                    </button>
                 </div>
             </div>
         </div>
