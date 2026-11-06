@@ -125,16 +125,34 @@ class BankSoal extends Model
         if ($hasObj) {
             $countObj = $objSoals->count();
             $bobotPerObj = round($targetObj / $countObj, 2);
+            $accumulated = 0.0;
+            $i = 0;
             foreach ($objSoals as $s) {
-                $s->update(['bobot_nilai' => $bobotPerObj]);
+                $i++;
+                if ($i === $countObj) {
+                    $val = round($targetObj - $accumulated, 2);
+                } else {
+                    $val = $bobotPerObj;
+                    $accumulated += $val;
+                }
+                $s->update(['bobot_nilai' => $val]);
             }
         }
 
         if ($hasSub) {
             $countSub = $subSoals->count();
             $bobotPerSub = round($targetSub / $countSub, 2);
+            $accumulated = 0.0;
+            $j = 0;
             foreach ($subSoals as $s) {
-                $s->update(['bobot_nilai' => $bobotPerSub]);
+                $j++;
+                if ($j === $countSub) {
+                    $val = round($targetSub - $accumulated, 2);
+                } else {
+                    $val = $bobotPerSub;
+                    $accumulated += $val;
+                }
+                $s->update(['bobot_nilai' => $val]);
             }
         }
 

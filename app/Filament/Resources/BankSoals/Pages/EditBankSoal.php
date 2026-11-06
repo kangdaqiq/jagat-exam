@@ -86,7 +86,7 @@ class EditBankSoal extends Page
             $firstSoal = $this->record->soals()->create([
                 'nomor_urut' => 1,
                 'tipe_soal' => 'pilihan_ganda',
-                'bobot_nilai' => 2.0,
+                'bobot_nilai' => 100.0,
                 'pertanyaan' => '<p>Tuliskan butir soal di sini...</p>',
                 'media_type' => 'none',
             ]);
@@ -98,6 +98,13 @@ class EditBankSoal extends Page
                     'is_jawaban_benar' => false,
                     'nomor_urut' => $index + 1,
                 ]);
+            }
+        } else {
+            // Otomatis seimbangkan ke 100 poin jika belum pas 100
+            $totalCurrent = (float) $this->record->soals()->sum('bobot_nilai');
+            if (abs($totalCurrent - 100.0) > 0.5 || (float) $this->record->total_bobot !== 100.0) {
+                $this->record->autoDistributeBobot();
+                $this->record->refresh();
             }
         }
 
@@ -319,10 +326,12 @@ class EditBankSoal extends Page
             ]);
         }
 
+        $this->record->autoDistributeBobot();
+        $this->record->refresh();
         $this->selectSoal($newSoal->id);
 
         Notification::make()
-            ->title("Soal No. {$nextNomor} ditambahkan")
+            ->title("Soal No. {$nextNomor} ditambahkan (Bobot otomatis disesuaikan ke 100 poin)")
             ->success()
             ->send();
     }
@@ -344,10 +353,12 @@ class EditBankSoal extends Page
             ]));
         }
 
+        $this->record->autoDistributeBobot();
+        $this->record->refresh();
         $this->selectSoal($replica->id);
 
         Notification::make()
-            ->title("Soal diduplikasi menjadi No. {$nextNomor}")
+            ->title("Soal diduplikasi menjadi No. {$nextNomor} (Bobot otomatis 100 poin)")
             ->success()
             ->send();
     }
@@ -368,6 +379,9 @@ class EditBankSoal extends Page
         foreach ($remaining as $r) {
             $r->update(['nomor_urut' => $num++]);
         }
+
+        $this->record->autoDistributeBobot();
+        $this->record->refresh();
 
         $next = $this->record->soals()->where('nomor_urut', '>=', $nomorHapus)->orderBy('nomor_urut', 'asc')->first()
             ?? $this->record->soals()->orderBy('nomor_urut', 'desc')->first();
@@ -511,11 +525,13 @@ class EditBankSoal extends Page
                 }
 
                 if ($firstNewId) {
+                    $this->record->autoDistributeBobot();
+                    $this->record->refresh();
                     $this->selectSoal($firstNewId);
                 }
 
                 Notification::make()
-                    ->title(count($generatedItems) . " butir soal baru berhasil digenerate dan ditambahkan!")
+                    ->title(count($generatedItems) . " butir soal baru berhasil digenerate (Bobot otomatis 100 poin)!")
                     ->success()
                     ->send();
             }
@@ -767,12 +783,13 @@ class EditBankSoal extends Page
     {
         return [
             Action::make('sesuaikanBobot')
-                ->label('Sesuaikan Bobot (100 Poin)')
+                ->label('Bobot Otomatis (100 Poin)')
                 ->icon(Heroicon::OutlinedCalculator)
                 ->color('success')
+                ->tooltip('Bobot soal sudah otomatis terdistribusi 100 poin secara default (Objektif 75% : Subjektif 25%). Klik untuk sinkronisasi ulang kapan saja.')
                 ->requiresConfirmation()
-                ->modalHeading('Sesuaikan Bobot Soal Menjadi 100 Poin?')
-                ->modalDescription('Sistem akan membagi bobot seluruh butir soal menjadi total 100 poin dengan rasio Objektif : Essay/Isian = 75 : 25 (atau 100% jika hanya ada satu jenis soal).')
+                ->modalHeading('Sinkronisasi Bobot Soal Menjadi 100 Poin?')
+                ->modalDescription('Sistem secara default telah membagi bobot seluruh butir soal menjadi total 100 poin dengan rasio Objektif : Essay/Isian = 75 : 25 (atau 100% jika hanya ada satu jenis soal). Klik konfirmasi untuk sinkronisasi ulang sekarang.')
                 ->action(function () {
                     $this->record->autoDistributeBobot();
                     $this->record->refresh();

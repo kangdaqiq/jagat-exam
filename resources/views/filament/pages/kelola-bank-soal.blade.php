@@ -35,12 +35,20 @@
                             </span>
                         @endif
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Total {{ $this->soals->count() }} butir soal &bull; Akumulasi Bobot: <span class="font-bold text-primary-600 dark:text-primary-400">{{ (float) $this->soals->sum('bobot_nilai') }} Poin</span>
-                        @if($record->total_bobot > 0)
-                            <span class="text-gray-400">/ Target {{ (float) $record->total_bobot }} Poin</span>
-                        @endif
-                    </p>
+                    <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Total {{ $this->soals->count() }} butir soal &bull; Akumulasi Bobot: <span class="font-bold text-primary-600 dark:text-primary-400">{{ (float) $this->soals->sum('bobot_nilai') }} Poin</span>
+                            @if($record->total_bobot > 0)
+                                <span class="text-gray-400">/ Target {{ (float) $record->total_bobot }} Poin</span>
+                            @endif
+                        </p>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60">
+                            <svg class="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Bobot Otomatis 100 Poin Aktif
+                        </span>
+                    </div>
                 </div>
             </div>
 
