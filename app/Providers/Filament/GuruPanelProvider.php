@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 use App\Filament\Resources\BankSoals\BankSoalResource;
 use App\Filament\Resources\HasilUjians\HasilUjianResource;
-use App\Filament\Resources\Siswas\SiswaResource;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Filament\Widgets\TailadminCbtMetricsWidget;
 use App\Filament\Widgets\TailadminLiveExamsWidget;
@@ -65,7 +64,6 @@ class GuruPanelProvider extends PanelProvider
                 UjianResource::class,
                 HasilUjianResource::class,
                 BankSoalResource::class,
-                SiswaResource::class,
             ])
             ->pages([
                 Dashboard::class,

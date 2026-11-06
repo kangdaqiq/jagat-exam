@@ -43,8 +43,12 @@ class SiswaResource extends Resource
 
     public static function canViewAny(): bool
     {
-        $user = auth()->user();
-        return $user?->isAdmin() || $user?->isGuru();
+        return auth()->user()?->isAdmin() ?? false;
+    }
+
+    public static function canView(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     public static function canCreate(): bool

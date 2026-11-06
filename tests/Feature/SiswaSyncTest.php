@@ -156,15 +156,25 @@ class SiswaSyncTest extends TestCase
         $this->assertEquals('Nama Baru Siswa', $user->name);
     }
 
-    public function test_admin_can_access_siswa_list_page(): void
+    public function test_admin_can_access_siswa_list_page_and_guru_is_forbidden(): void
     {
         $admin = User::factory()->create([
             'role' => 'admin',
             'email' => 'admin@cbt.com',
         ]);
 
+        $guru = User::factory()->create([
+            'role' => 'guru',
+            'email' => 'guru@cbt.com',
+        ]);
+
+        // Admin berhasil membuka data siswa
         $response = $this->actingAs($admin)->get('/admin/siswas');
         $response->assertSuccessful();
+
+        // Guru ditolak membuka data siswa
+        $this->actingAs($guru)->get('/guru/siswas')->assertStatus(404);
+        $this->actingAs($guru)->get('/admin/siswas')->assertStatus(403);
     }
 
     public function test_can_reset_password_individual_for_siswa(): void
