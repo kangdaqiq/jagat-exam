@@ -710,7 +710,7 @@
                                         {{-- Input Koreksi Nilai Essay oleh Guru --}}
                                         <div class="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
                                             @php
-                                                $maxBobotEssay = $sSesi ? $sSesi->getEffectiveBobotForJawaban($jwb) : (float) ($soal->bobot_nilai ?? 10);
+                                                $maxBobotEssay = $sSesi ? $sSesi->getEffectiveBobotForJawaban($jwb) : (float) ($soal?->bobot_nilai ?? 10);
                                             @endphp
                                             <span class="font-bold text-gray-700 dark:text-gray-300">
                                                 Beri Nilai Essay (Maks: {{ (float) $maxBobotEssay }} Poin):
