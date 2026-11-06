@@ -93,10 +93,10 @@
 
             {{-- Top Branding Header for Mobile / Tablet View --}}
             <div class="lg:hidden flex flex-col items-center text-center mb-6 pb-6 border-b border-slate-100">
-                <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm max-w-[210px] mb-3">
-                    <img src="{{ asset('images/logo/examuna-logo.png') }}"
+                <div class="p-2.5 bg-slate-50/80 rounded-2xl border border-slate-200 shadow-sm max-w-[260px] mb-2.5">
+                    <img src="{{ asset('images/logo/examuna.png') }}"
                          alt="Logo Examuna"
-                         class="w-full h-auto max-h-24 object-contain" />
+                         class="w-full h-auto max-h-14 object-contain" />
                 </div>
                 <span class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                     Digital Examination System

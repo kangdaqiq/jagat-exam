@@ -4,16 +4,8 @@
     <header style="background: #ffffff; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 40; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
         <div style="max-width: 1200px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
             {{-- Logo & Identitas Aplikasi --}}
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="{{ asset('images/logo/examuna-logo.png') }}" alt="Examuna Logo" style="height: 38px; width: auto; object-fit: contain;">
-                <div>
-                    <h2 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">
-                        Exam<span style="color: #10b981;">una</span> <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ecfdf5; color: #059669; font-weight: 800; border: 1px solid #a7f3d0;">CBT</span>
-                    </h2>
-                    <span style="font-size: 11px; font-weight: 600; color: #64748b;">
-                        {{ $siswa?->school_name ?: 'SMK Assuniyah Tumijajar • Digital Examination System' }}
-                    </span>
-                </div>
+            <div style="display: flex; align-items: center;">
+                <img src="{{ asset('images/logo/examuna.png') }}" alt="Examuna - SMK Assuniyah Tumijajar" style="height: 38px; width: auto; max-width: 220px; object-fit: contain;">
             </div>
 
             {{-- Info Siswa & Tombol Keluar --}}
