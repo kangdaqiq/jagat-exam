@@ -139,6 +139,19 @@ class UjianTokenFlowTest extends TestCase
         $this->get('/guru')->assertStatus(403);
     }
 
+    public function test_tailadmin_widgets_render_for_admin_and_guru(): void
+    {
+        $this->actingAs($this->admin);
+        Livewire::test(\App\Filament\Widgets\TailadminCbtMetricsWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Total Siswa Terdaftar');
+
+        $this->actingAs($this->guru);
+        Livewire::test(\App\Filament\Widgets\TailadminCbtMetricsWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Bank Soal Saya');
+    }
+
     /**
      * Verifikasi Halaman Form Buat Ujian dapat diakses oleh Admin & Guru
      */

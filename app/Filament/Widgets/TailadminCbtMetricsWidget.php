@@ -76,7 +76,7 @@ class TailadminCbtMetricsWidget extends Widget
 
         // Statistik untuk Guru
         $guruId = $user?->id;
-        $myBankSoals = BankSoal::where('guru_id', $guruId)->get();
+        $myBankSoals = BankSoal::where('user_id', $guruId)->get();
         $totalBank = $myBankSoals->count();
         $totalSoal = Soal::whereIn('bank_soal_id', $myBankSoals->pluck('id'))->count();
         $myUjians = Ujian::where('guru_id', $guruId)->get();
@@ -124,3 +124,4 @@ class TailadminCbtMetricsWidget extends Widget
         ];
     }
 }
+
