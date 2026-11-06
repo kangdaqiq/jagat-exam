@@ -424,6 +424,72 @@ MD;
 
         $this->assertEquals(100.0, (float) $this->bankSoal->fresh()->total_bobot);
     }
+
+    public function test_can_parse_questions_with_separate_answer_keys_table_or_list(): void
+    {
+        $rawText = <<<'MD'
+# SOAL PENGETAHUAN UMUM
+## A. Pilihan Ganda
+1\. Negara Indonesia terletak di antara dua benua, yaitu ....
+- A. Asia dan Afrika
+- B. Asia dan Australia
+- C. Australia dan Eropa
+- D. Eropa dan Amerika
+- E. Afrika dan Amerika
+
+2\. Planet terbesar dalam tata surya adalah ....
+- A. Mars
+- B. Venus
+- C. Saturnus
+- D. Jupiter
+- E. Neptunus
+
+3\. Semboyan Bhinneka Tunggal Ika memiliki arti ....
+- A. Bersatu kita teguh
+- B. Berbeda-beda tetapi tetap satu
+- C. Bersama membangun bangsa
+- D. Satu bangsa satu bahasa
+- E. Persatuan adalah kekuatan
+
+## B. Essay
+1\. Jelaskan mengapa Indonesia disebut sebagai negara kepulauan!
+
+## C. Kunci Jawaban Pilihan Ganda
+| No. | Jawaban |
+| --- | ------- |
+| 1   | B       |
+| 2   | D       |
+| 3   | B       |
+MD;
+
+        $service = app(\App\Services\AiQuestionService::class);
+        $results = $service->fallbackLocalParse($rawText);
+
+        $this->assertCount(4, $results);
+
+        // Soal 1: Kunci B
+        $this->assertEquals('pilihan_ganda', $results[0]['tipe_soal']);
+        $optB1 = collect($results[0]['opsi_jawabans'])->firstWhere('label', 'B');
+        $optA1 = collect($results[0]['opsi_jawabans'])->firstWhere('label', 'A');
+        $this->assertTrue((bool) $optB1['is_jawaban_benar']);
+        $this->assertFalse((bool) $optA1['is_jawaban_benar']);
+
+        // Soal 2: Kunci D
+        $this->assertEquals('pilihan_ganda', $results[1]['tipe_soal']);
+        $optD2 = collect($results[1]['opsi_jawabans'])->firstWhere('label', 'D');
+        $optA2 = collect($results[1]['opsi_jawabans'])->firstWhere('label', 'A');
+        $this->assertTrue((bool) $optD2['is_jawaban_benar']);
+        $this->assertFalse((bool) $optA2['is_jawaban_benar']);
+
+        // Soal 3: Kunci B
+        $this->assertEquals('pilihan_ganda', $results[2]['tipe_soal']);
+        $optB3 = collect($results[2]['opsi_jawabans'])->firstWhere('label', 'B');
+        $this->assertTrue((bool) $optB3['is_jawaban_benar']);
+
+        // Soal 4: Essay
+        $this->assertEquals('essay', $results[3]['tipe_soal']);
+        $this->assertEmpty($results[3]['opsi_jawabans']);
+    }
 }
 
 

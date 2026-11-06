@@ -135,10 +135,18 @@ class AiQuestionService
 
         try {
             if ($provider === 'gemini') {
-                return $this->callGemini($apiKey, $systemPrompt, $userPrompt, $params);
+                $results = $this->callGemini($apiKey, $systemPrompt, $userPrompt, $params);
             } else {
-                return $this->callOpenAI($apiKey, $systemPrompt, $userPrompt, $params);
+                $results = $this->callOpenAI($apiKey, $systemPrompt, $userPrompt, $params);
             }
+
+            // Rekonsiliasi dengan separateAnswerKeys jika ada (safety net)
+            $separateAnswerKeys = $this->extractSeparateAnswerKeys($rawText);
+            if (!empty($separateAnswerKeys) && !empty($results)) {
+                $results = $this->reconcileAnswerKeys($results, $separateAnswerKeys);
+            }
+
+            return $results;
         } catch (\Throwable $e) {
             // Jika AI gagal (misal kuota/timeout), coba fallback regex lokal sebelum melempar exception
             $localParsed = $this->fallbackLocalParse($rawText, $defaultBobot);
@@ -151,10 +159,77 @@ class AiQuestionService
     }
 
     /**
+     * Rekonsiliasi kunci jawaban terpisah ke butir soal pilihan ganda
+     *
+     * @param array $soals
+     * @param array<int, string> $separateAnswerKeys
+     * @return array
+     */
+    public function reconcileAnswerKeys(array $soals, array $separateAnswerKeys): array
+    {
+        foreach ($soals as $idx => &$soal) {
+            $num = $idx + 1;
+            if (isset($separateAnswerKeys[$num]) && in_array($soal['tipe_soal'] ?? '', ['pilihan_ganda', 'benar_salah'])) {
+                $targetKey = strtoupper($separateAnswerKeys[$num]);
+                $hasCorrectTarget = false;
+                if (!empty($soal['opsi_jawabans']) && is_array($soal['opsi_jawabans'])) {
+                    foreach ($soal['opsi_jawabans'] as $opt) {
+                        if (strtoupper($opt['label'] ?? '') === $targetKey && !empty($opt['is_jawaban_benar'])) {
+                            $hasCorrectTarget = true;
+                            break;
+                        }
+                    }
+                    if (!$hasCorrectTarget) {
+                        foreach ($soal['opsi_jawabans'] as &$opt) {
+                            $opt['is_jawaban_benar'] = (strtoupper($opt['label'] ?? '') === $targetKey);
+                        }
+                    }
+                }
+            }
+        }
+        return $soals;
+    }
+
+    /**
+     * Ekstrak kunci jawaban terpisah yang diletakkan di akhir dokumen (tabel Markdown atau list teks).
+     *
+     * @param string $text
+     * @return array<int, string> [nomor_soal => label_kunci (A, B, C, D, E)]
+     */
+    public function extractSeparateAnswerKeys(string $text): array
+    {
+        $keys = [];
+
+        // 1. Ekstrak dari tabel Markdown (contoh: | 1 | B | 14 | D |)
+        if (preg_match_all('/\|\s*(\d{1,3})\s*\|\s*([A-Ea-e])\s*(?=\||$)/m', $text, $tableMatches, PREG_SET_ORDER)) {
+            foreach ($tableMatches as $m) {
+                $keys[(int) $m[1]] = strtoupper(trim($m[2]));
+            }
+        }
+
+        // 2. Format daftar teks di bawah heading Kunci / Jawaban (bisa multi-line atau inline setelah titik dua)
+        if (preg_match('/(?:^|\n)[ \t]*(?:#{1,4}[ \t]*)?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*(?:Jawaban)?|Answer\s*Key|KUNCI)[ \t]*(?:[:=-][ \t]*|\r?\n)([\s\S]*)$/i', $text, $secMatch)) {
+            $kunciText = $secMatch[1];
+
+            if (preg_match_all('/(?:^|\s|,|;)(\d{1,3})\s*(?:[\.\)\:\=\-]|(?:\s+))\s*([A-Ea-e])(?=\s|,|;|$)/m', $kunciText, $listMatches, PREG_SET_ORDER)) {
+                foreach ($listMatches as $m) {
+                    $num = (int) $m[1];
+                    if (!isset($keys[$num])) {
+                        $keys[$num] = strtoupper(trim($m[2]));
+                    }
+                }
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
      * Fallback parser lokal berbasis pemrosesan teks cerdas & regex jika AI offline atau testing
      */
     public function fallbackLocalParse(string $rawText, ?float $defaultBobot = null): array
     {
+        $separateAnswerKeys = $this->extractSeparateAnswerKeys($rawText);
         // 1. Normalisasi Markdown, Karakter Khusus & HTML Entities
         $text = html_entity_decode($rawText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         // Unescape dot setelah angka atau huruf: 1\. -> 1. atau A\. -> A.
@@ -259,6 +334,7 @@ class AiQuestionService
                     continue;
                 }
 
+                $qNum = (int) $numMatch[1];
                 $body = trim($numMatch[2]);
 
                 // Ekstrak Pembahasan jika ada
@@ -274,6 +350,16 @@ class AiQuestionService
                     $kunciRaw = trim($kMatch[1]);
                     $body = trim(str_replace($kMatch[0], '', $body));
                     $kunci = strtoupper(substr($kunciRaw, 0, 1));
+                }
+
+                // Jika kunci belum ditemukan inline, cocokkan dengan kunci jawaban terpisah (tabel/list di akhir dokumen)
+                if (!$kunci) {
+                    $currentIdx = count($allSoals) + 1;
+                    if ($qNum && isset($separateAnswerKeys[$qNum])) {
+                        $kunci = $separateAnswerKeys[$qNum];
+                    } elseif (isset($separateAnswerKeys[$currentIdx])) {
+                        $kunci = $separateAnswerKeys[$currentIdx];
+                    }
                 }
 
                 // Tentukan tipe
@@ -430,7 +516,10 @@ ATURAN PENGURAIAN (PARSING) WAJIB:
 2. TIPE SOAL & PILIHAN JAWABAN:
    - Tipe soal: "pilihan_ganda", "pg_kompleks", "benar_salah", "menjodohkan", "isian", atau "essay".
    - Jika pilihan ganda: ekstrak huruf label ke 'label' (A, B, C, D, E) dan teks opsi ke 'teks_opsi' (bersihkan huruf label dari teks_opsi).
-   - KUNCI JAWABAN: Cari kunci jawaban yang ditandai dalam teks (misal "Kunci: A", "Jawaban: B", "Kunci Jawaban: C", opsi yang dicetak tebal, atau tanda centang). Berikan 'is_jawaban_benar': true pada opsi yang menjadi kunci. TEPAT 1 kunci untuk pilihan ganda.
+   - KUNCI JAWABAN (SANGAT KRUSIAL):
+     a) Kunci Melekat: Cari tanda kunci jawaban langsung di bawah atau di samping butir soal (misal "Kunci: A", "Jawaban: B", "Kunci Jawaban: C", opsi yang dicetak tebal, atau tanda centang).
+     b) KUNCI TERPISAH DI AKHIR (WAJIB DIBACA): Seringkali kunci jawaban diletakkan terpisah di bagian bawah dokumen dalam bentuk tabel Markdown (contoh: "## C. Kunci Jawaban Pilihan Ganda | No. | Jawaban | ...") atau daftar teks ("1. B, 2. C, 3. D..."). Anda WAJIB membaca tabel/daftar kunci jawaban di akhir ini dan memetakan setiap nomor kunci ke butir soal yang bersesuaian, sehingga opsi yang cocok mendapatkan 'is_jawaban_benar': true. TEPAT 1 kunci benar untuk pilihan ganda.
+     c) JANGAN membuat tabel kunci jawaban atau pedoman penilaian di akhir dokumen menjadi butir soal baru!
    - Jika tipe isian: isi field 'kunci_isian'.
    - Jika tipe essay: isi field 'rubrik_essay'.
 
@@ -475,6 +564,19 @@ PROMPT;
     {
         $prompt = "Tolong uraikan (parse) teks butir soal hasil copas berikut menjadi format JSON sesuai pedoman.\n";
         $prompt .= "Bobot nilai default per butir: {$defaultBobot}.\n\n";
+
+        $keys = $this->extractSeparateAnswerKeys($rawText);
+        if (!empty($keys)) {
+            $prompt .= "PETUNJUK TAMBAHAN - DAFTAR KUNCI JAWABAN TERPISAH TERDETEKSI DI BAGIAN AKHIR:\n";
+            $prompt .= "Sistem mendeteksi kunci jawaban untuk " . count($keys) . " butir soal:\n";
+            $keyPairs = [];
+            foreach ($keys as $no => $k) {
+                $keyPairs[] = "No.{$no}={$k}";
+            }
+            $prompt .= implode(', ', $keyPairs) . "\n";
+            $prompt .= "Pastikan setiap butir soal di bawah mendapatkan 'is_jawaban_benar': true pada opsi yang sesuai dengan kunci tersebut!\n\n";
+        }
+
         $prompt .= "--- TEKS MENTAH HASIL COPAS GURU DARI AI CHATBOT ---\n";
         $prompt .= $rawText . "\n";
         $prompt .= "--- AKHIR TEKS MENTAH ---";
