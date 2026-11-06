@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Ujians\Tables;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Models\Ujian;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -35,6 +36,7 @@ class UjianTable
                 TextColumn::make('nama_ujian')
                     ->label('Nama Ujian')
                     ->weight('bold')
+                    ->grow()
                     ->description(fn (Ujian $record): string => ($record->mapel?->nama_mapel ?? 'Mapel') . ' • ' . ($record->bankSoal?->judul ?? 'Bank Soal'))
                     ->searchable()
                     ->sortable(),
@@ -167,103 +169,109 @@ class UjianTable
                     ->icon(Heroicon::OutlinedComputerDesktop)
                     ->color('primary')
                     ->url(fn (Ujian $record): string => UjianResource::getUrl('pengawasan', ['record' => $record])),
-                // ACTION 1: MULAI UJIAN & GENERATE TOKEN
-                Action::make('mulai_ujian')
-                    ->label('Mulai Ujian')
-                    ->icon(Heroicon::OutlinedPlay)
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->modalHeading('Mulai Pelaksanaan Ujian?')
-                    ->modalDescription('Server akan mengubah status menjadi ONGOING dan menghasilkan 6 karakter Kode Akses Ujian (Token). Bagikan kode tersebut kepada siswa di kelas.')
-                    ->modalSubmitActionLabel('Mulai Ujian Sekarang')
-                    ->visible(fn (Ujian $record): bool =>
-                        $record->status === 'SCHEDULED' || ($record->status === 'ONGOING' && empty($record->token_ujian))
-                    )
-                    ->action(function (Ujian $record) {
-                        $token = $record->startExam();
-                        // Pastikan siswa di kelas ter-sinkron
-                        $synced = $record->syncPesertaFromKelas();
 
-                        Notification::make()
-                            ->title('Ujian Berhasil Dimulai! Status: ONGOING')
-                            ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$token}**\n\nToken berlaku selama **10 menit** ({$synced} siswa tersinkron). Bagikan kode ini ke siswa di kelas.")
-                            ->success()
-                            ->persistent()
-                            ->send();
-                    }),
+                ActionGroup::make([
+                    // ACTION 1: MULAI UJIAN & GENERATE TOKEN
+                    Action::make('mulai_ujian')
+                        ->label('Mulai Ujian')
+                        ->icon(Heroicon::OutlinedPlay)
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading('Mulai Pelaksanaan Ujian?')
+                        ->modalDescription('Server akan mengubah status menjadi ONGOING dan menghasilkan 6 karakter Kode Akses Ujian (Token). Bagikan kode tersebut kepada siswa di kelas.')
+                        ->modalSubmitActionLabel('Mulai Ujian Sekarang')
+                        ->visible(fn (Ujian $record): bool =>
+                            $record->status === 'SCHEDULED' || ($record->status === 'ONGOING' && empty($record->token_ujian))
+                        )
+                        ->action(function (Ujian $record) {
+                            $token = $record->startExam();
+                            // Pastikan siswa di kelas ter-sinkron
+                            $synced = $record->syncPesertaFromKelas();
 
-                // ACTION 2: REFRESH TOKEN / GENERATE TOKEN BARU (Masa berlaku 10 menit)
-                Action::make('refresh_token')
-                    ->label(fn (Ujian $record): string =>
-                        $record->isTokenExpired() ? 'Generate Token Baru' : 'Ganti Token'
-                    )
-                    ->icon(fn (Ujian $record): Heroicon =>
-                        $record->isTokenExpired() ? Heroicon::OutlinedSparkles : Heroicon::OutlinedArrowPath
-                    )
-                    ->color(fn (Ujian $record): string =>
-                        $record->isTokenExpired() ? 'danger' : 'warning'
-                    )
-                    ->requiresConfirmation()
-                    ->modalHeading(fn (Ujian $record): string =>
-                        $record->isTokenExpired()
-                            ? 'Generate Token Ujian Baru (Token Telah Kedaluwarsa)'
-                            : 'Perbarui Kode Token Ujian?'
-                    )
-                    ->modalDescription(fn (Ujian $record): string =>
-                        $record->isTokenExpired()
-                            ? 'Token ujian sebelumnya telah kedaluwarsa setelah 10 menit. Klik tombol di bawah untuk membuat token baru yang aktif selama 10 menit ke depan.'
-                            : 'Apakah Anda yakin ingin mengganti kode token sesi ujian saat ini dengan kode baru? Token baru akan aktif selama 10 menit ke depan.'
-                    )
-                    ->modalSubmitActionLabel('Rilis Token Sekarang')
-                    ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
-                    ->action(function (Ujian $record) {
-                        $newToken = $record->refreshToken();
+                            Notification::make()
+                                ->title('Ujian Berhasil Dimulai! Status: ONGOING')
+                                ->body("KODE TOKEN AKSES UJIAN:\n\n# **{$token}**\n\nToken berlaku selama **10 menit** ({$synced} siswa tersinkron). Bagikan kode ini ke siswa di kelas.")
+                                ->success()
+                                ->persistent()
+                                ->send();
+                        }),
 
-                        Notification::make()
-                            ->title('Token Ujian Berhasil Digenerate!')
-                            ->body("TOKEN BARU (BERLAKU 10 MENIT):\n\n# **{$newToken}**\n\nToken aktif selama 10 menit ke depan. Bagikan kode ini kepada siswa di ruangan ujian.")
-                            ->success()
-                            ->persistent()
-                            ->send();
-                    }),
+                    // ACTION 2: REFRESH TOKEN / GENERATE TOKEN BARU (Masa berlaku 10 menit)
+                    Action::make('refresh_token')
+                        ->label(fn (Ujian $record): string =>
+                            $record->isTokenExpired() ? 'Generate Token Baru' : 'Ganti Token'
+                        )
+                        ->icon(fn (Ujian $record): Heroicon =>
+                            $record->isTokenExpired() ? Heroicon::OutlinedSparkles : Heroicon::OutlinedArrowPath
+                        )
+                        ->color(fn (Ujian $record): string =>
+                            $record->isTokenExpired() ? 'danger' : 'warning'
+                        )
+                        ->requiresConfirmation()
+                        ->modalHeading(fn (Ujian $record): string =>
+                            $record->isTokenExpired()
+                                ? 'Generate Token Ujian Baru (Token Telah Kedaluwarsa)'
+                                : 'Perbarui Kode Token Ujian?'
+                        )
+                        ->modalDescription(fn (Ujian $record): string =>
+                            $record->isTokenExpired()
+                                ? 'Token ujian sebelumnya telah kedaluwarsa setelah 10 menit. Klik tombol di bawah untuk membuat token baru yang aktif selama 10 menit ke depan.'
+                                : 'Apakah Anda yakin ingin mengganti kode token sesi ujian saat ini dengan kode baru? Token baru akan aktif selama 10 menit ke depan.'
+                        )
+                        ->modalSubmitActionLabel('Rilis Token Sekarang')
+                        ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
+                        ->action(function (Ujian $record) {
+                            $newToken = $record->refreshToken();
 
-                // ACTION 3: SELESAI / TUTUP UJIAN
-                Action::make('selesai_ujian')
-                    ->label('Tutup Ujian')
-                    ->icon(Heroicon::OutlinedCheckCircle)
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->modalHeading('Tutup dan Selesaikan Ujian?')
-                    ->modalDescription('Status akan diubah menjadi COMPLETED. Siswa tidak dapat lagi memulai pengerjaan soal dengan token ini.')
-                    ->modalSubmitActionLabel('Selesaikan Ujian')
-                    ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
-                    ->action(function (Ujian $record) {
-                        $record->finishExam();
+                            Notification::make()
+                                ->title('Token Ujian Berhasil Digenerate!')
+                                ->body("TOKEN BARU (BERLAKU 10 MENIT):\n\n# **{$newToken}**\n\nToken aktif selama 10 menit ke depan. Bagikan kode ini kepada siswa di ruangan ujian.")
+                                ->success()
+                                ->persistent()
+                                ->send();
+                        }),
 
-                        Notification::make()
-                            ->title('Ujian Selesai')
-                            ->body('Status ujian telah diubah menjadi COMPLETED.')
-                            ->info()
-                            ->send();
-                    }),
+                    // ACTION 3: SELESAI / TUTUP UJIAN
+                    Action::make('selesai_ujian')
+                        ->label('Tutup Ujian')
+                        ->icon(Heroicon::OutlinedCheckCircle)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Tutup dan Selesaikan Ujian?')
+                        ->modalDescription('Status akan diubah menjadi COMPLETED. Siswa tidak dapat lagi memulai pengerjaan soal dengan token ini.')
+                        ->modalSubmitActionLabel('Selesaikan Ujian')
+                        ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
+                        ->action(function (Ujian $record) {
+                            $record->finishExam();
 
-                // ACTION 4: SINKRONKAN PESERTA DARI KELAS
-                Action::make('sync_peserta')
-                    ->label('Tarik Siswa Kelas')
-                    ->icon(Heroicon::OutlinedUserGroup)
-                    ->color('gray')
-                    ->visible(fn (Ujian $record): bool => $record->status !== 'COMPLETED')
-                    ->action(function (Ujian $record) {
-                        $count = $record->syncPesertaFromKelas();
-                        Notification::make()
-                            ->title('Peserta Diperbarui')
-                            ->body("Berhasil memperbarui daftar peserta dari rombel kelas ({$count} siswa baru ditambahkan).")
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Ujian Selesai')
+                                ->body('Status ujian telah diubah menjadi COMPLETED.')
+                                ->info()
+                                ->send();
+                        }),
 
-                EditAction::make(),
-                DeleteAction::make(),
+                    // ACTION 4: SINKRONKAN PESERTA DARI KELAS
+                    Action::make('sync_peserta')
+                        ->label('Tarik Siswa Kelas')
+                        ->icon(Heroicon::OutlinedUserGroup)
+                        ->color('gray')
+                        ->visible(fn (Ujian $record): bool => $record->status !== 'COMPLETED')
+                        ->action(function (Ujian $record) {
+                            $count = $record->syncPesertaFromKelas();
+                            Notification::make()
+                                ->title('Peserta Diperbarui')
+                                ->body("Berhasil memperbarui daftar peserta dari rombel kelas ({$count} siswa baru ditambahkan).")
+                                ->success()
+                                ->send();
+                        }),
+
+                    EditAction::make(),
+                    DeleteAction::make(),
+                ])
+                ->label('Opsi')
+                ->icon(Heroicon::OutlinedEllipsisVertical)
+                ->color('gray'),
             ])
             ->emptyStateHeading('Belum Ada Agenda Ujian')
             ->emptyStateDescription('Klik tombol "Buat Ujian Baru" untuk menjadwalkan pelaksanaan ujian bagi siswa.');

@@ -19,6 +19,7 @@ class BankSoalTable
                 TextColumn::make('judul')
                     ->label('Judul Bank Soal')
                     ->weight('bold')
+                    ->grow()
                     ->searchable()
                     ->sortable(),
 

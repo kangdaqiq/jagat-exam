@@ -16,6 +16,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -34,6 +35,7 @@ class GuruPanelProvider extends PanelProvider
             ->id('guru')
             ->path('guru')
             ->login()
+            ->maxContentWidth(Width::Full)
             ->brandName('Portal Guru CBT')
             ->brandLogo(fn () => view('filament.components.brand-logo'))
             ->brandLogoHeight('2.2rem')

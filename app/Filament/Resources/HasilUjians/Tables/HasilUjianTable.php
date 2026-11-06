@@ -30,6 +30,7 @@ class HasilUjianTable
                 TextColumn::make('nama_ujian')
                     ->label('Nama Ujian')
                     ->weight('bold')
+                    ->grow()
                     ->description(fn (HasilUjian $record): string => ($record->mapel?->nama_mapel ?? 'Mapel') . ' • ' . ($record->bankSoal?->judul ?? 'Bank Soal'))
                     ->searchable()
                     ->sortable(),
