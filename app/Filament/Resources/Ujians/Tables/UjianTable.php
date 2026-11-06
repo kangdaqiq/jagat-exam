@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Ujians\Tables;
 
+use App\Filament\Resources\Ujians\UjianResource;
 use App\Models\Ujian;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -158,7 +159,14 @@ class UjianTable
                     ->label('Filter Mata Pelajaran')
                     ->relationship('mapel', 'nama_mapel'),
             ])
+            ->recordUrl(fn (Ujian $record): string => UjianResource::getUrl('pengawasan', ['record' => $record]))
             ->recordActions([
+                // ACTION UTAMA: RUANG PENGAWASAN
+                Action::make('pengawasan')
+                    ->label('Ruang Pengawasan')
+                    ->icon(Heroicon::OutlinedComputerDesktop)
+                    ->color('primary')
+                    ->url(fn (Ujian $record): string => UjianResource::getUrl('pengawasan', ['record' => $record])),
                 // ACTION 1: MULAI UJIAN & GENERATE TOKEN
                 Action::make('mulai_ujian')
                     ->label('Mulai Ujian')

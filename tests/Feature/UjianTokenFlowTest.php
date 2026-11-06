@@ -498,5 +498,67 @@ class UjianTokenFlowTest extends TestCase
         $this->assertNotNull($sesi);
         $res->assertRedirect(route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]));
     }
+
+    public function test_guru_and_admin_can_access_pengawasan_ujian_room_and_manage_session(): void
+    {
+        $ujian = Ujian::create([
+            'nama_ujian' => 'Ulangan Harian Pengawasan',
+            'tipe_ujian' => Ujian::TIPE_ASESMEN_HARIAN,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'durasi_menit' => 45,
+            'status' => 'SCHEDULED',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+        $ujian->kelas()->attach($this->kelas->id);
+        $ujian->syncPesertaFromKelas();
+
+        // 1. Guru bisa mengakses halaman Pengawasan Ujian
+        $urlGuru = "/guru/ujians/{$ujian->id}/pengawasan";
+        $response = $this->actingAs($this->guru)->get($urlGuru);
+        $response->assertStatus(200);
+        $response->assertSee('Ruang Pengawasan Ujian');
+        $response->assertSee('Ulangan Harian Pengawasan');
+
+        // 2. Admin juga bisa mengakses halaman Pengawasan Ujian
+        $urlAdmin = "/admin/ujians/{$ujian->id}/pengawasan";
+        $responseAdmin = $this->actingAs($this->admin)->get($urlAdmin);
+        $responseAdmin->assertStatus(200);
+        $responseAdmin->assertSee('Ruang Pengawasan Ujian');
+
+        // 3. Proctor actions via Livewire (Mulai Ujian, Rilis Token, Selesaikan)
+        Livewire::actingAs($this->guru)
+            ->test(\App\Filament\Resources\Ujians\Pages\PengawasanUjian::class, ['record' => $ujian->id])
+            ->assertSee('Ulangan Harian Pengawasan')
+            ->call('mulaiUjian')
+            ->assertHasNoErrors();
+
+        $ujian->refresh();
+        $this->assertEquals('ONGOING', $ujian->status);
+        $this->assertNotEmpty($ujian->token_ujian);
+        $this->assertTrue($ujian->isTokenActive());
+
+        // Rilis token baru
+        $oldToken = $ujian->token_ujian;
+        Livewire::actingAs($this->guru)
+            ->test(\App\Filament\Resources\Ujians\Pages\PengawasanUjian::class, ['record' => $ujian->id])
+            ->call('rilisTokenBaru')
+            ->assertHasNoErrors();
+
+        $ujian->refresh();
+        $this->assertNotEquals($oldToken, $ujian->token_ujian);
+
+        // Selesaikan ujian
+        Livewire::actingAs($this->guru)
+            ->test(\App\Filament\Resources\Ujians\Pages\PengawasanUjian::class, ['record' => $ujian->id])
+            ->call('selesaikanUjian')
+            ->assertHasNoErrors();
+
+        $ujian->refresh();
+        $this->assertEquals('COMPLETED', $ujian->status);
+    }
 }
+
 

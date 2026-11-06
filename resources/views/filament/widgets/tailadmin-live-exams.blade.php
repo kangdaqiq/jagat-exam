@@ -146,10 +146,10 @@
                                 </a>
                             @else
                                 <a
-                                    href="{{ $prefix }}/ujians/{{ $ujian->id }}/edit"
+                                    href="{{ $prefix }}/ujians/{{ $ujian->id }}/pengawasan"
                                     class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#ecf3ff] text-[#465fff] hover:bg-[#465fff] hover:text-white dark:bg-[#465fff]/15 dark:text-[#7592ff] dark:hover:bg-[#465fff] dark:hover:text-white transition duration-150"
                                 >
-                                    {{ $isOngoing ? 'Kelola Sesi' : 'Detail' }}
+                                    {{ $isOngoing ? 'Ruang Pengawasan' : 'Pengawasan' }}
                                 </a>
                             @endif
                         </td>
@@ -165,3 +165,4 @@
         </table>
     </div>
 </div>
+

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Ujians;
 use App\Filament\Resources\Ujians\Pages\CreateUjian;
 use App\Filament\Resources\Ujians\Pages\EditUjian;
 use App\Filament\Resources\Ujians\Pages\ListUjians;
+use App\Filament\Resources\Ujians\Pages\PengawasanUjian;
 use App\Filament\Resources\Ujians\RelationManagers\PesertasRelationManager;
 use App\Filament\Resources\Ujians\Schemas\UjianForm;
 use App\Filament\Resources\Ujians\Tables\UjianTable;
@@ -73,6 +74,7 @@ class UjianResource extends Resource
             'index' => ListUjians::route('/'),
             'create' => CreateUjian::route('/create'),
             'edit' => EditUjian::route('/{record}/edit'),
+            'pengawasan' => PengawasanUjian::route('/{record}/pengawasan'),
         ];
     }
 }
