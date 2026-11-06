@@ -17,196 +17,195 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 
 class UjianForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(['default' => 1, 'lg' => 3])
             ->components([
-                Grid::make(['default' => 1, 'lg' => 3])
-                    ->schema([
-                        // Kolom Kiri / Utama (Lebar 2 Kolom di Desktop)
-                        Group::make([
-                            Section::make('Informasi & Paket Ujian')
-                                ->description('Tentukan agenda asesmen, mata pelajaran, serta paket bank soal.')
-                                ->icon('heroicon-o-academic-cap')
-                                ->schema([
-                                    TextInput::make('nama_ujian')
-                                        ->label('Nama Agenda Ujian')
-                                        ->placeholder('Contoh: Penilaian Harian Matematika - Bab 2 Trigonometri')
-                                        ->required()
-                                        ->maxLength(255),
+                // Kolom Kiri / Utama (2 Kolom di Desktop - 66.6% Lebar Halaman)
+                Group::make([
+                    Section::make('Informasi & Paket Ujian')
+                        ->description('Tentukan agenda asesmen, mata pelajaran, serta paket bank soal.')
+                        ->icon(Heroicon::OutlinedAcademicCap)
+                        ->schema([
+                            TextInput::make('nama_ujian')
+                                ->label('Nama Agenda Ujian')
+                                ->placeholder('Contoh: Penilaian Harian Matematika - Bab 2 Trigonometri')
+                                ->required()
+                                ->maxLength(255),
 
-                                    Grid::make(2)->schema([
-                                        Select::make('mapel_id')
-                                            ->label('Mata Pelajaran')
-                                            ->relationship('mapel', 'nama_mapel')
-                                            ->required()
-                                            ->searchable()
-                                            ->preload()
-                                            ->live()
-                                            ->afterStateUpdated(fn ($set) => $set('bank_soal_id', null)),
+                            Grid::make(2)->schema([
+                                Select::make('mapel_id')
+                                    ->label('Mata Pelajaran')
+                                    ->relationship('mapel', 'nama_mapel')
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->afterStateUpdated(fn ($set) => $set('bank_soal_id', null)),
 
-                                        Select::make('bank_soal_id')
-                                            ->label('Paket Bank Soal')
-                                            ->options(function ($get) {
-                                                $mapelId = $get('mapel_id');
-                                                $query = BankSoal::query()->where('is_active', true);
-                                                if ($mapelId) {
-                                                    $query->where('mapel_id', $mapelId);
+                                Select::make('bank_soal_id')
+                                    ->label('Paket Bank Soal')
+                                    ->options(function ($get) {
+                                        $mapelId = $get('mapel_id');
+                                        $query = BankSoal::query()->where('is_active', true);
+                                        if ($mapelId) {
+                                            $query->where('mapel_id', $mapelId);
+                                        }
+                                        return $query->get()->mapWithKeys(function ($b) {
+                                            $count = $b->soals()->count();
+                                            return [$b->id => "{$b->judul} ({$count} Soal - Tingkat {$b->tingkat})"];
+                                        });
+                                    })
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->helperText('Otomatis mengisi durasi pengerjaan & preferensi pengacakan.')
+                                    ->afterStateUpdated(function ($state, $set) {
+                                        if ($state) {
+                                            $bank = BankSoal::find($state);
+                                            if ($bank) {
+                                                if (!empty($bank->durasi_menit)) {
+                                                    $set('durasi_menit', $bank->durasi_menit);
                                                 }
-                                                return $query->get()->mapWithKeys(function ($b) {
-                                                    $count = $b->soals()->count();
-                                                    return [$b->id => "{$b->judul} ({$count} Soal - Tingkat {$b->tingkat})"];
-                                                });
-                                            })
-                                            ->required()
-                                            ->searchable()
-                                            ->preload()
-                                            ->live()
-                                            ->helperText('Otomatis mengisi durasi pengerjaan & preferensi pengacakan.')
-                                            ->afterStateUpdated(function ($state, $set) {
-                                                if ($state) {
-                                                    $bank = BankSoal::find($state);
-                                                    if ($bank) {
-                                                        if (!empty($bank->durasi_menit)) {
-                                                            $set('durasi_menit', $bank->durasi_menit);
-                                                        }
-                                                        $set('acak_soal', $bank->acak_soal ?? true);
-                                                        $set('acak_opsi', $bank->acak_opsi ?? true);
-                                                    }
-                                                }
-                                            }),
-                                    ]),
-                                ]),
-
-                            Section::make('Sasaran Peserta & Guru Pengawas')
-                                ->description('Tentukan rombel kelas yang akan mengikuti ujian dan guru penanggung jawab.')
-                                ->icon('heroicon-o-user-group')
-                                ->schema([
-                                    Grid::make(2)->schema([
-                                        Select::make('kelas')
-                                            ->label('Rombel Kelas Peserta')
-                                            ->relationship('kelas', 'nama_kelas')
-                                            ->multiple()
-                                            ->searchable()
-                                            ->preload()
-                                            ->required()
-                                            ->helperText('Seluruh siswa aktif di rombel kelas terpilih otomatis terdaftar.'),
-
-                                        Select::make('guru_id')
-                                            ->label('Guru Pengawas / Pengampu')
-                                            ->options(function () {
-                                                return User::whereIn('role', ['guru', 'admin'])
-                                                    ->where('is_active', true)
-                                                    ->pluck('name', 'id');
-                                            })
-                                            ->default(fn () => auth()->id())
-                                            ->required()
-                                            ->searchable()
-                                            ->preload()
-                                            ->helperText('Guru yang berwenang membuka sesi dan merilis token.'),
-                                    ]),
-                                ]),
-
-                            Section::make('Petunjuk & Instruksi Pengerjaan (Opsional)')
-                                ->description('Catatan penting atau tata tertib yang dibaca siswa sebelum mulai.')
-                                ->icon('heroicon-o-information-circle')
-                                ->collapsible()
-                                ->schema([
-                                    Textarea::make('keterangan')
-                                        ->label('Petunjuk / Catatan Ujian')
-                                        ->placeholder('Contoh: Berdoalah sebelum mengerjakan. Dilarang membuka tab lain atau membawa catatan.')
-                                        ->rows(3),
-                                ]),
-                        ])->columnSpan(['default' => 1, 'lg' => 2]),
-
-                        // Kolom Kanan / Sidebar Pengaturan & Jadwal (Lebar 1 Kolom di Desktop)
-                        Group::make([
-                            Section::make('Tipe & Mode Pelaksanaan')
-                                ->icon('heroicon-o-cog-6-tooth')
-                                ->schema([
-                                    Select::make('tipe_ujian')
-                                        ->label('Tipe Pelaksanaan Ujian')
-                                        ->options(fn () => Ujian::getTipeOptions(auth()->user()))
-                                        ->default(Ujian::TIPE_ASESMEN_HARIAN)
-                                        ->required()
-                                        ->live()
-                                        ->helperText(function () {
-                                            $user = auth()->user();
-                                            if ($user && $user->isGuru()) {
-                                                return 'Guru berwenang membuat Asesmen Harian.';
+                                                $set('acak_soal', $bank->acak_soal ?? true);
+                                                $set('acak_opsi', $bank->acak_opsi ?? true);
                                             }
-                                            return 'Pilih tipe asesmen (Harian, Tengah, atau Akhir Semester).';
-                                        }),
+                                        }
+                                    }),
+                            ]),
+                        ]),
 
-                                    Toggle::make('langsung_generate_token')
-                                        ->label('🚀 Langsung Buka Sesi & Rilis Token?')
-                                        ->helperText('Status otomatis ONGOING & token 10 menit langsung dirilis tanpa menunggu jadwal.')
-                                        ->default(false)
-                                        ->visible(fn ($get, string $operation) =>
-                                            $operation === 'create' && ($get('tipe_ujian') === Ujian::TIPE_ASESMEN_HARIAN || empty($get('tipe_ujian')))
-                                        )
-                                        ->dehydrated(false),
+                    Section::make('Sasaran Peserta & Guru Pengawas')
+                        ->description('Tentukan rombel kelas yang akan mengikuti ujian dan guru penanggung jawab.')
+                        ->icon(Heroicon::OutlinedUserGroup)
+                        ->schema([
+                            Grid::make(2)->schema([
+                                Select::make('kelas')
+                                    ->label('Rombel Kelas Peserta')
+                                    ->relationship('kelas', 'nama_kelas')
+                                    ->multiple()
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->helperText('Seluruh siswa aktif di rombel kelas terpilih otomatis terdaftar.'),
 
-                                    Select::make('status')
-                                        ->label('Status Pelaksanaan')
-                                        ->options([
-                                            'SCHEDULED' => 'SCHEDULED (Dijadwalkan)',
-                                            'ONGOING' => 'ONGOING (Sedang Berlangsung)',
-                                            'COMPLETED' => 'COMPLETED (Selesai)',
-                                            'CANCELLED' => 'CANCELLED (Dibatalkan)',
-                                        ])
-                                        ->default('SCHEDULED')
-                                        ->required()
-                                        ->disabled(fn (string $operation) => $operation === 'create')
-                                        ->helperText('Status baru dibuat default SCHEDULED.'),
-                                ]),
+                                Select::make('guru_id')
+                                    ->label('Guru Pengawas / Pengampu')
+                                    ->options(function () {
+                                        return User::whereIn('role', ['guru', 'admin'])
+                                            ->where('is_active', true)
+                                            ->pluck('name', 'id');
+                                    })
+                                    ->default(fn () => auth()->id())
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->helperText('Guru yang berwenang membuka sesi dan merilis token.'),
+                            ]),
+                        ]),
 
-                            Section::make('Jadwal & Waktu Pelaksanaan')
-                                ->icon('heroicon-o-calendar-days')
-                                ->schema([
-                                    DatePicker::make('tanggal')
-                                        ->label('Tanggal Pelaksanaan')
-                                        ->default(now())
-                                        ->required(fn ($get) => in_array($get('tipe_ujian'), [Ujian::TIPE_TENGAH_SEMESTER, Ujian::TIPE_AKHIR_SEMESTER]))
-                                        ->helperText(fn ($get) => $get('tipe_ujian') === Ujian::TIPE_ASESMEN_HARIAN ? 'Opsional untuk harian' : 'Wajib diisi'),
+                    Section::make('Petunjuk & Instruksi Pengerjaan')
+                        ->description('Catatan penting atau tata tertib yang dibaca siswa sebelum mulai.')
+                        ->icon(Heroicon::OutlinedInformationCircle)
+                        ->collapsible()
+                        ->schema([
+                            Textarea::make('keterangan')
+                                ->label('Petunjuk / Catatan Ujian')
+                                ->placeholder('Contoh: Berdoalah sebelum mengerjakan. Dilarang membuka tab lain atau membawa catatan.')
+                                ->rows(3),
+                        ]),
+                ])->columnSpan(['default' => 1, 'lg' => 2]),
 
-                                    Grid::make(2)->schema([
-                                        TimePicker::make('waktu_mulai')
-                                            ->label('Waktu Mulai')
-                                            ->default('07:30:00'),
+                // Kolom Kanan / Sidebar Pengaturan & Jadwal (1 Kolom di Desktop - 33.3% Lebar Halaman)
+                Group::make([
+                    Section::make('Tipe & Mode Pelaksanaan')
+                        ->icon(Heroicon::OutlinedCog6Tooth)
+                        ->schema([
+                            Select::make('tipe_ujian')
+                                ->label('Tipe Pelaksanaan Ujian')
+                                ->options(fn () => Ujian::getTipeOptions(auth()->user()))
+                                ->default(Ujian::TIPE_ASESMEN_HARIAN)
+                                ->required()
+                                ->live()
+                                ->helperText(function () {
+                                    $user = auth()->user();
+                                    if ($user && $user->isGuru()) {
+                                        return 'Guru berwenang membuat Asesmen Harian.';
+                                    }
+                                    return 'Pilih tipe asesmen (Harian, Tengah, atau Akhir Semester).';
+                                }),
 
-                                        TimePicker::make('waktu_selesai')
-                                            ->label('Waktu Selesai')
-                                            ->default('09:30:00'),
-                                    ]),
+                            Toggle::make('langsung_generate_token')
+                                ->label('Buka Sesi & Rilis Token Sekarang')
+                                ->helperText('Status otomatis ONGOING & token 10 menit langsung dirilis tanpa menunggu jadwal.')
+                                ->default(false)
+                                ->visible(fn ($get, string $operation) =>
+                                    $operation === 'create' && ($get('tipe_ujian') === Ujian::TIPE_ASESMEN_HARIAN || empty($get('tipe_ujian')))
+                                )
+                                ->dehydrated(false),
 
-                                    TextInput::make('durasi_menit')
-                                        ->label('Alokasi Durasi Pengerjaan')
-                                        ->numeric()
-                                        ->default(60)
-                                        ->suffix('Menit')
-                                        ->required()
-                                        ->helperText('Hitung mundur waktu per siswa.'),
-                                ]),
+                            Select::make('status')
+                                ->label('Status Pelaksanaan')
+                                ->options([
+                                    'SCHEDULED' => 'SCHEDULED (Dijadwalkan)',
+                                    'ONGOING' => 'ONGOING (Sedang Berlangsung)',
+                                    'COMPLETED' => 'COMPLETED (Selesai)',
+                                    'CANCELLED' => 'CANCELLED (Dibatalkan)',
+                                ])
+                                ->default('SCHEDULED')
+                                ->required()
+                                ->disabled(fn (string $operation) => $operation === 'create')
+                                ->helperText('Status baru dibuat default SCHEDULED.'),
+                        ]),
 
-                            Section::make('Pengacakan & Integritas')
-                                ->icon('heroicon-o-shield-check')
-                                ->schema([
-                                    Toggle::make('acak_soal')
-                                        ->label('Acak Urutan Soal')
-                                        ->helperText('Urutan butir soal acak unik untuk tiap siswa.')
-                                        ->default(true),
+                    Section::make('Jadwal & Waktu Pelaksanaan')
+                        ->icon(Heroicon::OutlinedCalendarDays)
+                        ->schema([
+                            DatePicker::make('tanggal')
+                                ->label('Tanggal Pelaksanaan')
+                                ->default(now())
+                                ->required(fn ($get) => in_array($get('tipe_ujian'), [Ujian::TIPE_TENGAH_SEMESTER, Ujian::TIPE_AKHIR_SEMESTER]))
+                                ->helperText(fn ($get) => $get('tipe_ujian') === Ujian::TIPE_ASESMEN_HARIAN ? 'Opsional untuk harian' : 'Wajib diisi'),
 
-                                    Toggle::make('acak_opsi')
-                                        ->label('Acak Opsi Pilihan (A-E)')
-                                        ->helperText('Posisi opsi jawaban diacak unik.')
-                                        ->default(true),
-                                ]),
-                        ])->columnSpan(['default' => 1, 'lg' => 1]),
-                    ]),
+                            Grid::make(2)->schema([
+                                TimePicker::make('waktu_mulai')
+                                    ->label('Waktu Mulai')
+                                    ->default('07:30:00'),
+
+                                TimePicker::make('waktu_selesai')
+                                    ->label('Waktu Selesai')
+                                    ->default('09:30:00'),
+                            ]),
+
+                            TextInput::make('durasi_menit')
+                                ->label('Alokasi Durasi Pengerjaan')
+                                ->numeric()
+                                ->default(60)
+                                ->suffix('Menit')
+                                ->required()
+                                ->helperText('Hitung mundur waktu per siswa.'),
+                        ]),
+
+                    Section::make('Pengacakan & Integritas')
+                        ->icon(Heroicon::OutlinedShieldCheck)
+                        ->schema([
+                            Toggle::make('acak_soal')
+                                ->label('Acak Urutan Soal')
+                                ->helperText('Urutan butir soal acak unik untuk tiap siswa.')
+                                ->default(true),
+
+                            Toggle::make('acak_opsi')
+                                ->label('Acak Opsi Pilihan (A-E)')
+                                ->helperText('Posisi opsi jawaban diacak unik.')
+                                ->default(true),
+                        ]),
+                ])->columnSpan(['default' => 1, 'lg' => 1]),
             ]);
     }
 }
