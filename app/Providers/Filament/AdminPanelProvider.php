@@ -2,8 +2,8 @@
 
 namespace App\Providers\Filament;
 
-use App\Filament\Widgets\StatsOverview;
 use App\Filament\Widgets\TailadminCbtMetricsWidget;
+use App\Filament\Widgets\TailadminLiveExamsWidget;
 use App\Filament\Widgets\TailadminQuickActionWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -63,12 +63,10 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 TailadminQuickActionWidget::class,
                 TailadminCbtMetricsWidget::class,
-                AccountWidget::class,
-                StatsOverview::class,
+                TailadminLiveExamsWidget::class,
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,

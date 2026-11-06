@@ -142,14 +142,29 @@ class UjianTokenFlowTest extends TestCase
     public function test_tailadmin_widgets_render_for_admin_and_guru(): void
     {
         $this->actingAs($this->admin);
+        Livewire::test(\App\Filament\Widgets\TailadminQuickActionWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Selamat datang kembali');
+
         Livewire::test(\App\Filament\Widgets\TailadminCbtMetricsWidget::class)
             ->assertSuccessful()
             ->assertSee('Total Siswa Terdaftar');
 
+        Livewire::test(\App\Filament\Widgets\TailadminLiveExamsWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Monitoring Sesi Pelaksanaan Ujian');
+
         $this->actingAs($this->guru);
+        Livewire::test(\App\Filament\Widgets\TailadminQuickActionWidget::class)
+            ->assertSuccessful()
+            ->assertSee('Guru Pengampu');
+
         Livewire::test(\App\Filament\Widgets\TailadminCbtMetricsWidget::class)
             ->assertSuccessful()
             ->assertSee('Bank Soal Saya');
+
+        Livewire::test(\App\Filament\Widgets\TailadminLiveExamsWidget::class)
+            ->assertSuccessful();
     }
 
     /**
