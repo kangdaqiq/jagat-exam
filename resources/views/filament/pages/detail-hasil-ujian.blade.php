@@ -243,6 +243,7 @@
         @php
             $sPeserta = $this->selectedPeserta;
             $sSesi = $sPeserta->ujianSesi;
+            $sesi = $sSesi;
             $jawabans = $sSesi ? $sSesi->jawabans : collect();
         @endphp
 
@@ -327,7 +328,7 @@
                                     @endif
 
                                     <span class="text-xs text-gray-400">
-                                        Bobot: {{ (float) ($sesi ? $sesi->getEffectiveBobotForJawaban($jwb) : ($soal?->bobot_nilai ?? 1)) }} Poin
+                                        Bobot: {{ (float) ($sSesi ? $sSesi->getEffectiveBobotForJawaban($jwb) : ($soal?->bobot_nilai ?? 1)) }} Poin
                                     </span>
                                 </div>
                             </div>
@@ -428,7 +429,7 @@
                                         {{-- Input Koreksi Nilai Essay oleh Guru --}}
                                         <div class="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
                                             @php
-                                                $maxBobotEssay = $sesi ? $sesi->getEffectiveBobotForJawaban($jwb) : (float) ($soal->bobot_nilai ?? 10);
+                                                $maxBobotEssay = $sSesi ? $sSesi->getEffectiveBobotForJawaban($jwb) : (float) ($soal?->bobot_nilai ?? 10);
                                             @endphp
                                             <span class="font-bold text-gray-700 dark:text-gray-300">
                                                 Beri Nilai Essay (Maks: {{ (float) $maxBobotEssay }} Poin):
