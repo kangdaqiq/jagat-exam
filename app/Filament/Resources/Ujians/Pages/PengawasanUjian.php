@@ -157,29 +157,17 @@ class PengawasanUjian extends Page
      */
     public function paksaSelesaiSiswa(int $pesertaId): void
     {
-        $peserta = UjianPeserta::with(['ujianSesi.jawabans.soal'])->find($pesertaId);
+        $peserta = UjianPeserta::with(['ujianSesi', 'siswa'])->find($pesertaId);
         if (!$peserta) return;
 
         $sesi = $peserta->ujianSesi;
-        if ($sesi) {
-            // Hitung skor total
-            $totalSkor = (float) $sesi->jawabans()->sum('skor_didapat');
-            $sesi->update([
-                'status' => 'selesai',
-                'submitted_at' => now(),
-                'skor_total' => $totalSkor,
-            ]);
-
-            $peserta->update([
-                'status' => 'SELESAI',
-                'waktu_selesai' => now(),
-                'nilai' => $totalSkor,
-            ]);
+        if ($sesi && !$sesi->isSelesai()) {
+            $totalSkor = $sesi->koreksiDanSelesaikan();
         } else {
             $peserta->update([
                 'status' => 'SELESAI',
                 'waktu_selesai' => now(),
-                'nilai' => 0,
+                'nilai' => $peserta->nilai ?? 0,
             ]);
         }
 
@@ -233,3 +221,4 @@ class PengawasanUjian extends Page
         ];
     }
 }
+

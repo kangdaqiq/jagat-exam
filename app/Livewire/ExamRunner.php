@@ -59,6 +59,10 @@ class ExamRunner extends Component
 
             if ($this->sesi->status === 'selesai' || $this->sesi->isSelesai()) {
                 $this->is_submitted = true;
+            } elseif (($this->sesi->waktu_selesai && now()->greaterThan($this->sesi->waktu_selesai)) || ($this->sesi->ujian && $this->sesi->ujian->status === 'COMPLETED')) {
+                // Waktu sesi atau jadwal ujian telah berakhir
+                $this->sesi->koreksiDanSelesaikan();
+                $this->is_submitted = true;
             } else {
                 $this->loadSessionData();
             }
@@ -492,113 +496,7 @@ class ExamRunner extends Component
     {
         if (!$this->sesi || $this->is_submitted) return;
 
-        // Otomatis koreksi butir soal pilihan ganda, benar-salah, pg-kompleks, dan isian
-        $totalSkor = 0.0;
-        $jawabans = $this->sesi->jawabans()->with('soal.opsiJawabans')->get();
-
-        foreach ($jawabans as $jawaban) {
-            $soal = $jawaban->soal;
-            if (!$soal) continue;
-
-            $bobot = $this->sesi ? $this->sesi->getEffectiveBobotForJawaban($jawaban) : (float) $soal->bobot_nilai;
-            $isBenar = false;
-            $skor = 0.0;
-
-            if ($soal->tipe_soal === 'pilihan_ganda' || $soal->tipe_soal === 'benar_salah') {
-                $selectedLabel = is_array($jawaban->jawaban_pilihan) ? ($jawaban->jawaban_pilihan[0] ?? null) : $jawaban->jawaban_pilihan;
-
-                if (!empty($jawaban->urutan_opsi) && is_array($jawaban->urutan_opsi) && $selectedLabel) {
-                    $labelIndex = ord(strtoupper($selectedLabel)) - 65;
-                    $selectedOpsiId = $jawaban->urutan_opsi[$labelIndex] ?? null;
-                    if ($selectedOpsiId) {
-                        $selectedOpsi = $soal->opsiJawabans->firstWhere('id', $selectedOpsiId);
-                        if ($selectedOpsi && $selectedOpsi->is_jawaban_benar) {
-                            $isBenar = true;
-                            $skor = $bobot;
-                        }
-                    }
-                } else {
-                    $kunci = $soal->opsiJawabans->firstWhere('is_jawaban_benar', true);
-                    if ($kunci && $selectedLabel === $kunci->label) {
-                        $isBenar = true;
-                        $skor = $bobot;
-                    }
-                }
-            } elseif ($soal->tipe_soal === 'pg_kompleks') {
-                $siswaAns = is_array($jawaban->jawaban_pilihan) ? $jawaban->jawaban_pilihan : [];
-
-                if (!empty($jawaban->urutan_opsi) && is_array($jawaban->urutan_opsi)) {
-                    $selectedOpsiIds = [];
-                    foreach ($siswaAns as $lbl) {
-                        $idx = ord(strtoupper($lbl)) - 65;
-                        if (isset($jawaban->urutan_opsi[$idx])) {
-                            $selectedOpsiIds[] = (int) $jawaban->urutan_opsi[$idx];
-                        }
-                    }
-                    sort($selectedOpsiIds);
-                    $correctOpsiIds = $soal->opsiJawabans->where('is_jawaban_benar', true)->pluck('id')->map(fn($id) => (int)$id)->sort()->values()->toArray();
-                    if (!empty($correctOpsiIds) && $selectedOpsiIds === $correctOpsiIds) {
-                        $isBenar = true;
-                        $skor = $bobot;
-                    }
-                } else {
-                    $kuncis = $soal->opsiJawabans->where('is_jawaban_benar', true)->pluck('label')->sort()->values()->toArray();
-                    $sortedSiswaAns = collect($siswaAns)->sort()->values()->toArray();
-                    if ($kuncis === $sortedSiswaAns && !empty($kuncis)) {
-                        $isBenar = true;
-                        $skor = $bobot;
-                    }
-                }
-            } elseif ($soal->tipe_soal === 'menjodohkan') {
-                $opsiList = $soal->opsiJawabans->values();
-                $siswaMatching = is_array($jawaban->jawaban_pilihan) ? $jawaban->jawaban_pilihan : [];
-                $totalPasangan = $opsiList->count();
-                $pasanganBenar = 0;
-
-                foreach ($opsiList as $idx => $opt) {
-                    $kunciKanan = trim($opt->pasangan_matching ?? '');
-                    $jawabanKanan = trim($siswaMatching[$idx] ?? '');
-                    if (filled($kunciKanan) && $kunciKanan === $jawabanKanan) {
-                        $pasanganBenar++;
-                    }
-                }
-
-                if ($totalPasangan > 0 && $pasanganBenar === $totalPasangan) {
-                    $isBenar = true;
-                    $skor = $bobot;
-                }
-            } elseif ($soal->tipe_soal === 'isian') {
-                $kunciIsian = strtolower(trim($soal->kunci_isian ?? ''));
-                $siswaIsian = strtolower(trim($jawaban->jawaban_teks ?? ''));
-                if (filled($kunciIsian) && $kunciIsian === $siswaIsian) {
-                    $isBenar = true;
-                    $skor = $bobot;
-                }
-            }
-
-            $jawaban->update([
-                'is_benar' => $isBenar,
-                'skor_didapat' => $skor,
-            ]);
-
-            $totalSkor += $skor;
-        }
-
-        $this->sesi->update([
-            'status' => 'selesai',
-            'submitted_at' => now(),
-            'skor_total' => $totalSkor,
-        ]);
-
-        if ($this->sesi->ujian_id) {
-            \App\Models\UjianPeserta::where('ujian_id', $this->sesi->ujian_id)
-                ->where('user_id', $this->sesi->user_id)
-                ->update([
-                    'status' => 'SELESAI',
-                    'nilai' => $totalSkor,
-                    'waktu_selesai' => now(),
-                ]);
-        }
+        $this->sesi->koreksiDanSelesaikan();
 
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;

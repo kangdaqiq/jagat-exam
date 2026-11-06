@@ -215,12 +215,31 @@ class Ujian extends Model
 
     /**
      * Menutup sesi ujian (Status -> COMPLETED)
+     * Otomatis mengumpulkan & mengoreksi seluruh siswa yang masih mengerjakan
      */
     public function finishExam(): void
     {
         $this->update([
             'status' => 'COMPLETED',
         ]);
+
+        // Otomatis paksa selesai & koreksi seluruh peserta yang masih mengerjakan
+        $activePesertas = $this->pesertas()
+            ->where('status', 'SEDANG_MENGERJAKAN')
+            ->with('ujianSesi')
+            ->get();
+
+        foreach ($activePesertas as $peserta) {
+            if ($peserta->ujianSesi && !$peserta->ujianSesi->isSelesai()) {
+                $peserta->ujianSesi->koreksiDanSelesaikan();
+            } else {
+                $peserta->update([
+                    'status' => 'SELESAI',
+                    'waktu_selesai' => now(),
+                    'nilai' => 0,
+                ]);
+            }
+        }
     }
 
     /**

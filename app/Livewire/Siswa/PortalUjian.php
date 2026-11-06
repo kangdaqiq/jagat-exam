@@ -58,6 +58,16 @@ class PortalUjian extends Component
             return;
         }
 
+        // Cek apakah jadwal waktu selesai ujian sudah terlewati
+        if ($ujian->tanggal && $ujian->waktu_selesai) {
+            $tglStr = $ujian->tanggal instanceof \Carbon\Carbon ? $ujian->tanggal->format('Y-m-d') : substr((string)$ujian->tanggal, 0, 10);
+            $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$ujian->waktu_selesai}");
+            if ($jadwalSelesai->isPast()) {
+                $this->addError('token_input', 'Jadwal pelaksanaan sesi ujian ini telah berakhir pada pukul ' . substr($ujian->waktu_selesai, 0, 5) . ' WIB.');
+                return;
+            }
+        }
+
         // 2. Cek apakah bank soal memiliki butir soal
         $bankSoal = $ujian->bankSoal;
         if (!$bankSoal || $bankSoal->soals()->count() === 0) {
@@ -109,6 +119,17 @@ class PortalUjian extends Component
         if (!$sesi) {
             $tokenSesi = Str::random(36);
             $durasiMenit = $ujian->durasi_menit ?: ($bankSoal->durasi_menit ?: 60);
+            $waktuSelesai = now()->addMinutes($durasiMenit);
+
+            // Jika ada batas jadwal waktu_selesai pada ujian, sesuaikan agar durasi tidak melewati jadwal ujian
+            if ($ujian->tanggal && $ujian->waktu_selesai) {
+                $tglStr = $ujian->tanggal instanceof \Carbon\Carbon ? $ujian->tanggal->format('Y-m-d') : substr((string)$ujian->tanggal, 0, 10);
+                $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$ujian->waktu_selesai}");
+                if ($jadwalSelesai->isFuture() && $jadwalSelesai->lessThan($waktuSelesai)) {
+                    $waktuSelesai = $jadwalSelesai;
+                    $durasiMenit = max(1, (int) round(now()->diffInMinutes($jadwalSelesai)));
+                }
+            }
 
             $sesi = UjianSesi::create([
                 'ujian_id' => $ujian->id,
@@ -118,7 +139,7 @@ class PortalUjian extends Component
                 'nama_peserta' => $siswa ? $siswa->nama : $user->name,
                 'nomor_peserta' => $siswa ? $siswa->nis : ($user->nip ?: 'SISWA-' . $user->id),
                 'waktu_mulai' => now(),
-                'waktu_selesai' => now()->addMinutes($durasiMenit),
+                'waktu_selesai' => $waktuSelesai,
                 'durasi_menit' => $durasiMenit,
                 'status' => 'mengerjakan',
                 'ip_address' => request()->ip(),
