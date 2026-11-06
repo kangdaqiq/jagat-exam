@@ -44,10 +44,10 @@
             {{-- Center Logo & Title Display --}}
             <div class="relative z-10 my-8 flex flex-col items-center text-center">
                 {{-- Logo Container with Clean Backlight Effect --}}
-                <div class="w-full max-w-[290px] p-5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-2xl transition duration-300 hover:border-emerald-500/40">
-                    <img src="{{ asset('images/logo/examuna-logo.png') }}"
+                <div class="w-full max-w-[290px] p-5 rounded-2xl bg-white/[0.06] border border-white/15 backdrop-blur-md shadow-2xl transition duration-300 hover:border-emerald-500/40">
+                    <img src="{{ asset('images/logo/examuna-logo-white.png') }}"
                          alt="Logo Examuna SMK Assuniyah Tumijajar"
-                         class="w-full h-auto max-h-36 object-contain drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)]"
+                         class="w-full h-auto max-h-36 object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.7)]"
                          loading="eager" />
                 </div>
 
