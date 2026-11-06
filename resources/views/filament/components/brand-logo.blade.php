@@ -1,18 +1,18 @@
 <div class="flex items-center gap-2.5">
     <div class="flex-shrink-0">
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-sm">
-            <path d="M0 8.42105C0 3.77023 3.77023 0 8.42105 0H23.5789C28.2298 0 32 3.77023 32 8.42105V23.5789C32 28.2298 28.2298 32 23.5789 32H8.42105C3.77023 32 0 28.2298 0 23.5789V8.42105Z" fill="#465FFF"/>
-            <path d="M8.42383 8.42152C8.42383 7.49135 9.17787 6.7373 10.108 6.7373V6.7373C11.0382 6.7373 11.7922 7.49135 11.7922 8.42152V23.5794C11.7922 24.5096 11.0382 25.2636 10.108 25.2636V25.2636C9.17787 25.2636 8.42383 24.5096 8.42383 23.5794V8.42152Z" fill="white"/>
-            <path d="M14.7422 15.1569C14.7422 14.2267 15.4962 13.4727 16.4264 13.4727V13.4727C17.3566 13.4727 18.1106 14.2267 18.1106 15.1569V23.5779C18.1106 24.5081 17.3566 25.2621 16.4264 25.2621V25.2621C15.4962 25.2621 14.7422 24.5081 14.7422 23.5779V15.1569Z" fill="white" fill-opacity="0.9"/>
-            <path d="M21.0547 10.9459C21.0547 10.0158 21.8087 9.26172 22.7389 9.26172V9.26172C23.6691 9.26172 24.4231 10.0158 24.4231 10.9459V23.5775C24.4231 24.5077 23.6691 25.2617 22.7389 25.2617V25.2617C21.8087 25.2617 21.0547 24.5077 21.0547 23.5775V10.9459Z" fill="white" fill-opacity="0.7"/>
-        </svg>
+        <img src="{{ asset('images/logo/examuna-logo.png') }}" alt="Examuna Logo" class="h-8 w-auto object-contain drop-shadow-sm">
     </div>
-    <div class="flex items-baseline gap-1.5">
-        <span class="font-extrabold text-[17px] tracking-tight text-gray-900 dark:text-white" style="font-family: 'Outfit', sans-serif;">
-            Exam<span class="text-[#465fff]">Guard</span>
-        </span>
-        <span class="px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-md bg-[#ecf3ff] text-[#465fff] dark:bg-[#465fff]/20 dark:text-[#7592ff]">
-            CBT
+    <div class="flex flex-col">
+        <div class="flex items-baseline gap-1">
+            <span class="font-extrabold text-[17px] tracking-tight text-gray-900 dark:text-white" style="font-family: 'Outfit', sans-serif;">
+                Exam<span class="text-emerald-500">una</span>
+            </span>
+            <span class="px-1.5 py-0.2 text-[9px] font-black tracking-wider uppercase rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                CBT
+            </span>
+        </div>
+        <span class="text-[9px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-400 leading-none">
+            SMK Assuniyah Tumijajar
         </span>
     </div>
 </div>

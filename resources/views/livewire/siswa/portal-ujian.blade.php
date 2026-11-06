@@ -5,15 +5,13 @@
         <div style="max-width: 1200px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
             {{-- Logo & Identitas Aplikasi --}}
             <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(37,99,235,0.25);">
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                    </svg>
-                </div>
+                <img src="{{ asset('images/logo/examuna-logo.png') }}" alt="Examuna Logo" style="height: 38px; width: auto; object-fit: contain;">
                 <div>
-                    <h2 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">ExamGuard CBT</h2>
+                    <h2 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">
+                        Exam<span style="color: #10b981;">una</span> <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ecfdf5; color: #059669; font-weight: 800; border: 1px solid #a7f3d0;">CBT</span>
+                    </h2>
                     <span style="font-size: 11px; font-weight: 600; color: #64748b;">
-                        {{ $siswa?->school_name ?: 'Portal Ujian Berbasis Komputer' }}
+                        {{ $siswa?->school_name ?: 'SMK Assuniyah Tumijajar • Digital Examination System' }}
                     </span>
                 </div>
             </div>
