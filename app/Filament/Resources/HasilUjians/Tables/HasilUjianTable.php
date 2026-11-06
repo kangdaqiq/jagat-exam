@@ -147,6 +147,20 @@ class HasilUjianTable
                     ->icon(Heroicon::OutlinedDocumentMagnifyingGlass)
                     ->color('primary')
                     ->url(fn (HasilUjian $record): string => ViewHasilUjian::getUrl(['record' => $record])),
+
+                Action::make('export_csv')
+                    ->label('Export CSV')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('success')
+                    ->url(fn (HasilUjian $record): string => route('hasil-ujian.export-csv', $record->id))
+                    ->openUrlInNewTab(false),
+
+                Action::make('cetak')
+                    ->label('Cetak Rekap')
+                    ->icon(Heroicon::OutlinedPrinter)
+                    ->color('gray')
+                    ->url(fn (HasilUjian $record): string => route('hasil-ujian.print', $record->id))
+                    ->openUrlInNewTab(true),
             ])
             ->emptyStateHeading('Belum Ada Hasil Ujian')
             ->emptyStateDescription('Hasil nilai siswa akan otomatis masuk dan terekap di sini begitu siswa menyelesaikan pengerjaan ujian.');

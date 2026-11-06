@@ -415,6 +415,16 @@ class UjianTokenFlowTest extends TestCase
         $resAdminDetail = $this->get('/admin/hasil-ujians/' . $ujian->id);
         $resAdminDetail->assertStatus(200);
 
+        // Verifikasi rute langsung export CSV dan print view
+        $this->actingAs($this->guru);
+        $resExport = $this->get(route('hasil-ujian.export-csv', $ujian->id));
+        $resExport->assertStatus(200);
+        $resExport->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $resPrint = $this->get(route('hasil-ujian.print', $ujian->id));
+        $resPrint->assertStatus(200);
+        $resPrint->assertSee('REKAPITULASI DAFTAR NILAI SISWA CBT');
+
         // 3. Siswa dilarang mengakses
         $this->actingAs($this->siswaUser);
         $resSiswa = $this->get('/guru/hasil-ujians');

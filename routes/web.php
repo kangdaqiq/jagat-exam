@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\HasilUjianController;
 use App\Livewire\ExamRunner;
 use App\Livewire\Siswa\PortalUjian;
 use App\Livewire\Siswa\SiswaLogin;
@@ -59,6 +60,12 @@ Route::middleware(['auth'])->group(function () {
 // 5. Rute Kompatibilitas Bank Soal / Mode Preview Guru & Admin
 Route::get('/exam/{bankSoal}', ExamRunner::class)->name('exam.run');
 Route::get('/ujian/{bankSoal}', ExamRunner::class)->name('ujian.run');
+
+// 5b. Rute Rekap Hasil Ujian (Export CSV & Cetak Dokumen Resmi)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/hasil-ujians/{ujian}/export-csv', [HasilUjianController::class, 'exportCsv'])->name('hasil-ujian.export-csv');
+    Route::get('/hasil-ujians/{ujian}/print', [HasilUjianController::class, 'print'])->name('hasil-ujian.print');
+});
 
 // 6. Rute Demo & Halaman Template TailAdmin
 Route::middleware(['auth'])->group(function () {
