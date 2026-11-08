@@ -3,7 +3,7 @@
 
     <div
         x-data="studioSoalManager()"
-        @keydown.window.ctrl.enter.prevent="$wire.simpanSoal(true)"
+        @keydown.window.ctrl.enter.prevent="$wire.simpanSemua()"
         class="w-full flex flex-col gap-4 -mt-2"
     >
         {{-- ================================================================= --}}
@@ -975,7 +975,7 @@
                     <div class="flex items-center gap-2">
                         <button
                             type="button"
-                            wire:click="selectSoal({{ $selectedSoalId }})"
+                            wire:click="selectSoal({{ $selectedSoalId }}, false)"
                             class="px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                         >
                             Reset Form
@@ -1005,19 +1005,19 @@
 
                         <button
                             type="button"
-                            wire:click="simpanSoal(true)"
+                            wire:click="simpanSemua"
                             wire:loading.attr="disabled"
                             class="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:opacity-95 rounded-lg"
                             style="background-color: #465fff; color: #ffffff;"
-                            title="Simpan perubahan dan langsung lanjut ke butir soal berikutnya (Ctrl + Enter)"
+                            title="Simpan semua perubahan soal (Ctrl + Enter)"
                         >
                             <svg width="16" height="16" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                             </svg>
-                            <span wire:loading.remove wire:target="simpanSoal(true)">
-                                Simpan & Lanjut ke Soal Berikutnya
+                            <span wire:loading.remove wire:target="simpanSemua">
+                                Simpan Semua
                             </span>
-                            <span wire:loading wire:target="simpanSoal(true)">Menyimpan...</span>
+                            <span wire:loading wire:target="simpanSemua">Menyimpan...</span>
                             <kbd class="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-primary-700 text-primary-100 rounded border border-primary-500">
                                 Ctrl+Enter
                             </kbd>

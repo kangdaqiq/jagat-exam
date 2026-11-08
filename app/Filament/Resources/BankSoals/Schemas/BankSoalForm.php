@@ -38,12 +38,23 @@ class BankSoalForm
             return Mapel::pluck('nama_mapel', 'id');
         };
 
-        // Opsi Kelas: Jika guru, hanya kelas yang diajarnya
-        $kelasOptions = function () use ($user) {
+        // Opsi Kelas: Sesuaikan dengan tingkat soal yang dipilih (& kelas guru jika diajar)
+        $kelasOptions = function ($get) use ($user) {
+            $tingkat = $get('tingkat');
+            $query = Kelas::query();
+
             if ($user && $user->isGuru()) {
-                return $user->kelases()->pluck('nama_kelas', 'kelas.id');
+                $guruKelasIds = $user->kelases()->pluck('kelas.id')->toArray();
+                if (!empty($guruKelasIds)) {
+                    $query->whereIn('id', $guruKelasIds);
+                }
             }
-            return Kelas::pluck('nama_kelas', 'id');
+
+            if (!empty($tingkat) && $tingkat !== 'Semua') {
+                $query->where('tingkat', $tingkat);
+            }
+
+            return $query->orderBy('tingkat')->orderBy('nama_kelas')->pluck('nama_kelas', 'id');
         };
 
         return $schema
@@ -86,6 +97,22 @@ class BankSoalForm
                                     '12' => 'Kelas XII (12)',
                                 ])
                                 ->default('Semua')
+                                ->live()
+                                ->afterStateUpdated(function ($state, $set, $get) {
+                                    if (!empty($state) && $state !== 'Semua') {
+                                        $current = (array) ($get('kelases') ?? []);
+                                        if (!empty($current)) {
+                                            $validIds = Kelas::where('tingkat', $state)
+                                                ->pluck('id')
+                                                ->map(fn ($id) => (string) $id)
+                                                ->toArray();
+                                            $set('kelases', array_values(array_intersect(
+                                                array_map('strval', $current),
+                                                $validIds
+                                            )));
+                                        }
+                                    }
+                                })
                                 ->native(false),
 
                             Select::make('kelases')

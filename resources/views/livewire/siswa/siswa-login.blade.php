@@ -380,7 +380,8 @@
                         <div class="text-[10px] sm:text-[11px] text-slate-400 font-medium">
                             &copy; {{ date('Y') }} Sistem Ujian Terpadu &bull; All Rights Reserved
                         </div>
-</div>
+                    </div>
+
                 </div>
 
             </div>

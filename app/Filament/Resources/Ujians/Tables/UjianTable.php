@@ -176,14 +176,24 @@ class UjianTable
                         ->label('Mulai Ujian')
                         ->icon(Heroicon::OutlinedPlay)
                         ->color('success')
+                        ->disabled(fn (Ujian $record): bool => $record->isJadwalBerakhir())
                         ->requiresConfirmation()
                         ->modalHeading('Mulai Pelaksanaan Ujian?')
                         ->modalDescription('Server akan mengubah status menjadi ONGOING dan menghasilkan 6 karakter Kode Akses Ujian (Token). Bagikan kode tersebut kepada siswa di kelas.')
                         ->modalSubmitActionLabel('Mulai Ujian Sekarang')
                         ->visible(fn (Ujian $record): bool =>
-                            $record->status === 'SCHEDULED' || ($record->status === 'ONGOING' && empty($record->token_ujian))
+                            ($record->status === 'SCHEDULED' || ($record->status === 'ONGOING' && empty($record->token_ujian)))
+                            && ! $record->isJadwalBerakhir()
                         )
                         ->action(function (Ujian $record) {
+                            if ($record->isJadwalBerakhir()) {
+                                Notification::make()
+                                    ->title('Waktu Jadwal Ujian Telah Habis')
+                                    ->body('Rilis token telah ditutup karena melewati batas jadwal ujian.')
+                                    ->warning()
+                                    ->send();
+                                return;
+                            }
                             $token = $record->startExam();
                             // Pastikan siswa di kelas ter-sinkron
                             $synced = $record->syncPesertaFromKelas();
@@ -207,6 +217,7 @@ class UjianTable
                         ->color(fn (Ujian $record): string =>
                             $record->isTokenExpired() ? 'danger' : 'warning'
                         )
+                        ->disabled(fn (Ujian $record): bool => $record->isJadwalBerakhir())
                         ->requiresConfirmation()
                         ->modalHeading(fn (Ujian $record): string =>
                             $record->isTokenExpired()
@@ -219,8 +230,16 @@ class UjianTable
                                 : 'Apakah Anda yakin ingin mengganti kode token sesi ujian saat ini dengan kode baru? Token baru akan aktif selama 10 menit ke depan.'
                         )
                         ->modalSubmitActionLabel('Rilis Token Sekarang')
-                        ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING')
+                        ->visible(fn (Ujian $record): bool => $record->status === 'ONGOING' && ! $record->isJadwalBerakhir())
                         ->action(function (Ujian $record) {
+                            if ($record->isJadwalBerakhir()) {
+                                Notification::make()
+                                    ->title('Waktu Jadwal Ujian Telah Habis')
+                                    ->body('Rilis token telah ditutup karena melewati batas jadwal ujian.')
+                                    ->warning()
+                                    ->send();
+                                return;
+                            }
                             $newToken = $record->refreshToken();
 
                             Notification::make()

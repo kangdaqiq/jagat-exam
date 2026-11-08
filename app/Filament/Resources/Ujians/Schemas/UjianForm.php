@@ -85,7 +85,9 @@ class UjianForm
                                         : 'Otomatis mengisi durasi pengerjaan & preferensi pengacakan.')
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         if ($state) {
-                                            $bank = BankSoal::query()->forUser(auth()->user())->find($state);
+                                            $bank = BankSoal::with('kelases:id,tingkat')
+                                                ->forUser(auth()->user())
+                                                ->find($state);
                                             if ($bank) {
                                                 if (empty($get('mapel_id')) && !empty($bank->mapel_id)) {
                                                     $set('mapel_id', $bank->mapel_id);
@@ -95,6 +97,23 @@ class UjianForm
                                                 }
                                                 $set('acak_soal', $bank->acak_soal ?? true);
                                                 $set('acak_opsi', $bank->acak_opsi ?? true);
+
+                                                // Otomatis sesuaikan Rombel Kelas Peserta dengan kelas/tingkat Bank Soal
+                                                $bankKelasIds = $bank->kelases->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+                                                if (!empty($bankKelasIds)) {
+                                                    $set('kelas', $bankKelasIds);
+                                                } elseif (!empty($bank->tingkat) && $bank->tingkat !== 'Semua') {
+                                                    $currentKelas = (array) ($get('kelas') ?? []);
+                                                    $validIds = Kelas::where('tingkat', $bank->tingkat)
+                                                        ->pluck('id')
+                                                        ->map(fn ($id) => (string) $id)
+                                                        ->toArray();
+                                                    $filtered = array_values(array_intersect(
+                                                        array_map('strval', $currentKelas),
+                                                        $validIds
+                                                    ));
+                                                    $set('kelas', $filtered);
+                                                }
                                             }
                                         }
                                     }),
@@ -108,12 +127,38 @@ class UjianForm
                             Grid::make(2)->schema([
                                 Select::make('kelas')
                                     ->label('Rombel Kelas Peserta')
-                                    ->relationship('kelas', 'nama_kelas')
+                                    ->relationship(
+                                        name: 'kelas',
+                                        titleAttribute: 'nama_kelas',
+                                        modifyQueryUsing: function ($query, $get) {
+                                            $bankSoalId = $get('bank_soal_id');
+                                            if ($bankSoalId) {
+                                                $bank = BankSoal::with('kelases:id')->find($bankSoalId);
+                                                if ($bank) {
+                                                    if (!empty($bank->tingkat) && $bank->tingkat !== 'Semua') {
+                                                        $query->where('kelas.tingkat', $bank->tingkat);
+                                                    } elseif ($bank->kelases->isNotEmpty()) {
+                                                        $query->whereIn('kelas.id', $bank->kelases->pluck('id')->toArray());
+                                                    }
+                                                }
+                                            }
+                                            return $query->orderBy('kelas.tingkat')->orderBy('kelas.nama_kelas');
+                                        }
+                                    )
                                     ->multiple()
                                     ->searchable()
                                     ->preload()
                                     ->required()
-                                    ->helperText('Seluruh siswa aktif di rombel kelas terpilih otomatis terdaftar.'),
+                                    ->helperText(function ($get) {
+                                        $bankSoalId = $get('bank_soal_id');
+                                        if ($bankSoalId) {
+                                            $bank = BankSoal::find($bankSoalId);
+                                            if ($bank && !empty($bank->tingkat) && $bank->tingkat !== 'Semua') {
+                                                return "Menampilkan rombel kelas sesuai tingkat Bank Soal (Kelas {$bank->tingkat}).";
+                                            }
+                                        }
+                                        return 'Seluruh siswa aktif di rombel kelas terpilih otomatis terdaftar.';
+                                    }),
 
                                 Select::make('guru_id')
                                     ->label('Guru Pengawas / Pengampu')

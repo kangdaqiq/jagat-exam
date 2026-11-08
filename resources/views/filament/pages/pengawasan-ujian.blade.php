@@ -102,7 +102,18 @@
 
                 {{-- Tombol Aksi Kontrol Pengawas --}}
                 <div class="flex flex-col gap-2">
-                    @if($isScheduled || ($isOngoing && empty($ujian->token_ujian)))
+                    @if($ujian->isJadwalBerakhir())
+                        <button
+                            type="button"
+                            disabled
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-700 cursor-not-allowed"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Rilis Token Ditutup (Waktu Habis)
+                        </button>
+                    @elseif($isScheduled || ($isOngoing && empty($ujian->token_ujian)))
                         <button
                             type="button"
                             wire:click="mulaiUjian"
@@ -115,9 +126,7 @@
                             </svg>
                             Mulai Ujian Sekarang
                         </button>
-                    @endif
-
-                    @if($isOngoing)
+                    @elseif($isOngoing)
                         <button
                             type="button"
                             wire:click="rilisTokenBaru"
@@ -130,6 +139,17 @@
                             Rilis Token Baru (10 Menit)
                         </button>
                     @endif
+
+                    <a
+                        href="{{ route('hasil-ujian.berita-acara', $ujian->id) }}"
+                        target="_blank"
+                        class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200 transition shadow-theme-xs cursor-pointer"
+                    >
+                        <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Cetak Berita Acara & Daftar Hadir
+                    </a>
                 </div>
             </div>
         </div>
@@ -142,6 +162,7 @@
         $sudahSelesai = $ujian->pesertas()->where('status', 'SELESAI')->count();
         $belumMulai = $totalSiswa - ($sedangMengerjakan + $sudahSelesai);
         $persenSelesai = $totalSiswa > 0 ? round(($sudahSelesai / $totalSiswa) * 100) : 0;
+        $totalPelanggaranSiswa = $ujian->pesertas()->whereHas('ujianSesi', fn($q) => $q->where('jumlah_pelanggaran', '>', 0))->count();
     @endphp
 
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 w-full">
@@ -318,6 +339,17 @@
             >
                 Belum Mulai ({{ $belumMulai }})
             </button>
+            <button
+                type="button"
+                wire:click="$set('filterStatus', 'PELANGGARAN')"
+                class="px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition {{
+                    $filterStatus === 'PELANGGARAN'
+                        ? 'bg-rose-600 text-white shadow-theme-xs'
+                        : ($totalPelanggaranSiswa > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200')
+                }}"
+            >
+                Pelanggaran ({{ $totalPelanggaranSiswa }})
+            </button>
         </div>
     </div>
 
@@ -356,9 +388,10 @@
                         <th class="py-3.5 px-4">Kelas</th>
                         <th class="py-3.5 px-4 text-center">Status Sesi</th>
                         <th class="py-3.5 px-4">Progress Soal</th>
+                        <th class="py-3.5 px-4 text-center">Integritas / Tab</th>
                         <th class="py-3.5 px-4">Waktu Mulai</th>
                         <th class="py-3.5 px-4 text-center">Nilai Sementara</th>
-                        <th class="py-3.5 px-4 text-center w-52">Aksi Pengawas (Proktor)</th>
+                        <th class="py-3.5 px-4 text-center w-60">Aksi Pengawas (Proktor)</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-800/70 font-medium">
@@ -367,6 +400,7 @@
                             $sesi = $peserta->ujianSesi;
                             $jawabansCount = $sesi ? $sesi->jawabans->filter(fn($j) => !empty($j->jawaban_pilihan) || !empty($j->jawaban_teks))->count() : 0;
                             $persenJawab = $totalSoalBank > 0 ? round(($jawabansCount / $totalSoalBank) * 100) : 0;
+                            $jmlPelanggaran = (int) ($sesi?->jumlah_pelanggaran ?? 0);
                         @endphp
                         <tr class="hover:bg-[#f9fafb] dark:hover:bg-[#1f2a3d] transition">
                             <td class="py-3.5 px-4 text-center font-semibold text-gray-400">{{ $index + 1 }}</td>
@@ -421,6 +455,27 @@
                                 @endif
                             </td>
 
+                            {{-- Integritas / Pelanggaran Pindah Tab --}}
+                            <td class="py-3.5 px-4 text-center">
+                                @if(!$sesi)
+                                    <span class="text-gray-400 italic text-[11px]">-</span>
+                                @elseif($jmlPelanggaran > 0)
+                                    <span
+                                        title="{{ $sesi->terakhir_pelanggaran_at ? 'Terakhir terdeteksi pukul ' . $sesi->terakhir_pelanggaran_at->format('H:i:s') : 'Terdeteksi keluar tab/aplikasi' }}"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold {{ $jmlPelanggaran >= 3 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300' }}"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        {{ $jmlPelanggaran }}x Pindah Tab
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                        Aman
+                                    </span>
+                                @endif
+                            </td>
+
                             {{-- Waktu Mulai --}}
                             <td class="py-3.5 px-4 font-mono text-[11px] text-gray-600 dark:text-gray-400">
                                 {{ $peserta->waktu_mulai ? $peserta->waktu_mulai->format('H:i:s') : '-' }}
@@ -440,6 +495,19 @@
                             {{-- Aksi Pengawas --}}
                             <td class="py-3.5 px-4 text-center">
                                 <div class="inline-flex items-center gap-1">
+                                    {{-- Tambah Waktu +10 Menit (Jika sudah punya sesi) --}}
+                                    @if($peserta->ujianSesi)
+                                        <button
+                                            type="button"
+                                            wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
+                                            wire:confirm="Tambahkan ekstra waktu +10 menit untuk siswa {{ $peserta->siswa?->nama }}?"
+                                            title="Tambah Waktu +10 Menit"
+                                            class="px-2 py-1 rounded-lg text-[11px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 transition cursor-pointer"
+                                        >
+                                            +10m
+                                        </button>
+                                    @endif
+
                                     {{-- Reset Login Sesi --}}
                                     <button
                                         type="button"
@@ -487,7 +555,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="py-12 text-center text-gray-400 italic">
+                            <td colspan="10" class="py-12 text-center text-gray-400 italic">
                                 Belum ada siswa terdaftar pada sesi ujian ini.
                             </td>
                         </tr>
@@ -536,19 +604,47 @@
 
                 <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
                     @forelse($jawabans as $jwb)
-                        <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 text-xs">
+                        @php
+                            $soal = $jwb->soal;
+                            $tipeSoal = $soal?->tipe_soal ?? 'pilihan_ganda';
+                            $opsiList = $jwb->getOrderedOpsiWithSelection();
+                            $selectedOpsi = collect($opsiList)->where('is_selected', true)->values();
+                        @endphp
+                        <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 text-xs space-y-2.5">
                             <div class="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800 font-semibold text-gray-600 dark:text-gray-300">
                                 <span>Nomor Soal: {{ $jwb->nomor_urut }}</span>
-                                <span class="font-bold text-gray-800 dark:text-gray-200">
-                                    {{ $jwb->is_benar === true ? 'BENAR' : ($jwb->is_benar === false ? 'SALAH' : 'BELUM DINILAI') }}
-                                </span>
+                                @if($jwb->is_ragu)
+                                    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">Ragu-ragu</span>
+                                @endif
                             </div>
-                            <div class="py-2 text-gray-800 dark:text-gray-200 font-medium">
-                                {!! $jwb->soal?->pertanyaan !!}
+                            <div class="py-1 text-gray-800 dark:text-gray-200 font-medium text-sm leading-relaxed">
+                                {!! $soal?->pertanyaan !!}
                             </div>
-                            <div class="pt-2 text-gray-500">
-                                <strong>Pilihan Jawaban Siswa:</strong>
-                                {{ is_array($jwb->jawaban_pilihan) ? implode(', ', $jwb->jawaban_pilihan) : ($jwb->jawaban_pilihan ?: ($jwb->jawaban_teks ?: 'Belum Dijawab')) }}
+                            <div class="pt-1">
+                                @if(in_array($tipeSoal, ['pilihan_ganda', 'pg_kompleks', 'benar_salah']))
+                                    @if($selectedOpsi->isNotEmpty())
+                                        <div class="space-y-1.5">
+                                            <div class="text-[11px] font-bold text-gray-500">Jawaban yang Dipilih Siswa:</div>
+                                            @foreach($selectedOpsi as $opt)
+                                                <div class="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+                                                    <span class="w-6 h-6 rounded-lg bg-[#465fff] text-white font-black text-xs flex items-center justify-center shrink-0">
+                                                        {{ $opt['label'] }}
+                                                    </span>
+                                                    <div class="text-xs font-bold text-gray-900 dark:text-white leading-relaxed flex-1">
+                                                        {!! $opt['teks_opsi'] !!}
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-gray-400 italic">Belum Dijawab</div>
+                                    @endif
+                                @else
+                                    <div class="text-gray-700 dark:text-gray-200">
+                                        <strong>Jawaban Siswa:</strong>
+                                        {{ is_array($jwb->jawaban_pilihan) ? implode(', ', $jwb->jawaban_pilihan) : ($jwb->jawaban_pilihan ?: ($jwb->jawaban_teks ?: 'Belum Dijawab')) }}
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @empty

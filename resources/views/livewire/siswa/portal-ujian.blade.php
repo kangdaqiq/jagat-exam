@@ -162,13 +162,24 @@
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 6px;">
                                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        <span>Durasi: <strong>{{ $uj->durasi_menit ?: 60 }} Menit</strong> &bull; {{ $uj->bankSoal?->soals()->count() ?: 0 }} Butir Soal</span>
+                                        <span>Durasi: <strong>{{ $uj->durasi_menit ?: 60 }} Menit</strong> &bull; {{ $uj->bankSoal?->soals_count ?? ($uj->bankSoal?->soals()->count() ?: 0) }} Butir Soal</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div style="padding-top: 10px; border-top: 1px solid #f1f5f9; font-size: 11px;">
-                                @if($uj->status === 'ONGOING')
+                                @php
+                                    $sesiAktif = isset($sesiAktifMap) ? ($sesiAktifMap[$uj->id] ?? null) : null;
+                                @endphp
+                                @if($uj->status === 'ONGOING' && $sesiAktif)
+                                    <button
+                                        type="button"
+                                        wire:click="lanjutkanUjian({{ $uj->id }})"
+                                        style="width: 100%; padding: 10px 14px; border-radius: 10px; border: none; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-size: 12px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 3px 10px rgba(5,150,105,0.28);"
+                                    >
+                                        <span>Lanjutkan Mengerjakan Ujian &raquo;</span>
+                                    </button>
+                                @elseif($uj->status === 'ONGOING')
                                     <span style="color: #2563eb; font-weight: 700;">
                                         &bull; Minta kode token ke Guru Pengawas untuk memulai
                                     </span>

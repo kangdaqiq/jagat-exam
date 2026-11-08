@@ -95,6 +95,13 @@ class SiswaTable
                     ->falseLabel('Hanya Siswa Nonaktif'),
             ])
             ->recordActions([
+                Action::make('cetakKartu')
+                    ->label('Kartu CBT')
+                    ->icon(Heroicon::OutlinedIdentification)
+                    ->color('info')
+                    ->url(fn (Siswa $record) => route('kartu-peserta.print', ['ids' => $record->id]))
+                    ->openUrlInNewTab(),
+
                 Action::make('resetPassword')
                     ->label('Reset Password')
                     ->icon(Heroicon::OutlinedKey)

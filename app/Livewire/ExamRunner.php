@@ -6,6 +6,7 @@ use App\Models\BankSoal;
 use App\Models\Soal;
 use App\Models\UjianJawaban;
 use App\Models\UjianSesi;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -41,6 +42,9 @@ class ExamRunner extends Component
     public int $violationCount = 0;
     public bool $showViolationModal = false;
 
+    // Request-level cache untuk koleksi soal agar tidak berulang kali query DB
+    protected ?Collection $cachedSoals = null;
+
     protected $listeners = [
         'siswa-curang-tab' => 'handleTabViolation',
         'timer-expired' => 'autoSubmitOnTimeout',
@@ -54,8 +58,32 @@ class ExamRunner extends Component
                 ->with(['bankSoal.mapel', 'bankSoal.soals.opsiJawabans'])
                 ->firstOrFail();
 
+            // Keamanan: Pastikan sesi milik siswa yang sedang login (kecuali Admin/Guru)
+            if ($this->sesi->user_id && Auth::check()) {
+                $currentUser = Auth::user();
+                if ((int) $this->sesi->user_id !== (int) $currentUser->id && !$currentUser->isAdmin() && !$currentUser->isGuru()) {
+                    abort(403, 'Akses ditolak: Sesi ujian ini milik peserta lain.');
+                }
+
+                // Keamanan Single-Device Lock
+                if ($currentUser->isSiswa()) {
+                    $browserToken = session('cbt_device_token');
+                    if (filled($currentUser->active_session_token) && filled($browserToken) && $currentUser->active_session_token !== $browserToken) {
+                        Auth::logout();
+                        session()->invalidate();
+                        session()->regenerateToken();
+                        redirect()->route('login');
+                        return;
+                    }
+                    if (filled($this->sesi->device_token) && filled($browserToken) && $this->sesi->device_token !== $browserToken) {
+                        abort(403, 'Sesi ujian ini sedang terkunci pada perangkat lain. Hubungi Pengawas untuk Reset Login.');
+                    }
+                }
+            }
+
             $this->bankSoal = $this->sesi->bankSoal;
             $this->is_preview = false;
+            $this->violationCount = (int) ($this->sesi->jumlah_pelanggaran ?? 0);
 
             if ($this->sesi->status === 'selesai' || $this->sesi->isSelesai()) {
                 $this->is_submitted = true;
@@ -148,7 +176,7 @@ class ExamRunner extends Component
 
         session(["ujian_token_{$this->bankSoal->id}" => $token]);
 
-        // Inisialisasi baris jawaban di database untuk setiap butir soal
+        // Inisialisasi baris jawaban di database untuk setiap butir soal (Bulk Insert 1 Query)
         $soals = $this->bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
         $acakSoal = $this->bankSoal->acak_soal ?? true;
         $acakOpsi = $this->bankSoal->acak_opsi ?? true;
@@ -157,29 +185,40 @@ class ExamRunner extends Component
             $soals = $soals->shuffle();
         }
 
+        $now = now();
+        $jawabanRows = [];
         foreach ($soals->values() as $order => $soal) {
             $urutanOpsi = null;
             if ($acakOpsi && in_array($soal->tipe_soal, ['pilihan_ganda', 'pg_kompleks']) && $soal->opsiJawabans->isNotEmpty()) {
                 $urutanOpsi = $soal->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
             }
 
-            UjianJawaban::create([
+            $jawabanRows[] = [
                 'ujian_sesi_id' => $this->sesi->id,
                 'soal_id' => $soal->id,
                 'nomor_urut' => $order + 1,
-                'urutan_opsi' => $urutanOpsi,
+                'urutan_opsi' => $urutanOpsi !== null ? json_encode($urutanOpsi) : null,
                 'jawaban_pilihan' => null,
                 'jawaban_teks' => null,
                 'is_ragu' => false,
-            ]);
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
+        if (!empty($jawabanRows)) {
+            UjianJawaban::insert($jawabanRows);
+        }
+
+        $this->cachedSoals = null;
         $this->loadSessionData();
     }
 
     protected function loadSessionData(): void
     {
         if (!$this->sesi) return;
+
+        $this->violationCount = (int) ($this->sesi->jumlah_pelanggaran ?? 0);
 
         // Ambil semua jawaban yang sudah ada
         $jawabans = $this->sesi->jawabans()->get();
@@ -197,6 +236,10 @@ class ExamRunner extends Component
 
     public function getSoalsProperty()
     {
+        if ($this->cachedSoals !== null) {
+            return $this->cachedSoals;
+        }
+
         if ($this->sesi) {
             $jawabans = $this->sesi->jawabans()->orderBy('nomor_urut', 'asc')->get();
             if ($jawabans->isNotEmpty()) {
@@ -230,7 +273,7 @@ class ExamRunner extends Component
                     $orderedSoals->push($soal);
                 }
 
-                return $orderedSoals;
+                return $this->cachedSoals = $orderedSoals;
             }
         }
 
@@ -240,7 +283,7 @@ class ExamRunner extends Component
                 $opt->display_label = $opt->label;
             }
         }
-        return $rawSoals;
+        return $this->cachedSoals = $rawSoals;
     }
 
     public function getCurrentSoalProperty()
@@ -404,10 +447,12 @@ class ExamRunner extends Component
     {
         if (!$this->sesi || $this->is_submitted || empty($batch)) return;
 
+        $validSoalIds = $this->bankSoal->soals()->pluck('id')->flip();
+
         foreach ($batch as $item) {
             if (!is_array($item)) continue;
             $soalId = (int) ($item['soal_id'] ?? 0);
-            if (!$soalId) continue;
+            if (!$soalId || !$validSoalIds->has($soalId)) continue;
 
             $updateData = [];
             if (array_key_exists('pilihan', $item)) {
@@ -503,6 +548,11 @@ class ExamRunner extends Component
         if (!$this->sesi || $this->is_submitted) return;
 
         $this->sesi->koreksiDanSelesaikan();
+        $this->sesi->update(['device_token' => null]);
+
+        if (Auth::check() && Auth::user()->isSiswa()) {
+            Auth::user()->update(['active_session_token' => null]);
+        }
 
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;
@@ -516,21 +566,29 @@ class ExamRunner extends Component
         $this->submitUjianFinal();
     }
 
+    #[Renderless]
     public function triggerViolation(): void
     {
         $this->handleTabViolation();
     }
 
+    #[Renderless]
     public function handleTabViolation(): void
     {
-        if ($this->is_preview) {
+        if ($this->is_preview || $this->is_submitted) {
             return;
         }
 
-        $this->violationCount++;
+        if ($this->sesi) {
+            $this->violationCount = $this->sesi->catatPelanggaran();
+        } else {
+            $this->violationCount++;
+        }
+
         $this->showViolationModal = true;
     }
 
+    #[Renderless]
     public function tutupViolationModal(): void
     {
         $this->showViolationModal = false;

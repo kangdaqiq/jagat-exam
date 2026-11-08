@@ -42,6 +42,10 @@ class PengawasanUjian extends Page
 
     public function getPesertasListProperty()
     {
+        if ($this->ujian->status === 'ONGOING') {
+            $this->ujian->autoCloseExpiredSessions();
+        }
+
         $query = $this->ujian->pesertas()
             ->with(['siswa.kelas', 'user', 'ujianSesi.jawabans'])
             ->join('siswas', 'ujian_pesertas.siswa_id', '=', 'siswas.id')
@@ -55,7 +59,11 @@ class PengawasanUjian extends Page
             });
         }
 
-        if ($this->filterStatus !== 'all') {
+        if ($this->filterStatus === 'PELANGGARAN') {
+            $query->whereHas('ujianSesi', function ($q) {
+                $q->where('jumlah_pelanggaran', '>', 0);
+            });
+        } elseif ($this->filterStatus !== 'all') {
             $query->where('ujian_pesertas.status', $this->filterStatus);
         }
 
@@ -71,6 +79,15 @@ class PengawasanUjian extends Page
      */
     public function mulaiUjian(): void
     {
+        if ($this->ujian->isJadwalBerakhir()) {
+            Notification::make()
+                ->title('Waktu Jadwal Ujian Telah Habis')
+                ->body('Batas jadwal pelaksanaan ujian sudah berakhir. Rilis token telah ditutup.')
+                ->warning()
+                ->send();
+            return;
+        }
+
         $token = $this->ujian->startExam();
         $this->ujian->syncPesertaFromKelas();
         $this->ujian->refresh();
@@ -88,6 +105,15 @@ class PengawasanUjian extends Page
      */
     public function rilisTokenBaru(): void
     {
+        if ($this->ujian->isJadwalBerakhir()) {
+            Notification::make()
+                ->title('Waktu Jadwal Ujian Telah Habis')
+                ->body('Batas jadwal pelaksanaan ujian sudah berakhir. Rilis token telah ditutup.')
+                ->warning()
+                ->send();
+            return;
+        }
+
         $newToken = $this->ujian->refreshToken();
         $this->ujian->refresh();
 
@@ -130,24 +156,75 @@ class PengawasanUjian extends Page
     }
 
     /**
-     * Proktor mereset sesi login siswa (jika mati lampu / browser crash)
+     * Proktor mereset sesi login siswa (jika mati lampu / browser crash / ter-submit tidak sengaja)
      */
     public function resetSesiSiswa(int $pesertaId): void
     {
-        $peserta = UjianPeserta::with('ujianSesi', 'siswa')->find($pesertaId);
+        $peserta = UjianPeserta::with(['ujianSesi', 'siswa.user', 'user'])->find($pesertaId);
         if (!$peserta) return;
 
-        // Jika sesi sedang berjalan, perpanjang waktu atau biarkan melanjutkan
+        $targetUser = $peserta->user ?: $peserta->siswa?->user;
+        if ($targetUser) {
+            $targetUser->resetDeviceLogin();
+        }
+
+        $sesi = $peserta->ujianSesi;
+
         if ($peserta->status === 'SELESAI') {
-            $peserta->update(['status' => 'SEDANG_MENGERJAKAN']);
-            if ($peserta->ujianSesi) {
-                $peserta->ujianSesi->update(['status' => 'mengerjakan']);
+            $peserta->update([
+                'status' => 'SEDANG_MENGERJAKAN',
+                'waktu_selesai' => null,
+            ]);
+        }
+
+        if ($sesi) {
+            $waktuSelesaiBaru = $sesi->waktu_selesai;
+            // Jika waktu selesai sesi sudah habis atau sisa < 10 menit, berikan perpanjangan 15 menit dari sekarang
+            if (!$waktuSelesaiBaru || now()->addMinutes(10)->greaterThan($waktuSelesaiBaru)) {
+                $waktuSelesaiBaru = now()->addMinutes(15);
             }
+
+            $sesi->update([
+                'status' => 'mengerjakan',
+                'submitted_at' => null,
+                'waktu_selesai' => $waktuSelesaiBaru,
+                'jumlah_pelanggaran' => 0,
+                'device_token' => null,
+            ]);
         }
 
         Notification::make()
             ->title('Sesi Siswa Berhasil Direset')
             ->body("Siswa {$peserta->siswa?->nama} (NIS: {$peserta->siswa?->nis}) dapat login kembali dan melanjutkan ujian tanpa kehilangan jawaban tersimpan.")
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Proktor memberikan tambahan waktu pengerjaan untuk siswa tertentu (+10 menit default)
+     */
+    public function tambahWaktuSiswa(int $pesertaId, int $menit = 10): void
+    {
+        $peserta = UjianPeserta::with('ujianSesi', 'siswa')->find($pesertaId);
+        if (!$peserta || !$peserta->ujianSesi) return;
+
+        $sesi = $peserta->ujianSesi;
+        $baseTime = ($sesi->waktu_selesai && $sesi->waktu_selesai->isFuture()) ? $sesi->waktu_selesai : now();
+        $newEndTime = $baseTime->copy()->addMinutes($menit);
+
+        $sesi->update([
+            'waktu_selesai' => $newEndTime,
+            'durasi_menit' => ((int) $sesi->durasi_menit) + $menit,
+            'status' => 'mengerjakan',
+        ]);
+
+        if ($peserta->status === 'SELESAI') {
+            $peserta->update(['status' => 'SEDANG_MENGERJAKAN']);
+        }
+
+        Notification::make()
+            ->title("Waktu +{$menit} Menit Ditambahkan")
+            ->body("Batas waktu pengerjaan {$peserta->siswa?->nama} diperpanjang hingga pukul {$newEndTime->format('H:i')} WIB.")
             ->success()
             ->send();
     }

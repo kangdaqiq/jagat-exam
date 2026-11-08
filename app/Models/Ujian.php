@@ -160,11 +160,54 @@ class Ujian extends Model
     }
 
     /**
+     * Memeriksa apakah waktu jadwal pelaksanaan ujian sudah habis / lewat batas jadwal.
+     */
+    public function isJadwalBerakhir(): bool
+    {
+        if (in_array($this->status, ['COMPLETED', 'CANCELLED'], true)) {
+            return true;
+        }
+
+        if ($this->tanggal && $this->waktu_selesai) {
+            $tglStr = $this->tanggal instanceof \Carbon\Carbon
+                ? $this->tanggal->format('Y-m-d')
+                : substr((string) $this->tanggal, 0, 10);
+            $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$this->waktu_selesai}");
+
+            return now()->greaterThan($jadwalSelesai);
+        }
+
+        if ($this->tanggal && empty($this->waktu_selesai)) {
+            $tgl = $this->tanggal instanceof \Carbon\Carbon
+                ? $this->tanggal->copy()->endOfDay()
+                : \Carbon\Carbon::parse((string) $this->tanggal)->endOfDay();
+
+            return now()->greaterThan($tgl);
+        }
+
+        if (empty($this->tanggal) && $this->waktu_selesai) {
+            $jadwalSelesai = \Carbon\Carbon::parse(now()->format('Y-m-d') . ' ' . $this->waktu_selesai);
+
+            return now()->greaterThan($jadwalSelesai);
+        }
+
+        return false;
+    }
+
+    /**
+     * Memeriksa apakah token masih boleh dirilis / diperbarui oleh pengawas.
+     */
+    public function canReleaseToken(): bool
+    {
+        return ! $this->isJadwalBerakhir();
+    }
+
+    /**
      * Memeriksa apakah token ujian saat ini sudah kedaluwarsa (berlaku 10 menit)
      */
     public function isTokenExpired(): bool
     {
-        if ($this->status !== 'ONGOING') {
+        if ($this->status !== 'ONGOING' || $this->isJadwalBerakhir()) {
             return true;
         }
 
@@ -240,6 +283,93 @@ class Ujian extends Model
                 ]);
             }
         }
+    }
+
+    /**
+     * Otomatis mengoreksi & menyelesaikan sesi siswa yang waktu pengerjaannya sudah habis,
+     * serta menutup status ujian jika batas jadwal pelaksanaan sudah berakhir.
+     */
+    public function autoCloseExpiredSessions(): int
+    {
+        $closedCount = 0;
+        $jadwalHabis = $this->isJadwalBerakhir();
+
+        $activeSesis = $this->ujianSesis()
+            ->where('status', 'mengerjakan')
+            ->get();
+
+        foreach ($activeSesis as $sesi) {
+            $batasDurasi = $sesi->waktu_mulai
+                ? $sesi->waktu_mulai->copy()->addMinutes($sesi->durasi_menit ?: ($this->durasi_menit ?: 60))
+                : null;
+
+            $sesiHabis = ($sesi->waktu_selesai && now()->greaterThan($sesi->waktu_selesai))
+                || ($batasDurasi && now()->greaterThan($batasDurasi))
+                || (!$sesi->waktu_selesai && !$batasDurasi && $jadwalHabis);
+
+            if ($sesiHabis) {
+                $sesi->koreksiDanSelesaikan();
+                $closedCount++;
+            }
+        }
+
+        // Jika masih ada peserta berstatus SEDANG_MENGERJAKAN tapi sesinya sudah selesai
+        $stalePesertas = $this->pesertas()
+            ->where('status', 'SEDANG_MENGERJAKAN')
+            ->with('ujianSesi')
+            ->get();
+
+        foreach ($stalePesertas as $peserta) {
+            $sesi = $peserta->ujianSesi;
+            if ($sesi && $sesi->status === 'selesai') {
+                $peserta->update([
+                    'status' => 'SELESAI',
+                    'waktu_selesai' => $sesi->submitted_at ?? now(),
+                    'nilai' => $sesi->skor_total ?? 0,
+                ]);
+                $closedCount++;
+            } elseif (!$sesi && $jadwalHabis) {
+                $peserta->update([
+                    'status' => 'SELESAI',
+                    'waktu_selesai' => now(),
+                    'nilai' => 0,
+                ]);
+                $closedCount++;
+            }
+        }
+
+        // Jika jadwal ujian sudah lewat dan tidak ada lagi sesi aktif yang sedang dikerjakan (misal tambahan waktu), tutup status ujian
+        if ($this->status === 'ONGOING' && $jadwalHabis) {
+            $masihAdaSesiAktif = $this->ujianSesis()->where('status', 'mengerjakan')->exists();
+            if (! $masihAdaSesiAktif) {
+                $this->update(['status' => 'COMPLETED']);
+            }
+        }
+
+        return $closedCount;
+    }
+
+    /**
+     * Jalankan auto-close untuk seluruh ujian yang sedang berlangsung atau memiliki sesi kedaluwarsa.
+     */
+    public static function runGlobalAutoClose(): int
+    {
+        $totalClosed = 0;
+
+        $ujians = static::query()
+            ->where('status', 'ONGOING')
+            ->orWhereHas('ujianSesis', function ($q) {
+                $q->where('status', 'mengerjakan')
+                  ->whereNotNull('waktu_selesai')
+                  ->where('waktu_selesai', '<', now());
+            })
+            ->get();
+
+        foreach ($ujians as $ujian) {
+            $totalClosed += $ujian->autoCloseExpiredSessions();
+        }
+
+        return $totalClosed;
     }
 
     /**

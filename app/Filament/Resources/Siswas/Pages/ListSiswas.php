@@ -20,6 +20,13 @@ class ListSiswas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('cetakKartuPeserta')
+                ->label('Cetak Kartu Peserta')
+                ->icon(Heroicon::OutlinedIdentification)
+                ->color('info')
+                ->url(fn () => route('kartu-peserta.print'))
+                ->openUrlInNewTab(),
+
             Action::make('resetAllPassword')
                 ->label('Reset Password Seluruh Siswa')
                 ->icon(Heroicon::OutlinedKey)

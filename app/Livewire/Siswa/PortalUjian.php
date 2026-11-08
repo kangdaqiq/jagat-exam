@@ -27,6 +27,16 @@ class PortalUjian extends Component
         if (!$user->isSiswa() && ($user->isAdmin() || $user->isGuru())) {
             return redirect()->to('/admin');
         }
+
+        // Validasi Single-Device Lock jika token perangkat tidak cocok
+        if ($user->isSiswa() && filled($user->active_session_token) && filled(session('cbt_device_token'))) {
+            if ($user->active_session_token !== session('cbt_device_token')) {
+                Auth::logout();
+                session()->invalidate();
+                session()->regenerateToken();
+                return redirect()->route('login');
+            }
+        }
     }
 
     public function submitToken()
@@ -52,8 +62,14 @@ class PortalUjian extends Component
             return;
         }
 
-        // Cek kedaluwarsa token (masa berlaku 10 menit)
-        if ($ujian->isTokenExpired()) {
+        // Cek apakah siswa sudah punya sesi aktif yang sedang dikerjakan pada ujian ini
+        $existingActiveSesi = UjianSesi::where('ujian_id', $ujian->id)
+            ->where('user_id', $user->id)
+            ->where('status', 'mengerjakan')
+            ->first();
+
+        // Cek kedaluwarsa token (masa berlaku 10 menit) - kecuali siswa sudah punya sesi aktif
+        if (!$existingActiveSesi && $ujian->isTokenExpired()) {
             $this->addError('token_input', 'Kode token ujian telah KEDALUWARSA (masa berlaku 10 menit telah habis). Silakan minta Guru Pengawas / Proktor untuk generate token baru.');
             return;
         }
@@ -111,10 +127,7 @@ class PortalUjian extends Component
         }
 
         // 5. Cari sesi pengerjaan yang sudah ada atau buat sesi baru
-        $sesi = UjianSesi::where('ujian_id', $ujian->id)
-            ->where('user_id', $user->id)
-            ->where('status', 'mengerjakan')
-            ->first();
+        $sesi = $existingActiveSesi;
 
         if (!$sesi) {
             $tokenSesi = Str::random(36);
@@ -136,6 +149,7 @@ class PortalUjian extends Component
                 'bank_soal_id' => $bankSoal->id,
                 'user_id' => $user->id,
                 'token_sesi' => $tokenSesi,
+                'device_token' => session('cbt_device_token'),
                 'nama_peserta' => $siswa ? $siswa->nama : $user->name,
                 'nomor_peserta' => $siswa ? $siswa->nis : ($user->nip ?: 'SISWA-' . $user->id),
                 'waktu_mulai' => now(),
@@ -146,7 +160,7 @@ class PortalUjian extends Component
                 'user_agent' => request()->userAgent(),
             ]);
 
-            // Siapkan butir soal (acak atau urut sesuai pengaturan ujian / bank soal)
+            // Siapkan butir soal (acak atau urut sesuai pengaturan ujian / bank soal) dengan Bulk Insert 1 Query
             $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
             $acakSoal = $ujian->acak_soal ?? $bankSoal->acak_soal ?? true;
             $acakOpsi = $ujian->acak_opsi ?? $bankSoal->acak_opsi ?? true;
@@ -155,6 +169,8 @@ class PortalUjian extends Component
                 $soals = $soals->shuffle();
             }
 
+            $now = now();
+            $jawabanRows = [];
             foreach ($soals->values() as $idx => $s) {
                 $urutanOpsi = null;
                 // Hanya acak opsi untuk tipe pilihan ganda dan pg kompleks (Benar/Salah tidak diacak)
@@ -162,15 +178,21 @@ class PortalUjian extends Component
                     $urutanOpsi = $s->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
                 }
 
-                UjianJawaban::create([
+                $jawabanRows[] = [
                     'ujian_sesi_id' => $sesi->id,
                     'soal_id' => $s->id,
                     'nomor_urut' => $idx + 1,
-                    'urutan_opsi' => $urutanOpsi,
+                    'urutan_opsi' => $urutanOpsi !== null ? json_encode($urutanOpsi) : null,
                     'jawaban_pilihan' => null,
                     'jawaban_teks' => null,
                     'is_ragu' => false,
-                ]);
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            if (!empty($jawabanRows)) {
+                UjianJawaban::insert($jawabanRows);
             }
         }
 
@@ -187,8 +209,45 @@ class PortalUjian extends Component
         return redirect()->route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]);
     }
 
+    /**
+     * Lanjutkan sesi ujian yang sudah aktif tanpa harus mengetik ulang token 10 menit
+     */
+    public function lanjutkanUjian(int $ujianId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $sesi = UjianSesi::where('ujian_id', $ujianId)
+            ->where('user_id', $user->id)
+            ->where('status', 'mengerjakan')
+            ->first();
+
+        if (!$sesi) {
+            $this->addError('token_input', 'Sesi pengerjaan aktif tidak ditemukan. Silakan masukkan kode token dari Guru Pengawas.');
+            return;
+        }
+
+        $ujian = $sesi->ujian;
+        if ($ujian && $ujian->status === 'COMPLETED') {
+            $sesi->koreksiDanSelesaikan();
+            $this->addError('token_input', 'Pelaksanaan ujian ini telah ditutup oleh Guru Pengawas.');
+            return;
+        }
+
+        session(["ujian_token_{$sesi->bank_soal_id}" => $sesi->token_sesi]);
+
+        return redirect()->route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]);
+    }
+
     public function logout()
     {
+        $user = Auth::user();
+        if ($user && $user->isSiswa()) {
+            $user->update(['active_session_token' => null]);
+        }
+
         Auth::logout();
         session()->invalidate();
         session()->regenerateToken();
@@ -200,19 +259,41 @@ class PortalUjian extends Component
         $user = Auth::user();
         $siswa = $user->siswa;
 
-        // Cari daftar ujian yang relevan untuk kelas siswa
+        // Auto-close sesi siswa yang sudah melewati batas waktu
+        $expiredUserSesis = UjianSesi::where('user_id', $user->id)
+            ->where('status', 'mengerjakan')
+            ->whereNotNull('waktu_selesai')
+            ->where('waktu_selesai', '<', now())
+            ->get();
+
+        foreach ($expiredUserSesis as $expSesi) {
+            $expSesi->koreksiDanSelesaikan();
+        }
+
+        // Cari daftar ujian yang relevan untuk kelas siswa (optimasi eager loading soals_count)
         $daftarUjian = collect();
         if ($siswa && $siswa->kelas_id) {
             $daftarUjian = Ujian::whereHas('kelas', function ($q) use ($siswa) {
                 $q->where('kelas.id', $siswa->kelas_id);
             })
-            ->with(['mapel', 'guru', 'bankSoal'])
+            ->with([
+                'mapel',
+                'guru',
+                'bankSoal' => fn ($q) => $q->withCount('soals'),
+            ])
             ->whereIn('status', ['SCHEDULED', 'ONGOING', 'COMPLETED'])
             ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 1 WHEN status = 'SCHEDULED' THEN 2 ELSE 3 END")
             ->orderBy('tanggal', 'desc')
             ->take(6)
             ->get();
         }
+
+        // Map sesi aktif siswa berdasarkan ujian_id agar siswa bisa langsung klik "Lanjutkan Ujian"
+        $sesiAktifMap = UjianSesi::where('user_id', $user->id)
+            ->where('status', 'mengerjakan')
+            ->whereNotNull('ujian_id')
+            ->get()
+            ->keyBy('ujian_id');
 
         // Riwayat ujian siswa yang sudah selesai
         $riwayatUjian = UjianPeserta::where('user_id', $user->id)
@@ -226,6 +307,7 @@ class PortalUjian extends Component
             'user' => $user,
             'siswa' => $siswa,
             'daftarUjian' => $daftarUjian,
+            'sesiAktifMap' => $sesiAktifMap,
             'riwayatUjian' => $riwayatUjian,
         ]);
     }

@@ -12,7 +12,9 @@
         soalTypes: @js($soalTypes),
         initialAnswers: @js($userAnswers),
         tokenSesi: '{{ $sesi ? $sesi->token_sesi : ($bankSoal->kode_bank ?? "preview") }}',
-        isPreview: {{ $is_preview ? 'true' : 'false' }}
+        isPreview: {{ $is_preview ? 'true' : 'false' }},
+        initialViolationCount: {{ (int) $violationCount }},
+        initialShowViolationModal: {{ $showViolationModal ? 'true' : 'false' }}
     })"
     style="min-height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; color: #1e293b; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;"
 >
@@ -1320,37 +1322,41 @@
     </div>
 
     {{-- ----------------------------------------------------------------- --}}
-    {{-- MODAL PERINGATAN KECURANGAN                                        --}}
+    {{-- MODAL PERINGATAN KECURANGAN (CLIENT-SIDE 0MS)                     --}}
     {{-- ----------------------------------------------------------------- --}}
-    @if($showViolationModal)
-        <div style="position: fixed; inset: 0; z-index: 50; background: rgba(127,29,29,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 16px;">
-            <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; border: 2px solid #ef4444; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 24px 20px; text-align: center;">
-                <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
-                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                </div>
-
-                <span style="display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #fee2e2; color: #991b1b; margin-bottom: 8px;">
-                    Peringatan Pelanggaran #{{ $violationCount }}
-                </span>
-                <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 8px;">Aktivitas Mencurigakan Terdeteksi!</h3>
-                <p style="font-size: 12px; color: #dc2626; font-weight: 600; margin: 0 0 16px; line-height: 1.55;">
-                    Anda terdeteksi meninggalkan halaman ujian atau membuka aplikasi lain. Insiden ini dicatat dalam log pengawas ujian.
-                </p>
-
-                <button
-                    type="button"
-                    wire:click="tutupViolationModal"
-                    style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 700; color: #fff; background: #dc2626; cursor: pointer; box-shadow: 0 2px 10px rgba(220,38,38,0.3); min-height: 44px;"
-                >
-                    Saya Mengerti &amp; Kembali ke Ujian
-                </button>
+    <div
+        x-show="showViolationModal"
+        x-cloak
+        style="position: fixed; inset: 0; z-index: 9999; background: rgba(127,29,29,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+    >
+        <div
+            @click.outside="showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); }"
+            style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; border: 2px solid #ef4444; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 24px 20px; text-align: center;"
+        >
+            <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
             </div>
+
+            <span style="display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #fee2e2; color: #991b1b; margin-bottom: 8px;">
+                Peringatan Pelanggaran #<span x-text="violationCount">{{ $violationCount }}</span>
+            </span>
+            <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 8px;">Aktivitas Mencurigakan Terdeteksi!</h3>
+            <p style="font-size: 12px; color: #dc2626; font-weight: 600; margin: 0 0 16px; line-height: 1.55;">
+                Anda terdeteksi meninggalkan halaman ujian atau membuka aplikasi lain. Insiden ini dicatat dalam log pengawas ujian.
+            </p>
+
+            <button
+                type="button"
+                @click="showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); }"
+                style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 700; color: #fff; background: #dc2626; cursor: pointer; box-shadow: 0 2px 10px rgba(220,38,38,0.3); min-height: 44px;"
+            >
+                Saya Mengerti &amp; Kembali ke Ujian
+            </button>
         </div>
-    @endif
+    </div>
 @endif
-</div>
 
 {{-- ===================================================================== --}}
 {{-- SCRIPT: ALPINE EXAM RUNNER LOGIC (CLIENT-SIDE NAVIGATION & OFFLINE)  --}}
@@ -1372,6 +1378,8 @@ function examRunner($wire, config) {
         answers: config.initialAnswers || {},
         tokenSesi: config.tokenSesi || 'token',
         isPreview: Boolean(config.isPreview),
+        violationCount: config.initialViolationCount || 0,
+        showViolationModal: Boolean(config.initialShowViolationModal),
 
         zoomLevel: 'md',
         showDaftarSoalMobile: false,
@@ -1478,6 +1486,8 @@ function examRunner($wire, config) {
             });
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden && !window.isLegitNavigation) {
+                    this.violationCount++;
+                    this.showViolationModal = true;
                     if (window.AndroidExam && typeof window.AndroidExam.triggerViolation === 'function') {
                         window.AndroidExam.triggerViolation('Siswa beralih aplikasi atau membuka notifikasi');
                     }
@@ -1697,3 +1707,4 @@ function examRunner($wire, config) {
     };
 }
 </script>
+</div>

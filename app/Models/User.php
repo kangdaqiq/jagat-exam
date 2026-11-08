@@ -31,6 +31,8 @@ class User extends Authenticatable implements FilamentUser
         'nip',
         'phone',
         'is_active',
+        'active_session_token',
+        'last_login_at',
     ];
 
     /**
@@ -54,7 +56,32 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'last_login_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Lepas kunci sesi perangkat aktif untuk siswa (dipanggil saat Pengawas klik Reset Login).
+     */
+    public function resetDeviceLogin(): void
+    {
+        $this->update([
+            'active_session_token' => null,
+        ]);
+
+        UjianSesi::where('user_id', $this->id)
+            ->where('status', 'mengerjakan')
+            ->update(['device_token' => null]);
+
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('sessions')) {
+                \Illuminate\Support\Facades\DB::table('sessions')
+                    ->where('user_id', $this->id)
+                    ->delete();
+            }
+        } catch (\Throwable $e) {
+            // Abaikan jika driver session bukan database
+        }
     }
 
     public function isAdmin(): bool

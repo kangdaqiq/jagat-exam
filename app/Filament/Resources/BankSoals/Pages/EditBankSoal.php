@@ -111,7 +111,7 @@ class EditBankSoal extends Page
 
         $first = $this->record->soals()->orderBy('nomor_urut', 'asc')->first();
         if ($first) {
-            $this->selectSoal($first->id);
+            $this->selectSoal($first->id, false);
         }
     }
 
@@ -126,8 +126,12 @@ class EditBankSoal extends Page
         return $query->get();
     }
 
-    public function selectSoal(int $id): void
+    public function selectSoal(int $id, bool $autoSaveCurrent = true): void
     {
+        if ($autoSaveCurrent && $this->selectedSoalId && $this->selectedSoalId !== $id) {
+            $this->simpanSoal(false, true);
+        }
+
         $soal = $this->record->soals()->with('opsiJawabans')->find($id);
         if (! $soal) return;
 
@@ -244,7 +248,7 @@ class EditBankSoal extends Page
         }
     }
 
-    public function simpanSoal(bool $advanceToNext = false): void
+    public function simpanSoal(bool $advanceToNext = false, bool $silent = false): void
     {
         if (! $this->selectedSoalId) return;
 
@@ -288,10 +292,12 @@ class EditBankSoal extends Page
             }
         }
 
-        Notification::make()
-            ->title("Soal No. {$soal->nomor_urut} berhasil disimpan")
-            ->success()
-            ->send();
+        if (! $silent) {
+            Notification::make()
+                ->title("Soal No. {$soal->nomor_urut} berhasil disimpan")
+                ->success()
+                ->send();
+        }
 
         if ($advanceToNext) {
             $next = $this->record->soals()
@@ -300,15 +306,34 @@ class EditBankSoal extends Page
                 ->first();
 
             if ($next) {
-                $this->selectSoal($next->id);
+                $this->selectSoal($next->id, false);
             } else {
                 $this->tambahSoal();
             }
         }
     }
 
+    public function simpanSemua(): void
+    {
+        if ($this->selectedSoalId) {
+            $this->simpanSoal(false, true);
+        }
+
+        $this->record->refresh();
+        $totalSoal = $this->record->soals()->count();
+
+        Notification::make()
+            ->title("Semua perubahan soal ({$totalSoal} butir) berhasil disimpan")
+            ->success()
+            ->send();
+    }
+
     public function tambahSoal(): void
     {
+        if ($this->selectedSoalId) {
+            $this->simpanSoal(false, true);
+        }
+
         $nextNomor = ((int) $this->record->soals()->max('nomor_urut')) + 1;
         $newSoal = $this->record->soals()->create([
             'nomor_urut' => $nextNomor,
@@ -329,7 +354,7 @@ class EditBankSoal extends Page
 
         $this->record->autoDistributeBobot();
         $this->record->refresh();
-        $this->selectSoal($newSoal->id);
+        $this->selectSoal($newSoal->id, false);
 
         Notification::make()
             ->title("Soal No. {$nextNomor} ditambahkan (Bobot otomatis disesuaikan ke 100 poin)")
@@ -339,6 +364,10 @@ class EditBankSoal extends Page
 
     public function duplikatSoal(?int $id = null): void
     {
+        if ($this->selectedSoalId) {
+            $this->simpanSoal(false, true);
+        }
+
         $targetId = $id ?? $this->selectedSoalId;
         $soal = $this->record->soals()->with('opsiJawabans')->find($targetId);
         if (! $soal) return;
@@ -356,7 +385,7 @@ class EditBankSoal extends Page
 
         $this->record->autoDistributeBobot();
         $this->record->refresh();
-        $this->selectSoal($replica->id);
+        $this->selectSoal($replica->id, false);
 
         Notification::make()
             ->title("Soal diduplikasi menjadi No. {$nextNomor} (Bobot otomatis 100 poin)")
@@ -388,7 +417,7 @@ class EditBankSoal extends Page
             ?? $this->record->soals()->orderBy('nomor_urut', 'desc')->first();
 
         if ($next) {
-            $this->selectSoal($next->id);
+            $this->selectSoal($next->id, false);
         } else {
             $this->tambahSoal();
         }
@@ -558,7 +587,7 @@ class EditBankSoal extends Page
                 if ($firstNewId) {
                     $this->record->autoDistributeBobot();
                     $this->record->refresh();
-                    $this->selectSoal($firstNewId);
+                    $this->selectSoal($firstNewId, false);
                 }
 
                 Notification::make()
@@ -791,13 +820,14 @@ class EditBankSoal extends Page
                 }
             }
 
-            if ($firstNewId) {
-                $this->selectSoal($firstNewId);
-            }
-
             if ($this->import_default_bobot == 2.0) {
                 // Otomatis sesuaikan bobot seluruh bank soal ke skala 100 poin (rasio 75:25)
                 $this->record->autoDistributeBobot();
+                $this->record->refresh();
+            }
+
+            if ($firstNewId) {
+                $this->selectSoal($firstNewId, false);
             }
 
             Notification::make()

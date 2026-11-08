@@ -94,5 +94,87 @@ class HasilUjianController extends Controller
             'pesertas' => $pesertas,
         ]);
     }
+
+    /**
+     * Cetak Berita Acara & Daftar Hadir Pelaksanaan Ujian CBT (A4).
+     */
+    public function beritaAcara(\App\Models\Ujian $ujian)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $ujian->autoCloseExpiredSessions();
+        $ujian->loadMissing(['mapel', 'guru', 'kelas', 'bankSoal']);
+
+        $pesertas = $ujian->pesertas()
+            ->with(['siswa.kelas', 'user', 'ujianSesi'])
+            ->join('siswas', 'ujian_pesertas.siswa_id', '=', 'siswas.id')
+            ->select('ujian_pesertas.*')
+            ->orderBy('siswas.nama', 'asc')
+            ->get();
+
+        return view('print.berita-acara-ujian', [
+            'ujian' => $ujian,
+            'pesertas' => $pesertas,
+        ]);
+    }
+
+    /**
+     * Cetak Kartu Peserta Ujian CBT (per Kelas, Pilihan Siswa, atau Seluruh Siswa).
+     */
+    public function cetakKartuPeserta(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $hasAssignedKelas = $user->isGuru() && $user->kelases()->exists();
+
+        $query = \App\Models\Siswa::query()
+            ->with(['kelas', 'user'])
+            ->where('is_active', true);
+
+        if ($hasAssignedKelas) {
+            $query->forUser($user);
+        }
+
+        $selectedKelas = null;
+        if ($request->filled('kelas_id')) {
+            $kelasId = (int) $request->input('kelas_id');
+            $query->where('kelas_id', $kelasId);
+            $selectedKelas = \App\Models\Kelas::find($kelasId);
+        }
+
+        if ($request->filled('ids')) {
+            $ids = array_filter(array_map('intval', explode(',', (string) $request->input('ids'))));
+            if (!empty($ids)) {
+                $query->whereIn('id', $ids);
+            }
+        }
+
+        $siswas = $query
+            ->orderBy('kelas_id', 'asc')
+            ->orderBy('nama', 'asc')
+            ->get();
+
+        $daftarKelasQuery = \App\Models\Kelas::query();
+        if ($hasAssignedKelas) {
+            $daftarKelasQuery->forUser($user);
+        }
+
+        $daftarKelas = $daftarKelasQuery
+            ->orderBy('tingkat')
+            ->orderBy('nama_kelas')
+            ->get();
+
+        return view('print.kartu-peserta', [
+            'siswas' => $siswas,
+            'selectedKelas' => $selectedKelas,
+            'daftarKelas' => $daftarKelas,
+        ]);
+    }
 }
 

@@ -36,6 +36,7 @@ class ViewHasilUjian extends Page
     public function mount(int | string $record): void
     {
         $this->record = $this->resolveRecord($record);
+        $this->record->autoCloseExpiredSessions();
     }
 
     public function getHasilUjianProperty(): HasilUjian

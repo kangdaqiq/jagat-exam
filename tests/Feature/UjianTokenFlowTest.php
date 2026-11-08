@@ -559,6 +559,236 @@ class UjianTokenFlowTest extends TestCase
         $ujian->refresh();
         $this->assertEquals('COMPLETED', $ujian->status);
     }
+
+    public function test_security_persistent_violation_and_resume_exam_flow(): void
+    {
+        $ujian = Ujian::create([
+            'nama_ujian' => 'Ujian Keamanan & Integritas',
+            'tipe_ujian' => Ujian::TIPE_ASESMEN_HARIAN,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'durasi_menit' => 45,
+            'status' => 'SCHEDULED',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+        $ujian->kelas()->attach($this->kelas->id);
+        $ujian->syncPesertaFromKelas();
+        $token = $ujian->startExam();
+
+        // 1. Siswa masuk sesi ujian
+        Livewire::actingAs($this->siswaUser)
+            ->test(PortalUjian::class)
+            ->set('token_input', $token)
+            ->call('submitToken')
+            ->assertHasNoErrors();
+
+        $sesi = \App\Models\UjianSesi::where('ujian_id', $ujian->id)->where('user_id', $this->siswaUser->id)->first();
+        $this->assertNotNull($sesi);
+
+        // 2. Pelanggaran pindah tab tercatat secara persisten di database
+        Livewire::actingAs($this->siswaUser)
+            ->test(ExamRunner::class, ['token_sesi' => $sesi->token_sesi])
+            ->call('triggerViolation')
+            ->assertSet('violationCount', 1)
+            ->call('triggerViolation')
+            ->assertSet('violationCount', 2);
+
+        $sesi->refresh();
+        $this->assertEquals(2, $sesi->jumlah_pelanggaran);
+        $this->assertNotNull($sesi->terakhir_pelanggaran_at);
+
+        // Ketika halaman direfresh (komponen di-mount ulang), jumlah pelanggaran tetap 2
+        Livewire::actingAs($this->siswaUser)
+            ->test(ExamRunner::class, ['token_sesi' => $sesi->token_sesi])
+            ->assertSet('violationCount', 2);
+
+        // 3. Siswa lain tidak boleh membajak token_sesi milik siswa ini (403 Forbidden)
+        $otherSiswaUser = User::factory()->create([
+            'role' => 'siswa',
+            'is_active' => true,
+        ]);
+        $this->actingAs($otherSiswaUser)
+            ->get(route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]))
+            ->assertStatus(403);
+
+        // 4. Meskipun token 10 menit sudah kedaluwarsa, siswa yang sudah punya sesi aktif bisa klik Lanjutkan Ujian
+        $ujian->update(['token_generated_at' => now()->subMinutes(20)]);
+        $this->assertTrue($ujian->fresh()->isTokenExpired());
+
+        Livewire::actingAs($this->siswaUser)
+            ->test(PortalUjian::class)
+            ->assertSee('Lanjutkan Mengerjakan Ujian')
+            ->call('lanjutkanUjian', $ujian->id)
+            ->assertRedirect(route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]));
+
+        // 5. Proktor dapat melihat indikator pelanggaran, menambah waktu +10 menit, dan mereset sesi
+        $peserta = UjianPeserta::where('ujian_id', $ujian->id)->where('siswa_id', $this->siswa->id)->first();
+        Livewire::actingAs($this->guru)
+            ->test(\App\Filament\Resources\Ujians\Pages\PengawasanUjian::class, ['record' => $ujian->id])
+            ->assertSee('2x Pindah Tab')
+            ->call('tambahWaktuSiswa', $peserta->id, 10)
+            ->assertHasNoErrors()
+            ->call('resetSesiSiswa', $peserta->id)
+            ->assertHasNoErrors();
+
+        $sesi->refresh();
+        $this->assertEquals(55, $sesi->durasi_menit);
+        $this->assertEquals(0, $sesi->jumlah_pelanggaran);
+    }
+
+    public function test_pwa_pengawas_login_and_portal_monitoring_actions(): void
+    {
+        $ujian = Ujian::create([
+            'nama_ujian' => 'Ujian PWA Pengawas',
+            'tipe_ujian' => Ujian::TIPE_ASESMEN_HARIAN,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'durasi_menit' => 45,
+            'status' => 'SCHEDULED',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+        $ujian->kelas()->attach($this->kelas->id);
+        $ujian->syncPesertaFromKelas();
+
+        // 0. Mengakses /pengawas saat belum login harus redirect ke /pengawas/login (bukan /login siswa)
+        $this->get('/pengawas')->assertRedirect(route('pengawas.login'));
+
+        // 1. Siswa ditolak login di halaman khusus Pengawas PWA
+        Livewire::test(\App\Livewire\Pengawas\PengawasLogin::class)
+            ->set('login', '10234')
+            ->set('password', 'password123')
+            ->call('doLogin')
+            ->assertHasErrors(['login']);
+
+        // 2. Guru berhasil login di halaman khusus Pengawas PWA dan diarahkan ke /pengawas
+        Livewire::test(\App\Livewire\Pengawas\PengawasLogin::class)
+            ->set('login', 'guru@sekolah.sch.id')
+            ->set('password', 'password')
+            ->call('doLogin')
+            ->assertRedirect(route('pengawas.portal'));
+
+        // 3. Guru memilih ujian, memulai ujian, rilis token baru, dan mereset login siswa
+        $portal = Livewire::actingAs($this->guru)
+            ->test(\App\Livewire\Pengawas\PortalPengawas::class)
+            ->assertSee('Ujian PWA Pengawas')
+            ->call('pilihUjian', $ujian->id)
+            ->assertSet('selectedUjianId', $ujian->id)
+            ->call('mulaiUjian')
+            ->assertHasNoErrors();
+
+        $ujian->refresh();
+        $this->assertEquals('ONGOING', $ujian->status);
+        $firstToken = $ujian->token_ujian;
+        $this->assertNotEmpty($firstToken);
+
+        // Rilis token baru dari PWA Pengawas
+        $portal->call('rilisTokenBaru');
+        $ujian->refresh();
+        $this->assertNotEquals($firstToken, $ujian->token_ujian);
+
+        // Reset login siswa dari PWA Pengawas
+        $peserta = UjianPeserta::where('ujian_id', $ujian->id)->where('siswa_id', $this->siswa->id)->first();
+        $portal->call('resetSesiSiswa', $peserta->id)
+            ->assertSee('berhasil di-reset');
+    }
+
+    public function test_single_device_lock_auto_close_and_print_berita_acara_kartu_peserta(): void
+    {
+        $ujian = Ujian::create([
+            'nama_ujian' => 'Ujian Kunci Perangkat & Auto Close',
+            'tipe_ujian' => Ujian::TIPE_ASESMEN_HARIAN,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'durasi_menit' => 30,
+            'status' => 'SCHEDULED',
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+        $ujian->kelas()->attach($this->kelas->id);
+        $ujian->syncPesertaFromKelas();
+        $token = $ujian->startExam();
+
+        // 1. Siswa login pertama kali -> active_session_token terisi
+        Livewire::test(SiswaLogin::class)
+            ->set('login', '10234')
+            ->set('password', 'password123')
+            ->call('doLogin')
+            ->assertRedirect(route('siswa.portal'));
+
+        $this->siswaUser->refresh();
+        $this->assertNotNull($this->siswaUser->active_session_token);
+
+        // 2. Percobaan login kedua dari perangkat/browser lain (ketika active_session_token masih terkunci) DITOLAK
+        auth()->logout();
+        session()->forget('cbt_device_token');
+        Livewire::test(SiswaLogin::class)
+            ->set('login', '10234')
+            ->set('password', 'password123')
+            ->call('doLogin')
+            ->assertHasErrors(['login'])
+            ->assertSee('sedang aktif');
+
+        // 3. Pengawas menekan "Reset Login" -> kunci perangkat terbuka
+        $peserta = UjianPeserta::where('ujian_id', $ujian->id)->where('siswa_id', $this->siswa->id)->first();
+        Livewire::actingAs($this->guru)
+            ->test(\App\Livewire\Pengawas\PortalPengawas::class)
+            ->call('pilihUjian', $ujian->id)
+            ->call('resetSesiSiswa', $peserta->id)
+            ->assertHasNoErrors();
+
+        $this->siswaUser->refresh();
+        $this->assertNull($this->siswaUser->active_session_token);
+
+        // 4. Sekarang siswa bisa login kembali dari perangkat baru
+        auth()->logout();
+        Livewire::test(SiswaLogin::class)
+            ->set('login', '10234')
+            ->set('password', 'password123')
+            ->call('doLogin')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('siswa.portal'));
+
+        // 5. Uji Auto-Close sesi yang waktunya sudah habis
+        Livewire::actingAs($this->siswaUser)
+            ->test(PortalUjian::class)
+            ->set('token_input', $token)
+            ->call('submitToken')
+            ->assertHasNoErrors();
+
+        $sesi = \App\Models\UjianSesi::where('ujian_id', $ujian->id)->where('user_id', $this->siswaUser->id)->first();
+        $this->assertNotNull($sesi);
+        $this->assertEquals('mengerjakan', $sesi->status);
+
+        // Simulasikan waktu mulai 40 menit yang lalu (durasi 30 menit -> sudah habis 10 menit lalu)
+        $sesi->update(['waktu_mulai' => now()->subMinutes(40)]);
+
+        $closedCount = $ujian->autoCloseExpiredSessions();
+        $this->assertEquals(1, $closedCount);
+
+        $sesi->refresh();
+        $peserta->refresh();
+        $this->assertEquals('selesai', $sesi->status);
+        $this->assertEquals('SELESAI', $peserta->status);
+
+        // 6. Uji halaman cetak Berita Acara & Daftar Hadir serta Kartu Peserta
+        $this->actingAs($this->guru)
+            ->get(route('hasil-ujian.berita-acara', $ujian->id))
+            ->assertStatus(200)
+            ->assertSee('BERITA ACARA PELAKSANAAN UJIAN CBT')
+            ->assertSee('DAFTAR HADIR PESERTA UJIAN CBT')
+            ->assertSee('Ahmad Siswa');
+
+        $this->actingAs($this->guru)
+            ->get(route('kartu-peserta.print'))
+            ->assertStatus(200)
+            ->assertSee('KARTU PESERTA UJIAN CBT')
+            ->assertSee('10234');
+    }
 }
 
 
