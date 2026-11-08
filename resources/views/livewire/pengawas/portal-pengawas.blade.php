@@ -531,7 +531,11 @@
                                         </span>
                                     @endif
 
-                                    @if($jmlPelanggaran > 0)
+                                    @if($jmlPelanggaran >= 3)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold animate-pulse" style="background-color: #991b1b; color: #ffffff;">
+                                            🔒 TERKUNCI ({{ $jmlPelanggaran }}x Pindah Tab)
+                                        </span>
+                                    @elseif($jmlPelanggaran > 0)
                                         <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold" style="background-color: #ffe4e6; color: #9f1239; border: 1px solid #fda4af;">
                                             ⚠️ {{ $jmlPelanggaran }}x Pindah Tab
                                             @if($sesi?->terakhir_pelanggaran_at)
@@ -568,12 +572,12 @@
                                     wire:click="resetSesiSiswa({{ $peserta->id }})"
                                     wire:confirm="Reset login & buka kunci sesi untuk {{ $peserta->siswa?->nama }}? Jawaban yang sudah dikerjakan tetap aman."
                                     class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
-                                    style="background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a;"
+                                    style="{{ $jmlPelanggaran >= 3 ? 'background-color: #dc2626; color: #ffffff; border: 1px solid #b91c1c;' : 'background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a;' }}"
                                 >
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
-                                    <span>Reset Login</span>
+                                    <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci & Reset' : 'Reset Login' }}</span>
                                 </button>
 
                                 <button

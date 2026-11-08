@@ -68,9 +68,16 @@ class UjianSesi extends Model
         return $this->hasMany(UjianJawaban::class, 'ujian_sesi_id')->orderBy('nomor_urut', 'asc');
     }
 
+    public const MAX_VIOLATION_LOCK = 3;
+
     public function isSelesai(): bool
     {
         return $this->status === 'selesai' || ($this->waktu_selesai && now()->greaterThan($this->waktu_selesai));
+    }
+
+    public function isTerblokirPelanggaran(): bool
+    {
+        return (int) $this->jumlah_pelanggaran >= self::MAX_VIOLATION_LOCK;
     }
 
     public function sisaDetik(): int

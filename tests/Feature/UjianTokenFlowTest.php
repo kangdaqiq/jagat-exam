@@ -600,9 +600,17 @@ class UjianTokenFlowTest extends TestCase
         $this->assertNotNull($sesi->terakhir_pelanggaran_at);
 
         // Ketika halaman direfresh (komponen di-mount ulang), jumlah pelanggaran tetap 2
+        // Jika terjadi pelanggaran ke-3, sesi otomatis terkunci (showViolationModal tidak bisa ditutup sendiri oleh siswa)
         Livewire::actingAs($this->siswaUser)
             ->test(ExamRunner::class, ['token_sesi' => $sesi->token_sesi])
-            ->assertSet('violationCount', 2);
+            ->assertSet('violationCount', 2)
+            ->call('triggerViolation')
+            ->assertSet('violationCount', 3)
+            ->assertSet('showViolationModal', true)
+            ->call('tutupViolationModal')
+            ->assertSet('showViolationModal', true);
+
+        $this->assertTrue($sesi->fresh()->isTerblokirPelanggaran());
 
         // 3. Siswa lain tidak boleh membajak token_sesi milik siswa ini (403 Forbidden)
         $otherSiswaUser = User::factory()->create([
@@ -623,11 +631,11 @@ class UjianTokenFlowTest extends TestCase
             ->call('lanjutkanUjian', $ujian->id)
             ->assertRedirect(route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]));
 
-        // 5. Proktor dapat melihat indikator pelanggaran, menambah waktu +10 menit, dan mereset sesi
+        // 5. Proktor dapat melihat indikator pelanggaran/terkunci, menambah waktu +10 menit, dan mereset/membuka kunci sesi
         $peserta = UjianPeserta::where('ujian_id', $ujian->id)->where('siswa_id', $this->siswa->id)->first();
         Livewire::actingAs($this->guru)
             ->test(\App\Filament\Resources\Ujians\Pages\PengawasanUjian::class, ['record' => $ujian->id])
-            ->assertSee('2x Pindah Tab')
+            ->assertSee('3x Pindah Tab')
             ->call('tambahWaktuSiswa', $peserta->id, 10)
             ->assertHasNoErrors()
             ->call('resetSesiSiswa', $peserta->id)
@@ -636,6 +644,7 @@ class UjianTokenFlowTest extends TestCase
         $sesi->refresh();
         $this->assertEquals(55, $sesi->durasi_menit);
         $this->assertEquals(0, $sesi->jumlah_pelanggaran);
+        $this->assertFalse($sesi->isTerblokirPelanggaran());
     }
 
     public function test_pwa_pengawas_login_and_portal_monitoring_actions(): void

@@ -732,6 +732,12 @@
                             window.__examTimerInterval = setInterval(() => {
                                 this.updateTimer();
                             }, 1000);
+                            window.addEventListener('cbt-update-end-timestamp', (e) => {
+                                if (e.detail && typeof e.detail === 'number') {
+                                    this.endTimestamp = e.detail;
+                                    this.updateTimer();
+                                }
+                            });
                         },
 
                         updateTimer() {
@@ -1322,38 +1328,82 @@
     </div>
 
     {{-- ----------------------------------------------------------------- --}}
-    {{-- MODAL PERINGATAN KECURANGAN (CLIENT-SIDE 0MS)                     --}}
+    {{-- MODAL PERINGATAN & AUTO-LOCK KECURANGAN (CLIENT-SIDE 0MS)         --}}
     {{-- ----------------------------------------------------------------- --}}
     <div
-        x-show="showViolationModal"
+        x-show="showViolationModal || isLockedByViolation"
         x-cloak
-        style="position: fixed; inset: 0; z-index: 9999; background: rgba(127,29,29,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+        style="position: fixed; inset: 0; z-index: 9999; background: rgba(127,29,29,0.88); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px;"
     >
         <div
-            @click.outside="showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); }"
-            style="width: 100%; max-width: 420px; background: #fff; border-radius: 24px; border: 2px solid #ef4444; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 24px 20px; text-align: center;"
+            @click.outside="if (!isLockedByViolation) { showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); } }"
+            style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; border: 2.5px solid #ef4444; box-shadow: 0 24px 64px rgba(0,0,0,0.4); padding: 26px 22px; text-align: center;"
         >
-            <div style="width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
-                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+            {{-- Icon --}}
+            <div style="width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
+                <template x-if="!isLockedByViolation">
+                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#dc2626">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </template>
+                <template x-if="isLockedByViolation">
+                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#991b1b">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </template>
             </div>
 
-            <span style="display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #fee2e2; color: #991b1b; margin-bottom: 8px;">
-                Peringatan Pelanggaran #<span x-text="violationCount">{{ $violationCount }}</span>
-            </span>
-            <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 8px;">Aktivitas Mencurigakan Terdeteksi!</h3>
-            <p style="font-size: 12px; color: #dc2626; font-weight: 600; margin: 0 0 16px; line-height: 1.55;">
-                Anda terdeteksi meninggalkan halaman ujian atau membuka aplikasi lain. Insiden ini dicatat dalam log pengawas ujian.
-            </p>
+            {{-- State 1: Peringatan (Pelanggaran 1-2x) --}}
+            <template x-if="!isLockedByViolation">
+                <div>
+                    <span style="display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; background: #fee2e2; color: #991b1b; margin-bottom: 8px;">
+                        Peringatan Pelanggaran #<span x-text="violationCount">{{ $violationCount }}</span> dari <span x-text="maxViolationLock">3</span>
+                    </span>
+                    <h3 style="font-size: 17px; font-weight: 900; color: #1e293b; margin: 0 0 8px;">Aktivitas Mencurigakan Terdeteksi!</h3>
+                    <p style="font-size: 12px; color: #dc2626; font-weight: 600; margin: 0 0 10px; line-height: 1.55;">
+                        Anda terdeteksi meninggalkan halaman ujian atau membuka aplikasi lain. Insiden ini dicatat dalam log pengawas ujian.
+                    </p>
+                    <div style="padding: 9px 12px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; font-size: 11px; font-weight: 700; color: #92400e; margin-bottom: 16px;">
+                        ⚠️ Perhatian: Jika mencapai <span x-text="maxViolationLock">3</span>x pelanggaran, lembar ujian Anda akan <strong>terkunci otomatis</strong>!
+                    </div>
 
-            <button
-                type="button"
-                @click="showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); }"
-                style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 700; color: #fff; background: #dc2626; cursor: pointer; box-shadow: 0 2px 10px rgba(220,38,38,0.3); min-height: 44px;"
-            >
-                Saya Mengerti &amp; Kembali ke Ujian
-            </button>
+                    <button
+                        type="button"
+                        @click="showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); }"
+                        style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; background: #dc2626; cursor: pointer; box-shadow: 0 2px 10px rgba(220,38,38,0.3); min-height: 44px;"
+                    >
+                        Saya Mengerti &amp; Kembali ke Ujian
+                    </button>
+                </div>
+            </template>
+
+            {{-- State 2: Terkunci Otomatis (Pelanggaran >= 3x) --}}
+            <template x-if="isLockedByViolation">
+                <div>
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; background: #991b1b; color: #ffffff; margin-bottom: 10px;">
+                        🔒 Lembar Ujian Terkunci (<span x-text="violationCount">{{ $violationCount }}</span>x Pelanggaran)
+                    </span>
+                    <h3 style="font-size: 18px; font-weight: 900; color: #7f1d1d; margin: 0 0 8px;">Sesi Ujian Anda Dikunci Sementara!</h3>
+                    <p style="font-size: 12.5px; color: #334155; font-weight: 600; margin: 0 0 12px; line-height: 1.55;">
+                        Anda telah melampaui batas maksimal berpindah tab/aplikasi (<strong style="color: #dc2626;">3 kali</strong>). Seluruh jawaban yang sudah Anda pilih <strong>tetap tersimpan aman</strong>.
+                    </p>
+                    <div style="padding: 11px 14px; border-radius: 12px; background: #fef2f2; border: 1.5px dashed #f87171; font-size: 12px; font-weight: 700; color: #991b1b; margin-bottom: 16px; line-height: 1.45;">
+                        Silakan angkat tangan dan lapor kepada <strong>Guru Pengawas</strong> di ruangan untuk menekan tombol <strong>"Reset Login / Buka Kunci"</strong> pada akun Anda.
+                    </div>
+
+                    <button
+                        type="button"
+                        @click="checkProctorUnlock()"
+                        :disabled="isCheckingUnlock"
+                        style="width: 100%; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 800; color: #fff; background: #041F45; cursor: pointer; box-shadow: 0 4px 14px rgba(4,31,69,0.3); min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                    >
+                        <span x-show="!isCheckingUnlock">Cek Status Buka Kunci Pengawas &rarr;</span>
+                        <span x-show="isCheckingUnlock">Memeriksa Persetujuan Pengawas...</span>
+                    </button>
+
+                    <div x-show="unlockFeedback" x-text="unlockFeedback" style="margin-top: 10px; font-size: 11px; font-weight: 700; color: #dc2626;"></div>
+                </div>
+            </template>
         </div>
     </div>
 @endif
@@ -1380,6 +1430,9 @@ function examRunner($wire, config) {
         isPreview: Boolean(config.isPreview),
         violationCount: config.initialViolationCount || 0,
         showViolationModal: Boolean(config.initialShowViolationModal),
+        maxViolationLock: 3,
+        isCheckingUnlock: false,
+        unlockFeedback: '',
 
         zoomLevel: 'md',
         showDaftarSoalMobile: false,
@@ -1393,6 +1446,52 @@ function examRunner($wire, config) {
 
         getWire() {
             return this.$wire || this._wire || (typeof window !== 'undefined' && window.Livewire && this.$el ? window.Livewire.find(this.$el.closest('[wire\\:id]')?.getAttribute('wire:id')) : null);
+        },
+
+        get isLockedByViolation() {
+            return !this.isPreview && this.violationCount >= this.maxViolationLock;
+        },
+
+        async checkProctorUnlock(silent = false) {
+            const wire = this.getWire();
+            if (!wire || typeof wire.cekStatusSesiServer !== 'function') return;
+            if (!silent) {
+                this.isCheckingUnlock = true;
+                this.unlockFeedback = '';
+            }
+            try {
+                const res = await wire.cekStatusSesiServer();
+                if (res && res.finished === true) {
+                    try {
+                        localStorage.removeItem(this.storageKey);
+                        localStorage.removeItem(this.queueKey);
+                    } catch (e) {}
+                    if (typeof wire.refreshToFinishedState === 'function') {
+                        wire.refreshToFinishedState();
+                    }
+                    return;
+                }
+                if (res && typeof res.end_timestamp === 'number') {
+                    window.dispatchEvent(new CustomEvent('cbt-update-end-timestamp', { detail: res.end_timestamp }));
+                }
+                if (res && typeof res.count === 'number') {
+                    this.violationCount = res.count;
+                }
+                if (res && res.locked === false) {
+                    this.showViolationModal = false;
+                    this.unlockFeedback = '';
+                } else if (!silent) {
+                    this.unlockFeedback = 'Status masih terkunci. Minta Guru Pengawas klik "Reset Login / Buka Kunci".';
+                }
+            } catch (e) {
+                if (!silent) {
+                    this.unlockFeedback = 'Gagal memeriksa status ke server. Pastikan koneksi internet aktif.';
+                }
+            } finally {
+                if (!silent) {
+                    this.isCheckingUnlock = false;
+                }
+            }
         },
 
         get currentSoalId() {
@@ -1438,6 +1537,13 @@ function examRunner($wire, config) {
                 }
             }, 15000);
 
+            // Sinkronisasi status sesi dari server setiap 5 detik (deteksi paksa selesai oleh pengawas, +10m waktu, & buka kunci)
+            setInterval(() => {
+                if (this.isOnline && !this.isPreview) {
+                    this.checkProctorUnlock(true);
+                }
+            }, 5000);
+
             // Render rumus matematika KaTeX saat halaman selesai dimuat
             this.$nextTick(() => {
                 if (typeof renderMathInElement === 'function') {
@@ -1455,6 +1561,7 @@ function examRunner($wire, config) {
 
             // Keyboard navigation (0ms instantaneous)
             window.addEventListener('keydown', (e) => {
+                if (this.showViolationModal || this.isLockedByViolation) return;
                 if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
                 const key = e.key.toUpperCase();
                 if (['A', 'B', 'C', 'D', 'E'].includes(key)) {
@@ -1551,7 +1658,17 @@ function examRunner($wire, config) {
                 return;
             }
             try {
-                await wire.syncBatchJawaban(batch);
+                const syncRes = await wire.syncBatchJawaban(batch);
+                if (syncRes && syncRes.status === 'finished') {
+                    try {
+                        localStorage.removeItem(this.storageKey);
+                        localStorage.removeItem(this.queueKey);
+                    } catch (e) {}
+                    if (typeof wire.refreshToFinishedState === 'function') {
+                        wire.refreshToFinishedState();
+                    }
+                    return;
+                }
                 const syncedIds = new Set(batch.map(b => b.soal_id));
                 this.pendingSync = this.pendingSync.filter(q => !syncedIds.has(q.soal_id));
                 this.isOnline = true;

@@ -68,7 +68,8 @@ class ViewHasilUjian extends Page
         }
 
         if ($this->sortBy === 'nilai') {
-            $query->orderByRaw('ujian_pesertas.nilai ' . ($this->sortDirection === 'asc' ? 'ASC NULLS LAST' : 'DESC NULLS LAST'))
+            $dir = $this->sortDirection === 'asc' ? 'ASC' : 'DESC';
+            $query->orderByRaw("CASE WHEN ujian_pesertas.nilai IS NULL THEN 1 ELSE 0 END ASC, ujian_pesertas.nilai {$dir}")
                   ->orderBy('siswas.nama', 'asc');
         } elseif ($this->sortBy === 'nis') {
             $query->orderBy('siswas.nis', $this->sortDirection);

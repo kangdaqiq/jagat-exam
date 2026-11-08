@@ -84,6 +84,9 @@ class ExamRunner extends Component
             $this->bankSoal = $this->sesi->bankSoal;
             $this->is_preview = false;
             $this->violationCount = (int) ($this->sesi->jumlah_pelanggaran ?? 0);
+            if ($this->sesi->isTerblokirPelanggaran()) {
+                $this->showViolationModal = true;
+            }
 
             if ($this->sesi->status === 'selesai' || $this->sesi->isSelesai()) {
                 $this->is_submitted = true;
@@ -443,9 +446,21 @@ class ExamRunner extends Component
     }
 
     #[Renderless]
-    public function syncBatchJawaban(array $batch): void
+    public function syncBatchJawaban(array $batch): array
     {
-        if (!$this->sesi || $this->is_submitted || empty($batch)) return;
+        if (!$this->sesi || $this->is_submitted) {
+            return ['status' => 'finished'];
+        }
+
+        $this->sesi->refresh();
+        if ($this->sesi->status === 'selesai' || ($this->sesi->ujian && $this->sesi->ujian->status === 'COMPLETED')) {
+            $this->is_submitted = true;
+            return ['status' => 'finished'];
+        }
+
+        if (empty($batch)) {
+            return ['status' => 'ok'];
+        }
 
         $validSoalIds = $this->bankSoal->soals()->pluck('id')->flip();
 
@@ -481,6 +496,8 @@ class ExamRunner extends Component
                 }
             }
         }
+
+        return ['status' => 'ok'];
     }
 
     public function setZoom(string $level): void
@@ -591,7 +608,70 @@ class ExamRunner extends Component
     #[Renderless]
     public function tutupViolationModal(): void
     {
+        if ($this->sesi && $this->sesi->fresh()?->isTerblokirPelanggaran()) {
+            $this->violationCount = (int) $this->sesi->jumlah_pelanggaran;
+            $this->showViolationModal = true;
+            return;
+        }
+
         $this->showViolationModal = false;
+    }
+
+    #[Renderless]
+    public function cekStatusBukaKunci(): array
+    {
+        return $this->cekStatusSesiServer();
+    }
+
+    /**
+     * Sinkronisasi ringan status sesi siswa dari server (deteksi paksa selesai oleh pengawas,
+     * tambahan waktu +10 menit, maupun buka kunci pelanggaran tab).
+     */
+    #[Renderless]
+    public function cekStatusSesiServer(): array
+    {
+        if (!$this->sesi || $this->is_preview) {
+            return ['finished' => false, 'locked' => false, 'count' => 0];
+        }
+
+        $this->sesi->refresh();
+        $ujianCompleted = $this->sesi->ujian && $this->sesi->ujian->fresh()?->status === 'COMPLETED';
+
+        if ($this->sesi->status === 'selesai' || $ujianCompleted) {
+            if ($this->sesi->status !== 'selesai') {
+                $this->sesi->koreksiDanSelesaikan();
+            }
+            $this->is_submitted = true;
+
+            return [
+                'finished' => true,
+                'locked' => false,
+                'count' => (int) ($this->sesi->jumlah_pelanggaran ?? 0),
+                'end_timestamp' => $this->sesi->waktu_selesai?->timestamp,
+            ];
+        }
+
+        $this->violationCount = (int) ($this->sesi->jumlah_pelanggaran ?? 0);
+        $locked = $this->sesi->isTerblokirPelanggaran();
+        $this->showViolationModal = $locked;
+
+        return [
+            'finished' => false,
+            'locked' => $locked,
+            'count' => $this->violationCount,
+            'end_timestamp' => $this->sesi->waktu_selesai?->timestamp,
+        ];
+    }
+
+    public function refreshToFinishedState(): void
+    {
+        if ($this->sesi) {
+            $this->sesi->refresh();
+        }
+        $this->is_submitted = true;
+        $this->showConfirmSubmitModal = false;
+        $this->showViolationModal = false;
+        $this->dispatch('ujian-selesai-resmi');
     }
 
     public function render()

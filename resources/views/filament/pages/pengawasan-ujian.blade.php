@@ -459,6 +459,13 @@
                             <td class="py-3.5 px-4 text-center">
                                 @if(!$sesi)
                                     <span class="text-gray-400 italic text-[11px]">-</span>
+                                @elseif($jmlPelanggaran >= 3)
+                                    <span
+                                        title="{{ $sesi->terakhir_pelanggaran_at ? 'Terakhir terdeteksi pukul ' . $sesi->terakhir_pelanggaran_at->format('H:i:s') : 'Sesi terkunci karena pelanggaran >= 3x' }}"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-600 text-white shadow-2xs"
+                                    >
+                                        🔒 Terkunci ({{ $jmlPelanggaran }}x Pindah Tab)
+                                    </span>
                                 @elseif($jmlPelanggaran > 0)
                                     <span
                                         title="{{ $sesi->terakhir_pelanggaran_at ? 'Terakhir terdeteksi pukul ' . $sesi->terakhir_pelanggaran_at->format('H:i:s') : 'Terdeteksi keluar tab/aplikasi' }}"
