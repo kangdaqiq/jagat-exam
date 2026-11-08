@@ -625,19 +625,39 @@
 {{-- KASUS 2: UJIAN SELESAI / SUBMIT                                        --}}
 {{-- ===================================================================== --}}
 @elseif($is_submitted)
+    @php
+        $nilaiAkhir = $sesi && $sesi->skor_total !== null ? round((float) $sesi->skor_total, 2) : 0;
+        $hasEssay = $this->soals->contains(fn ($s) => in_array($s->tipe_soal, ['essay', 'isian']));
+    @endphp
     <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 1.25rem;">
-        <div style="width: 100%; max-width: 480px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.12); border: 1px solid #e2e8f0; padding: 2rem 1.5rem; text-align: center;">
-            <div style="width: 68px; height: 68px; margin: 0 auto 16px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
-                <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="#059669">
+        <div style="width: 100%; max-width: 480px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(4,31,69,0.12); border: 1px solid #e2e8f0; padding: 2rem 1.5rem; text-align: center;">
+            <div style="width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
+                <svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="#059669">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                 </svg>
             </div>
 
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #d1fae5; color: #065f46; margin-bottom: 10px;">
+            <span style="display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; background: #d1fae5; color: #065f46; margin-bottom: 8px;">
                 Ujian Berhasil Diserahkan
             </span>
-            <h2 style="font-size: 20px; font-weight: 900; color: #1e293b; margin: 0 0 6px;">Terima Kasih, {{ $sesi->nama_peserta }}!</h2>
-            <p style="font-size: 12px; color: #64748b; margin: 0 0 18px;">Seluruh jawaban Anda telah tersimpan dengan aman di server CBT.</p>
+            <h2 style="font-size: 20px; font-weight: 900; color: #041F45; margin: 0 0 4px;">Terima Kasih, {{ $sesi->nama_peserta }}!</h2>
+            <p style="font-size: 12px; color: #64748b; margin: 0 0 16px;">Seluruh jawaban Anda telah tersimpan dan dikoreksi otomatis oleh sistem CBT.</p>
+
+            {{-- KARTU NILAI AKHIR SISWA --}}
+            <div style="padding: 18px 16px; border-radius: 20px; background: linear-gradient(135deg, #041F45 0%, #072d61 55%, #065f46 100%); color: #ffffff; margin-bottom: 16px; box-shadow: 0 10px 24px -6px rgba(4,31,69,0.28);">
+                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #a7f3d0; margin-bottom: 4px;">
+                    Nilai Hasil Ujian Anda
+                </div>
+                <div style="font-size: 42px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; color: #ffffff; font-family: 'Outfit', sans-serif;">
+                    {{ $nilaiAkhir }}
+                </div>
+                <div style="font-size: 11px; color: rgba(226,232,240,0.85); margin-top: 4px; font-weight: 600;">
+                    Skala 0 – 100
+                    @if($hasEssay)
+                        &bull; <span style="color: #fde68a;">Nilai sementara (menunggu koreksi soal esai oleh Guru)</span>
+                    @endif
+                </div>
+            </div>
 
             <div style="padding: 14px; border-radius: 16px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: left; font-size: 12px; margin-bottom: 18px;">
                 <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #e2e8f0;">
@@ -658,7 +678,7 @@
                 </div>
             </div>
 
-            <a href="{{ route('siswa.portal') }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 11px 22px; border-radius: 12px; font-size: 13px; font-weight: 800; color: #ffffff; background: #2563eb; border: none; text-decoration: none; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
+            <a href="{{ route('siswa.portal') }}" style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; text-decoration: none; box-shadow: 0 4px 14px rgba(4,31,69,0.25);">
                 Kembali ke Portal Ujian &raquo;
             </a>
         </div>
@@ -698,21 +718,43 @@
                 {{-- Status Jaringan & Autosave --}}
                 <div style="display: flex; align-items: center;">
                     {{-- Status Hijau (Online & Tersinkron) --}}
-                    <div x-show="isOnline && !isSyncing && pendingSync.length === 0" style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 11px; font-weight: 700;" title="Semua jawaban tersinkron ke server">
-                        <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
-                        <span class="status-label">Tersambung</span>
+                    <div
+                        x-show="isOnline && !isSyncing && pendingSync.length === 0"
+                        style="padding: 5px 10px; border-radius: 999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap;"
+                        title="Semua jawaban tersinkron ke server"
+                    >
+                        <span style="display: inline-flex; flex-direction: row; align-items: center; gap: 5px; line-height: 1;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block; flex-shrink: 0;"></span>
+                            <span class="status-label">Tersambung</span>
+                        </span>
                     </div>
 
                     {{-- Status Biru (Sedang Menyinkronkan ke Server) --}}
-                    <div x-show="isSyncing" x-cloak style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700;">
-                        <svg style="animation: spin 1s linear infinite; width: 11px; height: 11px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
-                        <span class="status-label">Menyimpan...</span>
+                    <div
+                        x-show="isSyncing"
+                        x-cloak
+                        style="padding: 5px 10px; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700; white-space: nowrap;"
+                    >
+                        <span style="display: inline-flex; flex-direction: row; align-items: center; gap: 6px; line-height: 1;">
+                            <svg style="animation: spin 1s linear infinite; width: 12px; height: 12px; flex-shrink: 0; display: inline-block;" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="9" stroke="#93c5fd" stroke-width="3"></circle>
+                                <path d="M12 3a9 9 0 0 1 9 9" stroke="#2563eb" stroke-width="3" stroke-linecap="round"></path>
+                            </svg>
+                            <span class="status-label">Menyimpan...</span>
+                        </span>
                     </div>
 
                     {{-- Status Kuning/Oranye (Offline / Antrean Tersimpan di Browser) --}}
-                    <div x-show="!isOnline || pendingSync.length > 0" x-cloak style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: #fffbeb; border: 1.5px solid #fde68a; color: #b45309; font-size: 11px; font-weight: 700;" :title="'Ada ' + pendingSync.length + ' jawaban tersimpan aman di perangkat (offline)'">
-                        <span style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
-                        <span class="status-label">Offline (<span x-text="pendingSync.length"></span>)</span>
+                    <div
+                        x-show="!isSyncing && (!isOnline || pendingSync.length > 0)"
+                        x-cloak
+                        style="padding: 5px 10px; border-radius: 999px; background: #fffbeb; border: 1.5px solid #fde68a; color: #b45309; font-size: 11px; font-weight: 700; white-space: nowrap;"
+                        :title="'Ada ' + pendingSync.length + ' jawaban tersimpan aman di perangkat (offline)'"
+                    >
+                        <span style="display: inline-flex; flex-direction: row; align-items: center; gap: 5px; line-height: 1;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; display: inline-block; flex-shrink: 0;"></span>
+                            <span class="status-label">Offline (<span x-text="pendingSync.length"></span>)</span>
+                        </span>
                     </div>
                 </div>
 
@@ -1333,11 +1375,12 @@
     <div
         x-show="showViolationModal || isLockedByViolation"
         x-cloak
-        style="position: fixed; inset: 0; z-index: 9999; background: rgba(127,29,29,0.88); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px;"
+        style="position: fixed; inset: 0; z-index: 9999; background: rgba(127,29,29,0.88); backdrop-filter: blur(8px);"
     >
+        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
         <div
             @click.outside="if (!isLockedByViolation) { showViolationModal = false; if (getWire()) { getWire().tutupViolationModal(); } }"
-            style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; border: 2.5px solid #ef4444; box-shadow: 0 24px 64px rgba(0,0,0,0.4); padding: 26px 22px; text-align: center;"
+            style="width: 100%; max-width: 440px; margin: auto; background: #fff; border-radius: 24px; border: 2.5px solid #ef4444; box-shadow: 0 24px 64px rgba(0,0,0,0.4); padding: 26px 22px; text-align: center;"
         >
             {{-- Icon --}}
             <div style="width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center;">
@@ -1404,6 +1447,7 @@
                     <div x-show="unlockFeedback" x-text="unlockFeedback" style="margin-top: 10px; font-size: 11px; font-weight: 700; color: #dc2626;"></div>
                 </div>
             </template>
+        </div>
         </div>
     </div>
 @endif

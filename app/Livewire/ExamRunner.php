@@ -88,11 +88,14 @@ class ExamRunner extends Component
                 $this->showViolationModal = true;
             }
 
-            if ($this->sesi->status === 'selesai' || $this->sesi->isSelesai()) {
+            if ($this->sesi->status === 'selesai') {
+                $this->loadSessionData();
                 $this->is_submitted = true;
-            } elseif (($this->sesi->waktu_selesai && now()->greaterThan($this->sesi->waktu_selesai)) || ($this->sesi->ujian && $this->sesi->ujian->status === 'COMPLETED')) {
+            } elseif ($this->sesi->isSelesai() || ($this->sesi->ujian && $this->sesi->ujian->status === 'COMPLETED')) {
                 // Waktu sesi atau jadwal ujian telah berakhir
                 $this->sesi->koreksiDanSelesaikan();
+                $this->sesi->refresh();
+                $this->loadSessionData();
                 $this->is_submitted = true;
             } else {
                 $this->loadSessionData();
@@ -566,6 +569,7 @@ class ExamRunner extends Component
 
         $this->sesi->koreksiDanSelesaikan();
         $this->sesi->update(['device_token' => null]);
+        $this->sesi->refresh();
 
         if (Auth::check() && Auth::user()->isSiswa()) {
             Auth::user()->update(['active_session_token' => null]);
