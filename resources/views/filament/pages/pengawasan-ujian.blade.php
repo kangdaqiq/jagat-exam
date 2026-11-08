@@ -15,7 +15,7 @@
     <div class="p-5 sm:p-6 bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             {{-- Info Ujian --}}
-            <div class="space-y-2">
+            <div class="space-y-2 min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="inline-flex items-center font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                         {{ $ujian->exam_id }}
