@@ -170,10 +170,6 @@
                     {{-- Header Title (Unified & Adaptive for Mobile + Desktop) --}}
                     <div class="flex items-start justify-between gap-3 mb-5 pb-3.5 border-b border-slate-100">
                         <div>
-                            <div class="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 mb-1">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                <span>Autentikasi Peserta &amp; Pengawas</span>
-                            </div>
                             <h1 class="text-xl sm:text-2xl font-black text-[#041F45] tracking-tight font-['Outfit',sans-serif]">
                                 Masuk Portal Ujian
                             </h1>

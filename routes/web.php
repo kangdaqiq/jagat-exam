@@ -66,21 +66,3 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/hasil-ujians/{ujian}/export-csv', [HasilUjianController::class, 'exportCsv'])->name('hasil-ujian.export-csv');
     Route::get('/hasil-ujians/{ujian}/print', [HasilUjianController::class, 'print'])->name('hasil-ujian.print');
 });
-
-// 6. Rute Demo & Halaman Template TailAdmin
-Route::middleware(['auth'])->group(function () {
-    Route::get('/calendar', fn () => view('pages.calender', ['title' => 'Calendar']))->name('calendar');
-    Route::get('/profile', fn () => view('pages.profile', ['title' => 'Profile']))->name('profile');
-    Route::get('/form-elements', fn () => view('pages.form.form-elements', ['title' => 'Form Elements']))->name('form-elements');
-    Route::get('/basic-tables', fn () => view('pages.tables.basic-tables', ['title' => 'Basic Tables']))->name('basic-tables');
-    Route::get('/blank', fn () => view('pages.blank', ['title' => 'Blank']))->name('blank');
-    Route::get('/error-404', fn () => view('pages.errors.error-404', ['title' => 'Error 404']))->name('error-404');
-    Route::get('/line-chart', fn () => view('pages.chart.line-chart', ['title' => 'Line Chart']))->name('line-chart');
-    Route::get('/bar-chart', fn () => view('pages.chart.bar-chart', ['title' => 'Bar Chart']))->name('bar-chart');
-    Route::get('/alerts', fn () => view('pages.ui-elements.alerts', ['title' => 'Alerts']))->name('alerts');
-    Route::get('/avatars', fn () => view('pages.ui-elements.avatars', ['title' => 'Avatars']))->name('avatars');
-    Route::get('/badge', fn () => view('pages.ui-elements.badges', ['title' => 'Badges']))->name('badges');
-    Route::get('/buttons', fn () => view('pages.ui-elements.buttons', ['title' => 'Buttons']))->name('buttons');
-    Route::get('/image', fn () => view('pages.ui-elements.images', ['title' => 'Images']))->name('images');
-    Route::get('/videos', fn () => view('pages.ui-elements.videos', ['title' => 'Videos']))->name('videos');
-});

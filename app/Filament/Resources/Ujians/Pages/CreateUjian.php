@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Ujians\Pages;
 
 use App\Filament\Resources\Ujians\UjianResource;
+use App\Models\BankSoal;
 use App\Models\Ujian;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
@@ -20,8 +21,22 @@ class CreateUjian extends CreateRecord
     {
         $user = auth()->user();
 
-        // Keamanan: Jika guru membuat ujian, tipe ujian dikunci ke Asesmen Harian
+        // Keamanan: Jika guru membuat ujian, tipe ujian dikunci ke Asesmen Harian & hanya boleh memakai Bank Soal miliknya sendiri
         if ($user && $user->isGuru()) {
+            $ownsBankSoal = BankSoal::where('id', $data['bank_soal_id'] ?? null)
+                ->where('user_id', $user->id)
+                ->exists();
+
+            if (!$ownsBankSoal) {
+                Notification::make()
+                    ->title('Akses Bank Soal Ditolak')
+                    ->body('Anda hanya dapat menjadwalkan ujian menggunakan Bank Soal milik Anda sendiri.')
+                    ->danger()
+                    ->send();
+
+                $this->halt();
+            }
+
             $data['tipe_ujian'] = Ujian::TIPE_ASESMEN_HARIAN;
             $data['guru_id'] = $user->id;
         } else {

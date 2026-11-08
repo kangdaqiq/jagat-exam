@@ -41,7 +41,18 @@ class UjianForm
                             Grid::make(2)->schema([
                                 Select::make('mapel_id')
                                     ->label('Mata Pelajaran')
-                                    ->relationship('mapel', 'nama_mapel')
+                                    ->options(function () {
+                                        $user = auth()->user();
+                                        if ($user && $user->isGuru()) {
+                                            $assignedIds = $user->mapels()->pluck('mapels.id')->toArray();
+                                            $ownBankMapelIds = BankSoal::where('user_id', $user->id)->pluck('mapel_id')->toArray();
+                                            $allowedIds = array_unique(array_merge($assignedIds, $ownBankMapelIds));
+                                            if (!empty($allowedIds)) {
+                                                return Mapel::whereIn('id', $allowedIds)->pluck('nama_mapel', 'id');
+                                            }
+                                        }
+                                        return Mapel::pluck('nama_mapel', 'id');
+                                    })
                                     ->required()
                                     ->searchable()
                                     ->preload()
@@ -52,10 +63,14 @@ class UjianForm
                                     ->label('Paket Bank Soal')
                                     ->options(function ($get) {
                                         $mapelId = $get('mapel_id');
-                                        $query = BankSoal::query()->where('is_active', true);
+                                        $query = BankSoal::query()
+                                            ->forUser(auth()->user())
+                                            ->where('is_active', true);
+
                                         if ($mapelId) {
                                             $query->where('mapel_id', $mapelId);
                                         }
+
                                         return $query->get()->mapWithKeys(function ($b) {
                                             $count = $b->soals()->count();
                                             return [$b->id => "{$b->judul} ({$count} Soal - Tingkat {$b->tingkat})"];
@@ -65,11 +80,16 @@ class UjianForm
                                     ->searchable()
                                     ->preload()
                                     ->live()
-                                    ->helperText('Otomatis mengisi durasi pengerjaan & preferensi pengacakan.')
-                                    ->afterStateUpdated(function ($state, $set) {
+                                    ->helperText(fn () => auth()->user()?->isGuru()
+                                        ? 'Hanya menampilkan Bank Soal milik Anda sendiri.'
+                                        : 'Otomatis mengisi durasi pengerjaan & preferensi pengacakan.')
+                                    ->afterStateUpdated(function ($state, $set, $get) {
                                         if ($state) {
-                                            $bank = BankSoal::find($state);
+                                            $bank = BankSoal::query()->forUser(auth()->user())->find($state);
                                             if ($bank) {
+                                                if (empty($get('mapel_id')) && !empty($bank->mapel_id)) {
+                                                    $set('mapel_id', $bank->mapel_id);
+                                                }
                                                 if (!empty($bank->durasi_menit)) {
                                                     $set('durasi_menit', $bank->durasi_menit);
                                                 }
@@ -98,11 +118,17 @@ class UjianForm
                                 Select::make('guru_id')
                                     ->label('Guru Pengawas / Pengampu')
                                     ->options(function () {
+                                        $user = auth()->user();
+                                        if ($user && $user->isGuru()) {
+                                            return [$user->id => $user->name];
+                                        }
                                         return User::whereIn('role', ['guru', 'admin'])
                                             ->where('is_active', true)
                                             ->pluck('name', 'id');
                                     })
                                     ->default(fn () => auth()->id())
+                                    ->disabled(fn () => auth()->user()?->isGuru() ?? false)
+                                    ->dehydrated()
                                     ->required()
                                     ->searchable()
                                     ->preload()

@@ -48,14 +48,24 @@ class BankSoalResource extends Resource
         return true;
     }
 
+    public static function canView(Model $record): bool
+    {
+        $user = Auth::user();
+        if (!$user) return false;
+        if ($user->isAdmin()) return true;
+
+        // Guru hanya boleh melihat/mengakses bank soal miliknya sendiri
+        return (int) $record->user_id === (int) $user->id;
+    }
+
     public static function canEdit(Model $record): bool
     {
         $user = Auth::user();
         if (!$user) return false;
         if ($user->isAdmin()) return true;
 
-        // Guru hanya boleh edit bank soal miliknya
-        return $record->user_id === $user->id;
+        // Guru hanya boleh edit bank soal miliknya sendiri
+        return (int) $record->user_id === (int) $user->id;
     }
 
     public static function canDelete(Model $record): bool
@@ -64,7 +74,7 @@ class BankSoalResource extends Resource
         if (!$user) return false;
         if ($user->isAdmin()) return true;
 
-        return $record->user_id === $user->id;
+        return (int) $record->user_id === (int) $user->id;
     }
 
     public static function getEloquentQuery(): Builder

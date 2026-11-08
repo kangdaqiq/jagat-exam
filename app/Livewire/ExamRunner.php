@@ -72,6 +72,12 @@ class ExamRunner extends Component
         // 2. Jika diakses via bank soal langsung
         if ($bankSoal) {
             $this->bankSoal = $bankSoal->loadMissing(['mapel', 'soals.opsiJawabans']);
+
+            // Keamanan: Guru hanya boleh mengakses / mempratinjau bank soal miliknya sendiri
+            if (Auth::check() && Auth::user()->isGuru() && (int) $this->bankSoal->user_id !== (int) Auth::id()) {
+                abort(403, 'Akses ditolak: Anda hanya dapat mengakses dan mempratinjau Bank Soal milik Anda sendiri.');
+            }
+
             $this->is_preview = request()->boolean('preview') || (Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isGuru()));
 
             // Cari sesi aktif dari session/cookie

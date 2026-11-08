@@ -79,6 +79,7 @@ class EditBankSoal extends Page
     public function mount(int | string $record): void
     {
         $this->record = $this->resolveRecord($record);
+        abort_unless(BankSoalResource::canEdit($this->record), 403, 'Anda tidak memiliki akses untuk mengedit Bank Soal ini.');
         $this->record->loadMissing(['mapel', 'kelases']);
 
         // Jika bank soal belum memiliki soal sama sekali, buatkan Soal No. 1 otomatis

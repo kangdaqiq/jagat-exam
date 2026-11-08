@@ -175,13 +175,8 @@ class BankSoal extends Model
             return $query;
         }
 
-        // Guru hanya melihat bank soal miliknya atau yang terikat pada mapel yang diampunya
-        $mapelIds = $user->mapels()->pluck('mapels.id');
-
-        return $query->where(function (Builder $q) use ($user, $mapelIds) {
-            $q->where('user_id', $user->id)
-              ->orWhereIn('mapel_id', $mapelIds);
-        });
+        // Guru hanya dapat mengakses, melihat, dan mengedit bank soal miliknya sendiri
+        return $query->where('user_id', $user->id);
     }
 }
 

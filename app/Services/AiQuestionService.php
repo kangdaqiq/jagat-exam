@@ -19,8 +19,8 @@ class AiQuestionService
             'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash (Cepat & Andal)',
             'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)',
             'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS)',
+            'gemini-3.1-pro-preview' => '🔬 Gemini 3.1 Pro Preview (Alternatif Pro Terbaru)',
             'gemini-flash-latest' => '🔄 Gemini Flash Latest (Versi Terbaru Otomatis)',
-            'gemini-2.5-pro' => '🔬 Gemini 2.5 Pro (Alternatif Pro)',
         ];
     }
 
@@ -242,6 +242,11 @@ class AiQuestionService
             return [];
         }
 
+        // Bersihkan blok tabel kunci jawaban & catatan kaki di bagian akhir teks agar tidak menempel ke opsi soal terakhir
+        $text = preg_replace('/\n[ \t]*(?:#{1,4}[ \t]*|\*{1,2})?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*Jawaban|DAFTAR\s*KUNCI|Tabel\s*Kunci|Pedoman\s*Penilaian|Rubrik\s*Penilaian)[\s\S]*$/i', '', $text);
+        $text = preg_replace('/\n[ \t]*\|[ \t]*No\.?[ \t]*\|[\s\S]*$/i', '', $text);
+        $text = preg_replace('/\n[ \t]*(?:\*{1,2})?Catatan(?:\s+penyusunan)?\s*:[\s\S]*$/i', '', $text);
+
         // 2. Deteksi apakah teks memiliki bagian-bagian (Sections) seperti "## A. Pilihan Ganda", "## B. Essay", dll
         $sectionPattern = '/(?=(?:^|\n)\s*#{1,3}\s*(?:[A-Z]\.?\s*)?(?:Pilihan\s*Ganda|PG|Multiple\s*Choice|Essay|Uraian|Isian|Menjodohkan|Kunci\s*Jawaban|Pedoman\s*Penilaian))/i';
         $rawSections = preg_split($sectionPattern, $text, -1, PREG_SPLIT_NO_EMPTY);
@@ -254,13 +259,17 @@ class AiQuestionService
 
                 $firstLine = trim(strtok($sec, "\n"));
 
-                // Lewati judul dokumen awal / preamble
-                if (preg_match('/^#{1,3}\s*(?:SOAL|PETUNJUK|MATERI|KISI|UJIAN|PENILAIAN)/i', $firstLine) && !preg_match('/Pilihan\s*Ganda|PG|Essay|Uraian/i', $firstLine)) {
+                // Lewati kunci jawaban guru / pedoman penilaian di akhir
+                if (preg_match('/Kunci\s*Jawaban|Pedoman\s*Penilaian|Rubrik/i', $firstLine)) {
                     continue;
                 }
 
-                // Lewati kunci jawaban guru / pedoman penilaian di akhir
-                if (preg_match('/Kunci\s*Jawaban|Pedoman\s*Penilaian|Rubrik/i', $firstLine)) {
+                // Lewati judul dokumen awal HANYA JIKA section ini tidak memiliki daftar soal bernomor
+                if (
+                    preg_match('/^#{1,3}\s*(?:SOAL|PETUNJUK|MATERI|KISI|UJIAN|PENILAIAN)/i', $firstLine)
+                    && !preg_match('/Pilihan\s*Ganda|PG|Essay|Uraian/i', $firstLine)
+                    && !preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/m', $sec)
+                ) {
                     continue;
                 }
 
@@ -273,8 +282,12 @@ class AiQuestionService
                     $type = 'benar_salah';
                 }
 
-                // Hapus header section dan petunjuk umum jika ada
-                $body = preg_replace('/^#{1,3}[^\n]+\n(?:Petunjuk[^\n]+\n)?/i', '', $sec);
+                // Hapus header section dan petunjuk umum sebelum soal nomor 1
+                if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/m', $sec, $m, PREG_OFFSET_CAPTURE)) {
+                    $body = substr($sec, $m[0][1]);
+                } else {
+                    $body = preg_replace('/^#{1,3}[^\n]+\n(?:Petunjuk[^\n]+\n)?/i', '', $sec);
+                }
                 $parsedSections[] = [
                     'type' => $type,
                     'content' => trim($body),
@@ -282,7 +295,7 @@ class AiQuestionService
             }
         } else {
             // Tanpa section eksplisit, bersihkan judul dokumen di awal sebelum soal No 1
-            if (preg_match('/(?:^|\n)\s*1[\.\)]\s+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
+            if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
                 $text = substr($text, $m[0][1]);
             }
             $parsedSections[] = [
@@ -306,9 +319,9 @@ class AiQuestionService
             foreach ($lines as $line) {
                 $trimmed = trim($line);
 
-                // Cek apakah baris diawali nomor soal:
+                // Cek apakah baris diawali nomor soal (mendukung format biasa "1. " maupun Markdown bold "**1.** "):
                 // Harus lebih besar dari nomor soal sebelumnya dalam section yang sama (mencegah nomor 1, 2, 3 di dalam soal terpecah)
-                if (preg_match('/^(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)]\s+(.*)$/i', $trimmed, $nMatch)) {
+                if (preg_match('/^(?:\*{1,2})?(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)](?:\*{1,2})?\s+(.*)$/i', $trimmed, $nMatch)) {
                     $num = (int) $nMatch[1];
                     if (($lastQuestionNumber === 0 && $num <= 2) || ($num > $lastQuestionNumber && $num <= $lastQuestionNumber + 50)) {
                         if (!empty($currentBlock)) {
@@ -330,7 +343,7 @@ class AiQuestionService
                 $block = trim($block);
                 if (empty($block)) continue;
 
-                if (!preg_match('/^(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)]\s+(.*)$/s', $block, $numMatch)) {
+                if (!preg_match('/^(?:\*{1,2})?(?:Soal\s*(?:No\.?)?\s*)?(\d+)[\.\)](?:\*{1,2})?\s+(.*)$/s', $block, $numMatch)) {
                     continue;
                 }
 
@@ -377,8 +390,8 @@ class AiQuestionService
                     foreach ($lines as $line) {
                         $trimmed = trim($line);
 
-                        // Opsi A, B, C, D, E
-                        if (preg_match('/^(?:[-*•]\s*)?(?:\(?([A-Ea-e])[\.\)]|\b([A-Ea-e])\.\s+)\s*(.*)$/', $trimmed, $optMatch)) {
+                        // Opsi A, B, C, D, E (mendukung "A. ", "**A.** ", "- A. ")
+                        if (preg_match('/^(?:[-*•]\s*)?(?:\*{1,2})?(?:\(?([A-Ea-e])[\.\)](?:\*{1,2})?|\b([A-Ea-e])\.\s+)\s*(.*)$/', $trimmed, $optMatch)) {
                             $isParsingOptions = true;
                             if ($currentLabel !== null) {
                                 $options[] = [
@@ -560,10 +573,11 @@ PROMPT;
     /**
      * Bangun User Prompt untuk Parsing Teks Mentah
      */
-    protected function buildParseUserPrompt(string $rawText, float $defaultBobot, array $params): string
+    protected function buildParseUserPrompt(string $rawText, ?float $defaultBobot, array $params): string
     {
+        $bobotLabel = $defaultBobot ?? 2.0;
         $prompt = "Tolong uraikan (parse) teks butir soal hasil copas berikut menjadi format JSON sesuai pedoman.\n";
-        $prompt .= "Bobot nilai default per butir: {$defaultBobot}.\n\n";
+        $prompt .= "Bobot nilai default per butir: {$bobotLabel}.\n\n";
 
         $keys = $this->extractSeparateAnswerKeys($rawText);
         if (!empty($keys)) {
@@ -619,6 +633,9 @@ PROMPT;
 
         if ($provider === 'gemini') {
             $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.6-flash');
+            if ($primaryModel === 'gemini-2.5-pro') {
+                $primaryModel = 'gemini-3.6-flash';
+            }
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
             $candidateModels = array_values(array_unique([
                 $primaryModel,
@@ -626,13 +643,13 @@ PROMPT;
                 'gemini-3.5-flash',
                 'gemini-3.5-flash-lite',
                 'gemini-flash-latest',
-                'gemini-2.5-pro',
             ]));
+            $primaryError = null;
             $lastError = null;
 
-            foreach ($candidateModels as $model) {
+            foreach ($candidateModels as $candidate) {
                 try {
-                    $url = "{$baseUrl}/models/{$model}:generateContent?key={$key}";
+                    $url = "{$baseUrl}/models/{$candidate}:generateContent?key={$key}";
 
                     $response = Http::timeout(45)->post($url, [
                         'contents' => [
@@ -650,13 +667,20 @@ PROMPT;
                         }
                     }
 
-                    $lastError = $response->json('error.message') ?? $response->body();
+                    $err = $response->json('error.message') ?? $response->body();
+                    if ($candidate === $primaryModel) {
+                        $primaryError = $err;
+                    }
+                    $lastError = $err;
                 } catch (\Throwable $e) {
+                    if ($candidate === $primaryModel) {
+                        $primaryError = $e->getMessage();
+                    }
                     $lastError = $e->getMessage();
                 }
             }
 
-            throw new Exception("Gemini API Error: " . ($lastError ?? 'Pembahasan tidak dapat dibuat.'));
+            throw new Exception("Gemini API Error ({$primaryModel}): " . ($primaryError ?? $lastError ?? 'Pembahasan tidak dapat dibuat.'));
         } else {
             $model = config('ai.openai.model', 'gpt-4o-mini');
             $url = rtrim(config('ai.openai.base_url'), '/') . '/chat/completions';
@@ -683,6 +707,9 @@ PROMPT;
     protected function callGemini(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
     {
         $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
+        if ($primaryModel === 'gemini-2.5-pro') {
+            $primaryModel = 'gemini-3.6-flash';
+        }
         $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
 
         $candidateModels = array_values(array_unique([
@@ -691,7 +718,6 @@ PROMPT;
             'gemini-3.5-flash',
             'gemini-3.5-flash-lite',
             'gemini-flash-latest',
-            'gemini-2.5-pro',
         ]));
 
         $payload = [
@@ -704,12 +730,13 @@ PROMPT;
                 ]
             ],
             'generationConfig' => [
-                'temperature' => 0.5,
+                'temperature' => 0.4,
                 'responseMimeType' => 'application/json',
-                'maxOutputTokens' => 8192,
+                'maxOutputTokens' => 65536,
             ],
         ];
 
+        $primaryError = null;
         $lastError = null;
 
         foreach ($candidateModels as $model) {
@@ -724,16 +751,24 @@ PROMPT;
                     }
                 }
 
-                $lastError = $response->json('error.message') ?? $response->body();
-                Log::warning("Gemini model {$model} respons gagal: {$lastError}. Mencoba model alternatif...");
+                $err = $response->json('error.message') ?? $response->body();
+                if ($model === $primaryModel) {
+                    $primaryError = $err;
+                }
+                $lastError = $err;
+                Log::warning("Gemini model {$model} respons gagal: {$err}. Mencoba model alternatif...");
             } catch (\Throwable $e) {
+                if ($model === $primaryModel) {
+                    $primaryError = $e->getMessage();
+                }
                 $lastError = $e->getMessage();
                 Log::warning("Gemini model {$model} timeout/koneksi gagal: {$lastError}. Mencoba model alternatif...");
             }
         }
 
-        Log::error('Gemini API All Models Failed', ['last_error' => $lastError]);
-        throw new Exception("Google Gemini API Error: {$lastError}");
+        $finalError = $primaryError ?? $lastError;
+        Log::error('Gemini API All Models Failed', ['primary_model' => $primaryModel, 'error' => $finalError]);
+        throw new Exception("Google Gemini API Error ({$primaryModel}): {$finalError}");
     }
 
     /**
@@ -793,7 +828,16 @@ PROMPT;
             $data = json_decode($fixed, true);
         }
 
+        // Jika masih gagal karena respons JSON terpotong di tengah (misal saat memproses 50 soal sekaligus),
+        // pulihkan seluruh objek butir soal yang sudah utuh sebelum titik potong.
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+            $recovered = $this->recoverTruncatedJson($this->fixJsonWithLatex($clean));
+            if ($recovered !== null) {
+                $data = $recovered;
+            }
+        }
+
+        if (!is_array($data)) {
             Log::warning('Gagal decode JSON AI', ['raw' => $rawText, 'clean' => $clean, 'json_err' => json_last_error_msg()]);
             $errDetail = json_last_error_msg() !== 'No error' ? json_last_error_msg() : 'Respons tidak berbentuk objek/array JSON yang valid.';
             throw new Exception("Format JSON dari AI tidak valid: {$errDetail}");
@@ -919,6 +963,25 @@ PROMPT;
         $clean = preg_replace('/(?<!\\\\)\\\([{}])/', '\\\\\\\\$1', $clean);
 
         return $clean;
+    }
+
+    /**
+     * Pulihkan JSON array butir soal apabila terpotong di akhir oleh batas token AI
+     */
+    protected function recoverTruncatedJson(string $brokenJson): ?array
+    {
+        // Cari posisi elemen soal terakhir yang utuh (ditutup dengan } sebelum koma dan objek berikutnya)
+        $pos = strlen($brokenJson);
+        while (($pos = strrpos(substr($brokenJson, 0, $pos), '}')) !== false) {
+            $candidate = substr($brokenJson, 0, $pos + 1);
+            foreach (["]}", "]"] as $suffix) {
+                $decoded = json_decode($candidate . $suffix, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+        return null;
     }
 
     /**

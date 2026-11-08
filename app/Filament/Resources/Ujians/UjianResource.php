@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
@@ -41,6 +42,33 @@ class UjianResource extends Resource
     {
         $user = Auth::user();
         return $user && in_array($user->role, ['admin', 'guru']);
+    }
+
+    public static function canView(Model $record): bool
+    {
+        $user = Auth::user();
+        if (!$user) return false;
+        if ($user->isAdmin()) return true;
+
+        return (int) $record->guru_id === (int) $user->id;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        $user = Auth::user();
+        if (!$user) return false;
+        if ($user->isAdmin()) return true;
+
+        return (int) $record->guru_id === (int) $user->id;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = Auth::user();
+        if (!$user) return false;
+        if ($user->isAdmin()) return true;
+
+        return (int) $record->guru_id === (int) $user->id;
     }
 
     public static function getEloquentQuery(): Builder

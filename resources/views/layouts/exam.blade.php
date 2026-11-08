@@ -11,11 +11,11 @@
     <title>{{ $title ?? 'Examuna - Digital Examination System | SMK Assuniyah Tumijajar' }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/logo/examuna-logo.png') }}">
 
-    {{-- KaTeX & Font Amiri untuk Rumus Matematika dan Tulisan Arab --}}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+    {{-- KaTeX Lokal (Offline-Ready) & Font Non-Blocking --}}
+    <link rel="stylesheet" href="{{ asset('vendor/katex/katex.min.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
     @vite(['resources/css/app.css'])
 
@@ -75,9 +75,9 @@
         }
     </style>
 
-    {{-- Script KaTeX Library --}}
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    {{-- Script KaTeX Lokal dengan Defer (Tidak Memblokir Render Halaman) --}}
+    <script defer src="{{ asset('vendor/katex/katex.min.js') }}"></script>
+    <script defer src="{{ asset('vendor/katex/contrib/auto-render.min.js') }}"></script>
 
     @livewireStyles
 </head>
@@ -87,19 +87,21 @@
     @livewireScripts
 
     <script>
-        // Render semua rumus matematika KaTeX saat konten dimuat atau Livewire berpindah soal
+        // Render rumus matematika KaTeX hanya jika halaman mengandung delimiter rumus
         function renderMath() {
-            if (typeof renderMathInElement === 'function') {
-                renderMathInElement(document.body, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\(', right: '\\)', display: false},
-                        {left: '\\[', right: '\\]', display: true}
-                    ],
-                    throwOnError: false
-                });
-            }
+            if (typeof renderMathInElement !== 'function' || !document.body) return;
+            const text = document.body.textContent || '';
+            if (!text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return;
+
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                throwOnError: false
+            });
         }
 
         document.addEventListener('DOMContentLoaded', renderMath);

@@ -237,7 +237,7 @@
 
     {{-- FOOTER --}}
     <footer style="padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; background: #ffffff;">
-        ExamGuard CBT &bull; Sistem Ujian Online Terintegrasi Token Sesi &bull; {{ date('Y') }}
+        Examuna CBT &bull; Sistem Ujian Online Terintegrasi Token Sesi &bull; {{ date('Y') }}
     </footer>
 </div>
 

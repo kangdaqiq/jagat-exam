@@ -1,8 +1,8 @@
-{{-- KaTeX CSS & Google Font Amiri untuk Soal Arab & Rumus Matematika --}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+{{-- KaTeX Lokal (Offline-Ready) & Google Font Non-Blocking --}}
+<link rel="stylesheet" href="{{ asset('vendor/katex/katex.min.css') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
 <style>
     /* Arab: Font Amiri & line-height proporsional agar harakat rapi dan terbaca jelas */
@@ -131,9 +131,9 @@
     .dark .mp-field label, .dark .mp-label, .dark .mp-hint { color: rgb(156 163 175); }
 </style>
 
-{{-- Script KaTeX dimuat langsung tanpa defer agar window.katex segera tersedia --}}
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+{{-- Script KaTeX Lokal dengan defer agar tidak memblokir loading halaman Admin/Guru --}}
+<script defer src="{{ asset('vendor/katex/katex.min.js') }}"></script>
+<script defer src="{{ asset('vendor/katex/contrib/auto-render.min.js') }}"></script>
 
 <script>
     window.KATEX_DELIMITERS = [
@@ -148,7 +148,9 @@
 
     function triggerKatexRender(targetElement) {
         let el = targetElement || document.body;
-        if (typeof renderMathInElement !== 'function') return;
+        if (typeof renderMathInElement !== 'function' || !el) return;
+        const txt = el.textContent || '';
+        if (!txt.includes('$') && !txt.includes('\\(') && !txt.includes('\\[')) return;
         if (el !== document.body && el.closest && el.closest(KATEX_SKIP_SELECTOR)) return;
 
         try {
