@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RuangUjians\Tables;
 
+use App\Filament\Resources\JadwalRuangs\JadwalRuangResource;
 use App\Models\RuangUjian;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -128,6 +129,18 @@ class RuangUjianTable
                     ->color('info')
                     ->url(fn (RuangUjian $record) => route('kartu-peserta.print', ['ruang_ujian_id' => $record->id]))
                     ->openUrlInNewTab(),
+
+                Action::make('jadwalRuang')
+                    ->label('Jadwal & Pengawas')
+                    ->icon(Heroicon::OutlinedCalendarDays)
+                    ->color('warning')
+                    ->url(fn (RuangUjian $record): string => JadwalRuangResource::getUrl('index', [
+                        'tableFilters' => [
+                            'ruang_ujian_id' => [
+                                'value' => $record->id,
+                            ],
+                        ],
+                    ])),
 
                 Action::make('bukaPengawasRuang')
                     ->label('Monitor Ruang')

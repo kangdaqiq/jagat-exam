@@ -87,6 +87,107 @@
         @endif
 
         {{-- ============================================================= --}}
+        {{-- TUGAS JADWAL PENGAWASAN HARI INI (PENGAWAS SILANG)            --}}
+        {{-- ============================================================= --}}
+        @if(isset($tugasJadwalHariIni) && $tugasJadwalHariIni->isNotEmpty())
+            <div class="rounded-2xl p-4 sm:p-5 border border-indigo-200/80 shadow-sm" style="background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);">
+                <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-600 text-white shadow-xs">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        </span>
+                        <div>
+                            <h2 class="text-sm sm:text-base font-extrabold text-slate-900" style="font-family: 'Outfit', sans-serif;">
+                                Tugas Jadwal Pengawasan Anda Hari Ini ({{ $tugasJadwalHariIni->count() }} Sesi)
+                            </h2>
+                            <p class="text-xs text-slate-600">
+                                Berdasarkan penetapan jadwal ruang & pengawas silang dari Panitia Ujian.
+                            </p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
+                        {{ now()->translatedFormat('l, d F Y') }}
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach($tugasJadwalHariIni as $jadwal)
+                        <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-xs hover:border-indigo-300 transition flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-slate-900 text-white">
+                                        {{ $jadwal->ruangUjian?->nama_ruang ?: 'Ruang Ujian' }}
+                                    </span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold {{ $jadwal->status === 'ONGOING' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+                                        {{ $jadwal->status }}
+                                    </span>
+                                </div>
+
+                                <div class="text-xs font-extrabold text-slate-800 line-clamp-1 mb-1">
+                                    {{ $jadwal->ujian?->nama_ujian ?: 'Ujian Terjadwal' }}
+                                </div>
+                                <div class="text-[11px] text-slate-500 mb-2">
+                                    Mapel: <strong class="text-slate-700">{{ $jadwal->ujian?->mapel?->nama_mapel ?: '-' }}</strong>
+                                </div>
+
+                                <div class="p-2 rounded-lg bg-slate-50 border border-slate-100 mb-3 space-y-1 text-[11px]">
+                                    <div class="flex items-center justify-between text-slate-600">
+                                        <span>Sesi & Waktu:</span>
+                                        <span class="font-bold text-slate-800">{{ $jadwal->label_sesi_waktu }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-slate-600">
+                                        <span>Token Ruang:</span>
+                                        @if($jadwal->isTokenActive())
+                                            <span class="font-mono font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                {{ $jadwal->token_ruang }} ({{ $jadwal->sisaWaktuTokenFormatted() }})
+                                            </span>
+                                        @elseif($jadwal->token_ruang)
+                                            <span class="font-mono text-rose-500 line-through">
+                                                {{ $jadwal->token_ruang }} (Kedaluwarsa)
+                                            </span>
+                                        @else
+                                            <span class="text-slate-400 italic">Belum Dirilis</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 pt-2 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    wire:click="pilihRuang({{ $jadwal->ruang_ujian_id }})"
+                                    class="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition cursor-pointer text-center"
+                                >
+                                    Buka Ruangan
+                                </button>
+                                @if(!$jadwal->isTokenActive())
+                                    <button
+                                        type="button"
+                                        wire:click="rilisTokenJadwal({{ $jadwal->id }})"
+                                        class="py-1.5 px-2.5 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-95 transition cursor-pointer"
+                                        title="Rilis Token Sesi Sekarang"
+                                    >
+                                        Rilis Token
+                                    </button>
+                                @endif
+                                <a
+                                    href="{{ route('hasil-ujian.berita-acara', ['ujian' => $jadwal->ujian_id, 'ruang_ujian_id' => $jadwal->ruang_ujian_id]) }}"
+                                    target="_blank"
+                                    class="py-1.5 px-2 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                                    title="Cetak Berita Acara Ujian"
+                                >
+                                    📄
+                                </a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        {{-- ============================================================= --}}
         {{-- MODE 1: PILIH RUANG UJIAN ATAU JADWAL UJIAN YANG DIAWASI       --}}
         {{-- ============================================================= --}}
         @if(!$activeUjian && !$activeRuang)

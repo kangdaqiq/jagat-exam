@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Pengawas;
 
+use App\Models\JadwalRuang;
 use App\Models\RuangUjian;
 use App\Models\Siswa;
 use App\Models\Ujian;
@@ -528,6 +529,38 @@ class PortalPengawas extends Component
         $this->selectedPesertaId = null;
     }
 
+    public function getTugasJadwalHariIniProperty()
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return collect();
+        }
+
+        return JadwalRuang::query()
+            ->hariIni()
+            ->forUser($user)
+            ->with(['ruangUjian', 'ujian.mapel', 'ujian.kelas', 'pengawas', 'pengawasPendamping'])
+            ->orderBy('sesi_ke')
+            ->orderBy('waktu_mulai')
+            ->get();
+    }
+
+    public function rilisTokenJadwal(int $jadwalId): void
+    {
+        $jadwal = JadwalRuang::find($jadwalId);
+        if (! $jadwal) {
+            return;
+        }
+
+        $token = $jadwal->rilisToken();
+        $namaRuang = $jadwal->ruangUjian?->nama_ruang ?: 'Ruang Ujian';
+        $this->flashType = 'success';
+        $this->flashMessage = "Token {$namaRuang} (Sesi {$jadwal->sesi_ke}) berhasil dirilis: {$token} (Aktif 10 menit)";
+
+        // Otomatis arahkan view ke ruang ini
+        $this->pilihRuang($jadwal->ruang_ujian_id);
+    }
+
     public function logout()
     {
         Auth::logout();
@@ -542,6 +575,7 @@ class PortalPengawas extends Component
         if (!Auth::check()) {
             return view('livewire.pengawas.portal-pengawas', [
                 'user' => null,
+                'tugasJadwalHariIni' => collect(),
                 'daftarRuang' => collect(),
                 'activeRuang' => null,
                 'pesertasRuang' => collect(),
@@ -553,6 +587,7 @@ class PortalPengawas extends Component
 
         return view('livewire.pengawas.portal-pengawas', [
             'user' => Auth::user(),
+            'tugasJadwalHariIni' => $this->tugasJadwalHariIni,
             'daftarRuang' => $this->daftarRuang,
             'activeRuang' => $this->activeRuang,
             'pesertasRuang' => $this->pesertasRuangList,

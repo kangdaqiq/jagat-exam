@@ -61,6 +61,11 @@ class RuangUjian extends Model
         return $this->hasMany(UjianSesi::class, 'ruang_ujian_id');
     }
 
+    public function jadwalRuangs(): HasMany
+    {
+        return $this->hasMany(JadwalRuang::class, 'ruang_ujian_id');
+    }
+
     /**
      * Ambil daftar nama kelas unik dari siswa yang berada di ruang ujian ini.
      */

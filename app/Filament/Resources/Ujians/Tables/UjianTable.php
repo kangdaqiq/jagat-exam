@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Ujians\Tables;
 
+use App\Filament\Resources\JadwalRuangs\JadwalRuangResource;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Models\Ujian;
 use Filament\Actions\Action;
@@ -269,6 +270,19 @@ class UjianTable
                                 ->info()
                                 ->send();
                         }),
+
+                    // ACTION: JADWAL RUANG & PENGAWAS SILANG
+                    Action::make('jadwalRuang')
+                        ->label('Jadwal Ruang & Pengawas')
+                        ->icon(Heroicon::OutlinedCalendarDays)
+                        ->color('warning')
+                        ->url(fn (Ujian $record): string => JadwalRuangResource::getUrl('index', [
+                            'tableFilters' => [
+                                'ujian_id' => [
+                                'value' => $record->id,
+                                ],
+                            ],
+                        ])),
 
                     // ACTION 4: SINKRONKAN PESERTA DARI KELAS
                     Action::make('sync_peserta')

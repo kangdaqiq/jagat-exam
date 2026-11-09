@@ -663,13 +663,27 @@
                                     </div>
 
                                     <div x-data="{
-                                        compressing: false,
+                                        isUploading: false,
+                                        isCompressingClient: false,
+                                        isProcessingServer: false,
+                                        uploadSuccess: false,
+                                        progress: 0,
+                                        fileName: '',
+                                        fileSizeStr: '',
+                                        uploadError: null,
+
                                         handleFileSelect(e) {
                                             const file = e.target.files[0];
                                             if (!file) return;
 
+                                            this.uploadError = null;
+                                            this.uploadSuccess = false;
+                                            this.fileName = file.name;
+                                            const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                                            this.fileSizeStr = sizeMB + ' MB';
+
                                             if (file.type.startsWith('image/')) {
-                                                this.compressing = true;
+                                                this.isCompressingClient = true;
                                                 const reader = new FileReader();
                                                 reader.onload = (loadEvt) => {
                                                     const img = new Image();
@@ -688,34 +702,133 @@
                                                         const ctx = canvas.getContext('2d');
                                                         ctx.drawImage(img, 0, 0, w, h);
                                                         canvas.toBlob((blob) => {
-                                                            this.compressing = false;
+                                                            this.isCompressingClient = false;
                                                             const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), {
                                                                 type: 'image/webp',
                                                                 lastModified: Date.now()
                                                             });
-                                                            @this.upload('media_file_upload', compressedFile);
+                                                            this.startUpload(compressedFile);
                                                         }, 'image/webp', 0.82);
                                                     };
                                                     img.src = loadEvt.target.result;
                                                 };
                                                 reader.readAsDataURL(file);
                                             } else {
-                                                @this.upload('media_file_upload', file);
+                                                this.startUpload(file);
                                             }
+                                        },
+
+                                        startUpload(file) {
+                                            this.isUploading = true;
+                                            this.progress = 0;
+                                            this.isProcessingServer = false;
+                                            this.uploadError = null;
+
+                                            @this.upload(
+                                                'media_file_upload',
+                                                file,
+                                                () => {
+                                                    this.isUploading = false;
+                                                    this.isProcessingServer = true;
+                                                    this.progress = 100;
+                                                },
+                                                (err) => {
+                                                    this.isUploading = false;
+                                                    this.isProcessingServer = false;
+                                                    this.uploadError = err || 'Gagal mengunggah file. Pastikan ukuran file di bawah 60MB.';
+                                                },
+                                                (event) => {
+                                                    this.progress = event.detail.progress;
+                                                }
+                                            );
                                         }
                                     }">
-                                        <input
-                                            type="file"
-                                            @change="handleFileSelect($event)"
-                                            accept="{{ $media_type === 'image' ? 'image/*' : ($media_type === 'audio' ? 'audio/*' : ($media_type === 'video' ? 'video/*' : '*')) }}"
-                                            class="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-950 dark:file:text-primary-300"
-                                        />
-                                        <div x-show="compressing" x-cloak class="text-xs text-primary-600 flex items-center gap-1.5 mt-1 font-medium">
-                                            <svg class="animate-spin w-3 h-3 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
-                                            Mengompresi gambar sebelum diunggah...
+                                        {{-- Tombol Unggah File Custom Berwarna & Rapi --}}
+                                        <div class="flex items-center gap-3 flex-wrap">
+                                            <button
+                                                type="button"
+                                                @click="$refs.fileInput.click()"
+                                                style="background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff;"
+                                                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold shadow-sm hover:opacity-95 active:scale-95 transition cursor-pointer select-none"
+                                            >
+                                                @if($media_type === 'video')
+                                                    <svg width="15" height="15" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span>Pilih File Video</span>
+                                                @elseif($media_type === 'audio')
+                                                    <svg width="15" height="15" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                                    </svg>
+                                                    <span>Pilih File Audio</span>
+                                                @else
+                                                    <svg width="15" height="15" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span>Pilih File Gambar</span>
+                                                @endif
+                                            </button>
+
+                                            <span
+                                                x-text="fileName ? (fileName + ' (' + fileSizeStr + ')') : 'Belum ada file baru dipilih'"
+                                                class="text-xs font-medium truncate max-w-xs"
+                                                :class="fileName ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-500 dark:text-gray-400'"
+                                            ></span>
+
+                                            {{-- Input file asli disembunyikan --}}
+                                            <input
+                                                type="file"
+                                                x-ref="fileInput"
+                                                @change="handleFileSelect($event)"
+                                                accept="{{ $media_type === 'image' ? 'image/*' : ($media_type === 'audio' ? 'audio/*' : ($media_type === 'video' ? 'video/*' : '*')) }}"
+                                                class="hidden"
+                                            />
                                         </div>
-                                        <div wire:loading wire:target="media_file_upload" class="text-xs text-primary-600 mt-1 font-medium">
-                                            Mengunggah & mengoptimalkan media di server...
+
+                                        {{-- 1. Status Kompresi Resolusi Gambar di Peramban --}}
+                                        <div x-show="isCompressingClient" x-cloak class="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center gap-2 text-xs text-indigo-700 dark:text-indigo-300 font-medium mt-2">
+                                            <svg class="animate-spin w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                                            <span>Mengompresi resolusi gambar sebelum diunggah...</span>
+                                        </div>
+
+                                        {{-- 2. PROGRESS BAR AKTIF SAAT UPLOAD SEDANG BERJALAN --}}
+                                        <div x-show="isUploading" x-cloak class="p-3 rounded-xl bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 shadow-sm space-y-2 mt-2">
+                                            <div class="flex items-center justify-between text-xs">
+                                                <span class="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                                                    <svg class="animate-spin w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                                                    Mengunggah: <span class="text-indigo-600 font-semibold truncate max-w-[200px]" x-text="fileName"></span> (<span x-text="fileSizeStr"></span>)
+                                                </span>
+                                                <span class="font-extrabold text-indigo-600 text-xs" x-text="progress + '%'"></span>
+                                            </div>
+                                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                                <div
+                                                    class="h-2.5 rounded-full transition-all duration-150"
+                                                    style="background: linear-gradient(90deg, #4f46e5 0%, #06b6d4 100%);"
+                                                    :style="'width: ' + progress + '%'"
+                                                ></div>
+                                            </div>
+                                            <p class="text-[11px] text-gray-500">Mohon tunggu, proses transfer data sedang berlangsung...</p>
+                                        </div>
+
+                                        {{-- 3. Status Pemrosesan & Kompresi di Server --}}
+                                        <div
+                                            wire:loading
+                                            wire:target="media_file_upload"
+                                            class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center gap-3 text-xs text-indigo-800 dark:text-indigo-200 mt-2"
+                                        >
+                                            <div class="shrink-0 relative flex items-center justify-center">
+                                                <svg class="animate-spin w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <span class="font-bold block">Sedang Mengompresi & Memproses di Server...</span>
+                                                <span class="text-[11px] opacity-80 block">Media dioptimalkan (FastStart / WebP) agar siswa dapat memuat soal secara instan.</span>
+                                            </div>
+                                        </div>
+
+                                        {{-- 4. Status Error jika Gagal --}}
+                                        <div x-show="uploadError" x-cloak class="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2 mt-2">
+                                            <svg width="16" height="16" class="w-4 h-4 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            <span x-text="uploadError"></span>
                                         </div>
                                     </div>
 

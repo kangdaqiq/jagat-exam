@@ -442,6 +442,18 @@ class Ujian extends Model
         return $this->hasMany(UjianSesi::class, 'ujian_id');
     }
 
+    public function jadwalRuangs(): HasMany
+    {
+        return $this->hasMany(JadwalRuang::class, 'ujian_id');
+    }
+
+    public function ruangUjians(): BelongsToMany
+    {
+        return $this->belongsToMany(RuangUjian::class, 'jadwal_ruangs', 'ujian_id', 'ruang_ujian_id')
+            ->withPivot(['pengawas_id', 'tanggal', 'sesi_ke', 'waktu_mulai', 'waktu_selesai', 'token_ruang', 'status'])
+            ->withTimestamps();
+    }
+
     /**
      * Scope untuk menyaring daftar ujian:
      * - Admin: semua ujian
