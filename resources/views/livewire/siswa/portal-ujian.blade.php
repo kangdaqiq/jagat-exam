@@ -40,6 +40,9 @@
                         </div>
                         <div class="text-[10px] font-semibold text-emerald-200 leading-tight">
                             NIS: {{ $siswa?->nis ?: ($user->nip ?: '-') }} &bull; {{ $siswa?->kelas?->nama_kelas ?: 'Siswa' }}
+                            @if($siswa?->ruangUjian)
+                                &bull; <span class="text-amber-300 font-extrabold">{{ $siswa->ruangUjian->nama_ruang }}</span>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -80,13 +83,13 @@
                         </svg>
                     </div>
                     <span class="inline-block px-3 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-emerald-400/15 text-emerald-200 border border-emerald-400/30 mb-1.5">
-                        Verifikasi Token Ruangan
+                        Verifikasi Token {{ $siswa?->ruangUjian ? $siswa->ruangUjian->nama_ruang : 'Ruangan' }}
                     </span>
                     <h1 class="text-xl sm:text-2xl font-black tracking-tight font-['Outfit',sans-serif] text-white">
-                        Masuk Sesi Ujian dengan Token
+                        Masuk Sesi Ujian dengan Token Ruangan
                     </h1>
                     <p class="text-xs sm:text-sm text-sky-100/90 mt-1.5 leading-relaxed">
-                        Minta <strong>6 karakter Kode Token Akses</strong> kepada Guru Pengawas di ruangan ujian Anda untuk membuka lembar soal.
+                        Minta <strong>6 karakter Kode Token Ruangan</strong> kepada Guru Pengawas di <strong>{{ $siswa?->ruangUjian?->nama_ruang ?: 'ruangan ujian Anda' }}</strong>. Soal ujian akan otomatis menyesuaikan tingkat/kelas Anda (<strong>{{ $siswa?->kelas?->nama_kelas ?: 'Kelas Anda' }}</strong>).
                     </p>
                 </div>
             </div>
@@ -95,7 +98,7 @@
                 <form wire:submit.prevent="submitToken" class="space-y-4">
                     <div class="text-center space-y-2">
                         <label for="token_ujian_input" class="block text-xs font-extrabold uppercase tracking-wider text-slate-600">
-                            Ketik Kode Token Ujian (6 Karakter)
+                            Ketik Kode Token Ruangan (6 Karakter)
                         </label>
                         <input
                             id="token_ujian_input"

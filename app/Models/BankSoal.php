@@ -100,14 +100,16 @@ class BankSoal extends Model
     }
 
     /**
-     * Otomatis membagi bobot soal ke total 100 poin:
-     * - Jika ada objektif (PG/PGK/BS/Matching) dan subjektif (Isian/Essay): Rasio 75 : 25
-     * - Jika hanya objektif: 100%
-     * - Jika hanya subjektif: 100%
+     * Otomatis membagi bobot soal ke total 100 poin dengan rasio perbandingan kesulitan:
+     * LOTS : MOTS : HOTS = 1 : 2 : 3.
+     *
+     * Jika bank soal memuat soal campuran objektif (PG/PGK/BS/Menjodohkan) dan subjektif (Isian/Essay),
+     * bobot dialokasikan dengan standar komposisi 75% objektif : 25% subjektif, di mana di dalam
+     * masing-masing kelompok soal didistribusikan secara proporsional sesuai rasio kesulitan 1 : 2 : 3.
      */
-    public function autoDistributeBobot(): void
+    public function autoDistributeBobot(float $targetTotal = 100.0): void
     {
-        $soals = $this->soals()->get();
+        $soals = $this->soals()->orderBy('nomor_urut', 'asc')->get();
         if ($soals->isEmpty()) return;
 
         $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
@@ -119,44 +121,58 @@ class BankSoal extends Model
         $hasObj = $objSoals->isNotEmpty();
         $hasSub = $subSoals->isNotEmpty();
 
-        $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
-        $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
+        $distributeGroup = function ($groupSoals, float $target) {
+            $count = $groupSoals->count();
+            if ($count === 0) return;
 
-        if ($hasObj) {
-            $countObj = $objSoals->count();
-            $bobotPerObj = round($targetObj / $countObj, 2);
+            $totalUnits = 0.0;
+            foreach ($groupSoals as $s) {
+                $kesulitan = strtoupper($s->tingkat_kesulitan ?? 'MOTS');
+                $multiplier = match ($kesulitan) {
+                    'HOTS' => 3.0,
+                    'MOTS' => 2.0,
+                    default => 1.0, // LOTS
+                };
+                $totalUnits += $multiplier;
+            }
+
+            if ($totalUnits <= 0) {
+                $totalUnits = (float) $count;
+            }
+
+            $unitValue = $target / $totalUnits;
             $accumulated = 0.0;
-            $i = 0;
-            foreach ($objSoals as $s) {
-                $i++;
-                if ($i === $countObj) {
-                    $val = round($targetObj - $accumulated, 2);
+            $lastIdx = $count - 1;
+
+            foreach ($groupSoals->values() as $idx => $s) {
+                $kesulitan = strtoupper($s->tingkat_kesulitan ?? 'MOTS');
+                $multiplier = match ($kesulitan) {
+                    'HOTS' => 3.0,
+                    'MOTS' => 2.0,
+                    default => 1.0, // LOTS
+                };
+
+                if ($idx === $lastIdx) {
+                    $val = round($target - $accumulated, 2);
                 } else {
-                    $val = $bobotPerObj;
+                    $val = round($unitValue * $multiplier, 2);
                     $accumulated += $val;
                 }
-                $s->update(['bobot_nilai' => $val]);
+
+                $s->update(['bobot_nilai' => max(0.1, $val)]);
             }
+        };
+
+        if ($hasObj && $hasSub) {
+            $distributeGroup($objSoals, $targetTotal * 0.75);
+            $distributeGroup($subSoals, $targetTotal * 0.25);
+        } elseif ($hasObj) {
+            $distributeGroup($objSoals, $targetTotal);
+        } else {
+            $distributeGroup($subSoals, $targetTotal);
         }
 
-        if ($hasSub) {
-            $countSub = $subSoals->count();
-            $bobotPerSub = round($targetSub / $countSub, 2);
-            $accumulated = 0.0;
-            $j = 0;
-            foreach ($subSoals as $s) {
-                $j++;
-                if ($j === $countSub) {
-                    $val = round($targetSub - $accumulated, 2);
-                } else {
-                    $val = $bobotPerSub;
-                    $accumulated += $val;
-                }
-                $s->update(['bobot_nilai' => $val]);
-            }
-        }
-
-        $this->update(['total_bobot' => 100]);
+        $this->update(['total_bobot' => $targetTotal]);
     }
 
 

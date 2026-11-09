@@ -23,6 +23,8 @@ class Soal extends Model
         'media_file',
         'audio_max_play',
         'bobot_nilai',
+        'tingkat_kesulitan',
+        'taksonomi_bloom',
         'kunci_isian',
         'rubrik_essay',
         'pembahasan',

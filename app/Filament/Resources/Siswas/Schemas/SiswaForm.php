@@ -32,6 +32,13 @@ class SiswaForm
                     ->preload()
                     ->placeholder('Pilih Rombongan Belajar'),
 
+                Select::make('ruang_ujian_id')
+                    ->label('Ruang Ujian')
+                    ->relationship('ruangUjian', 'nama_ruang')
+                    ->searchable()
+                    ->preload()
+                    ->placeholder('Pilih Ruang Ujian (Opsional)'),
+
                 TextInput::make('no_wa')
                     ->label('Nomor WhatsApp / HP Siswa')
                     ->placeholder('08123456789')

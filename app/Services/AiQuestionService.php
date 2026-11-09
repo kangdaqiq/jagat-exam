@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -10,8 +11,202 @@ use Illuminate\Support\Facades\Log;
 class AiQuestionService
 {
     /**
-     * Daftar model Google Gemini yang didukung (Lini Gemini 3.6, 3.5 & Flash)
+     * Sumber hasil parsing terakhir: 'ai' | 'lokal' (parser regex) | 'mock' (testing).
      */
+    public string $lastParseSource = 'lokal';
+
+    /**
+     * Seragamkan teks hasil copy-paste (Word / chatbot): karakter tak terlihat,
+     * spasi khusus, tanda kutip melengkung, dan ujung baris.
+     */
+    public function normalizeRawText(string $text): string
+    {
+        $text = str_replace(["\u{FEFF}", "\u{200B}", "\u{200C}", "\u{200D}", "\u{00AD}"], '', $text);
+        $text = str_replace(["\u{00A0}", "\u{2007}", "\u{202F}", "\t"], ' ', $text);
+        $text = str_replace(["\u{201C}", "\u{201D}", "\u{201E}"], '"', $text);
+        $text = str_replace(["\u{2018}", "\u{2019}"], "'", $text);
+        $text = str_replace(["\r\n", "\r", "\u{2028}", "\u{2029}"], "\n", $text);
+        // Hapus spasi di akhir baris & rapikan baris kosong berlebihan
+        $text = preg_replace('/[ ]+$/m', '', $text);
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
+
+        return trim($text);
+    }
+
+    /**
+     * Beri peringatan per butir soal agar guru tahu mana yang perlu dicek ulang di pratinjau.
+     * Menambahkan key 'peringatan' (array string) pada setiap butir.
+     */
+    public function annotateWarnings(array $soals): array
+    {
+        $opsiCounts = [];
+        foreach ($soals as $s) {
+            if (($s['tipe_soal'] ?? '') === 'pilihan_ganda' && !empty($s['opsi_jawabans'])) {
+                $n = count($s['opsi_jawabans']);
+                $opsiCounts[$n] = ($opsiCounts[$n] ?? 0) + 1;
+            }
+        }
+        arsort($opsiCounts);
+        $umumOpsi = $opsiCounts ? array_key_first($opsiCounts) : null;
+
+        foreach ($soals as $i => $s) {
+            $warn = [];
+            $tipe = $s['tipe_soal'] ?? 'pilihan_ganda';
+            $opsi = $s['opsi_jawabans'] ?? [];
+
+            if (in_array($tipe, ['pilihan_ganda', 'pg_kompleks'], true)) {
+                if (empty($opsi)) {
+                    $warn[] = 'Tidak ada pilihan jawaban terdeteksi.';
+                } else {
+                    $benar = count(array_filter($opsi, fn ($o) => !empty($o['is_jawaban_benar'])));
+                    if (!empty($s['kunci_otomatis'])) {
+                        $warn[] = 'Kunci jawaban tidak ditemukan di teks (sementara diisi opsi A). Mohon periksa.';
+                    } elseif ($benar === 0) {
+                        $warn[] = 'Belum ada kunci jawaban.';
+                    } elseif ($tipe === 'pilihan_ganda' && $benar > 1) {
+                        $warn[] = 'Lebih dari satu kunci jawaban pada pilihan ganda.';
+                    }
+
+                    if ($tipe === 'pilihan_ganda' && $umumOpsi && count($opsi) !== $umumOpsi) {
+                        $warn[] = 'Jumlah opsi (' . count($opsi) . ') berbeda dari soal lain (' . $umumOpsi . ').';
+                    }
+                }
+            } elseif ($tipe === 'isian' && empty($s['kunci_isian'])) {
+                $warn[] = 'Kunci isian kosong.';
+            }
+
+            if (trim(strip_tags($s['pertanyaan'] ?? '')) === '') {
+                $warn[] = 'Teks pertanyaan kosong.';
+            }
+
+            $soals[$i]['peringatan'] = $warn;
+        }
+
+        return $soals;
+    }
+
+    /**
+     * Inferensi Taksonomi Bloom (C1-C6) & Tingkat Kesulitan (LOTS, MOTS, HOTS) berdasarkan kata kerja operasional (KKO) teks
+     */
+    public static function inferBloomTaxonomy(string $pertanyaan): array
+    {
+        $text = mb_strtolower(strip_tags($pertanyaan));
+
+        // C4-C6 (HOTS): Menganalisis, Mengevaluasi, Mengkreasi
+        if (preg_match('/\b(analis|bandingkan|bedakan|telaah|kritik|evaluasi|simpulkan|merancang|buatlah|rancang|hipotesis|hubungan|kaitan|mengapa|argumen|kemungkinan|bukti|fakta dan opini|solusi|pecahkan masalah|bagaimana cara|interpretasi)\b/u', $text)) {
+            // Bedakan apakah Evaluasi / Kreasi (C5-C6) atau Analisis (C4)
+            if (preg_match('/\b(evaluasi|kritik|nilai keabsahan|justifikasi|merancang|ciptakan|buatlah desain|solusi baru|rekomendasi)\b/u', $text)) {
+                return ['tingkat_kesulitan' => 'HOTS', 'taksonomi_bloom' => 'C5'];
+            }
+            return ['tingkat_kesulitan' => 'HOTS', 'taksonomi_bloom' => 'C4'];
+        }
+
+        // C3 (MOTS): Menerapkan, Menghitung, Mengimplementasikan, Mengklasifikasikan
+        if (preg_match('/\b(hitung|tentukan|berapakah|carilah|gunakan|terapkan|klasifikasi|urutan|tunjukkan|contohkan|bagaimana rumus|berdasarkan data|sesuai tabel|konversikan)\b/u', $text)) {
+            return ['tingkat_kesulitan' => 'MOTS', 'taksonomi_bloom' => 'C3'];
+        }
+
+        // C2 (LOTS): Memahami, Menjelaskan
+        if (preg_match('/\b(jelaskan|uraikan|maksud|makna|deskripsikan|rangkum|terangkan|apakah yang dimaksud)\b/u', $text)) {
+            return ['tingkat_kesulitan' => 'LOTS', 'taksonomi_bloom' => 'C2'];
+        }
+
+        // C1 (LOTS): Mengingat, Menyebutkan, Siapakah, Dimanakah, Kapankah, Sebutkan
+        if (preg_match('/\b(siapa|kapan|dimana|mana|sebutkan|tuliskan|apa definisi|istilah|nama|berikut ini yang bukan|adalah)\b/u', $text)) {
+            return ['tingkat_kesulitan' => 'LOTS', 'taksonomi_bloom' => 'C1'];
+        }
+
+        // Default jika ambigu
+        return ['tingkat_kesulitan' => 'MOTS', 'taksonomi_bloom' => 'C3'];
+    }
+
+    /**
+     * Hitung bobot nilai rekomendasi berdasarkan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
+     *
+     * @param string $kesulitan 'LOTS' | 'MOTS' | 'HOTS'
+     * @param float $baseUnit Poin dasar untuk 1 unit (bobot LOTS = 1x, MOTS = 2x, HOTS = 3x)
+     */
+    public static function calculateBobotByKesulitan(string $kesulitan, float $baseUnit = 2.0): float
+    {
+        $multiplier = match (strtoupper($kesulitan)) {
+            'HOTS' => 3.0,
+            'MOTS' => 2.0,
+            default => 1.0, // LOTS
+        };
+
+        return round($baseUnit * $multiplier, 2);
+    }
+
+    /**
+     * Distribusikan bobot sekumpulan soal secara otomatis sehingga totalnya tepat bernilai $targetTotal (default 100 poin),
+     * dengan proporsi bobot LOTS : MOTS : HOTS = 1 : 2 : 3.
+     *
+     * Contoh:
+     * Jika ada 10 soal (3 LOTS, 5 MOTS, 2 HOTS), maka total bobot unit = 3*(1) + 5*(2) + 2*(3) = 19 unit.
+     * Nilai 1 unit = 100 / 19 ≈ 5.26 poin.
+     * Maka per butir soal:
+     * - LOTS: 1 * 5.26 = 5.26 poin
+     * - MOTS: 2 * 5.26 = 10.53 poin
+     * - HOTS: 3 * 5.26 = 15.79 poin
+     * Sisa pembulatan otomatis disesuaikan pada butir terakhir agar jumlah pas 100.
+     *
+     * @param array $soals List butir soal (array of array)
+     * @param float $targetTotal Total nilai keseluruhan (default 100.0)
+     * @return array List butir soal dengan 'bobot_nilai' yang sudah terdistribusi
+     */
+    public static function distributeBobotByRasio(array $soals, float $targetTotal = 100.0): array
+    {
+        if (empty($soals)) {
+            return [];
+        }
+
+        $count = count($soals);
+
+        // Hitung total unit bobot berdasarkan rasio 1 : 2 : 3
+        $totalUnits = 0.0;
+        foreach ($soals as $s) {
+            $kesulitan = strtoupper($s['tingkat_kesulitan'] ?? 'MOTS');
+            $multiplier = match ($kesulitan) {
+                'HOTS' => 3.0,
+                'MOTS' => 2.0,
+                default => 1.0, // LOTS
+            };
+            $totalUnits += $multiplier;
+        }
+
+        if ($totalUnits <= 0) {
+            $totalUnits = (float) $count;
+        }
+
+        // Nilai per 1 unit bobot
+        $unitValue = $targetTotal / $totalUnits;
+
+        $accumulated = 0.0;
+        $lastIdx = $count - 1;
+
+        foreach ($soals as $idx => &$item) {
+            $kesulitan = strtoupper($item['tingkat_kesulitan'] ?? 'MOTS');
+            $multiplier = match ($kesulitan) {
+                'HOTS' => 3.0,
+                'MOTS' => 2.0,
+                default => 1.0, // LOTS
+            };
+
+            if ($idx === $lastIdx) {
+                // Sesuaikan selisih pembulatan pada soal terakhir agar tepat $targetTotal
+                $val = round($targetTotal - $accumulated, 2);
+            } else {
+                $val = round($unitValue * $multiplier, 2);
+                $accumulated += $val;
+            }
+
+            $item['bobot_nilai'] = max(0.1, $val);
+        }
+        unset($item);
+
+        return $soals;
+    }
+
     public static function getAvailableGeminiModels(): array
     {
         return [
@@ -34,7 +229,7 @@ class AiQuestionService
     public function generateSoals(array $params): array
     {
         $provider = $params['provider'] ?? config('ai.provider', 'gemini');
-        $apiKey = $params['api_key'] ?? ($provider === 'gemini' ? config('ai.gemini.api_key') : config('ai.openai.api_key'));
+        $apiKey = $params['api_key'] ?? ($provider === 'gemini' ? ($this->getGeminiApiKeys()[0] ?? null) : config('ai.openai.api_key'));
 
         // Jika testing, selalu gunakan mock generator agar test suite deterministik dan offline-safe
         if (app()->environment('testing')) {
@@ -103,6 +298,14 @@ class AiQuestionService
      */
     public function parseRawTextToSoals(string $rawText, array $params = []): array
     {
+        $this->lastParseSource = 'lokal';
+        $results = $this->parseRawTextToSoalsInternal($this->normalizeRawText($rawText), $params);
+
+        return $this->annotateWarnings($results);
+    }
+
+    protected function parseRawTextToSoalsInternal(string $rawText, array $params = []): array
+    {
         $rawText = trim($rawText);
         if (empty($rawText)) {
             throw new Exception("Teks sumber soal masih kosong.");
@@ -110,7 +313,7 @@ class AiQuestionService
 
         $defaultBobot = isset($params['default_bobot']) ? (float) $params['default_bobot'] : (isset($params['bobot_nilai']) ? (float) $params['bobot_nilai'] : null);
         $provider = $params['provider'] ?? config('ai.provider', 'gemini');
-        $apiKey = $params['api_key'] ?? ($provider === 'gemini' ? config('ai.gemini.api_key') : config('ai.openai.api_key'));
+        $apiKey = $params['api_key'] ?? ($provider === 'gemini' ? ($this->getGeminiApiKeys()[0] ?? null) : config('ai.openai.api_key'));
 
         // Jika testing environment, gunakan fallback parser / mock agar test suite cepat dan offline-safe
         if (app()->environment('testing')) {
@@ -118,6 +321,7 @@ class AiQuestionService
             if (!empty($parsed)) {
                 return $parsed;
             }
+            $this->lastParseSource = 'mock';
             return $this->generateMockSoals(['topik' => 'Hasil Parse Teks', 'jumlah' => 1]);
         }
 
@@ -146,6 +350,7 @@ class AiQuestionService
                 $results = $this->reconcileAnswerKeys($results, $separateAnswerKeys);
             }
 
+            $this->lastParseSource = 'ai';
             return $results;
         } catch (\Throwable $e) {
             // Jika AI gagal (misal kuota/timeout), coba fallback regex lokal sebelum melempar exception
@@ -243,7 +448,7 @@ class AiQuestionService
         }
 
         // Bersihkan blok tabel kunci jawaban & catatan kaki di bagian akhir teks agar tidak menempel ke opsi soal terakhir
-        $text = preg_replace('/\n[ \t]*(?:#{1,4}[ \t]*|\*{1,2})?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*Jawaban|DAFTAR\s*KUNCI|Tabel\s*Kunci|Pedoman\s*Penilaian|Rubrik\s*Penilaian)[\s\S]*$/i', '', $text);
+        $text = preg_replace('/\n[ \t]*(?:#{1,4}[ \t]*|\*{1,2})?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*Jawaban|DAFTAR\s*KUNCI|Tabel\s*Kunci|Pedoman\s*Penilaian|Rubrik\s*Penilaian)(?![ \t]*[:=\-]?[ \t]*\(?[A-Ea-e]\)?[ \t]*(?:\n|$))[\s\S]*$/i', '', $text);
         $text = preg_replace('/\n[ \t]*\|[ \t]*No\.?[ \t]*\|[\s\S]*$/i', '', $text);
         $text = preg_replace('/\n[ \t]*(?:\*{1,2})?Catatan(?:\s+penyusunan)?\s*:[\s\S]*$/i', '', $text);
 
@@ -269,6 +474,15 @@ class AiQuestionService
                     preg_match('/^#{1,3}\s*(?:SOAL|PETUNJUK|MATERI|KISI|UJIAN|PENILAIAN)/i', $firstLine)
                     && !preg_match('/Pilihan\s*Ganda|PG|Essay|Uraian/i', $firstLine)
                     && !preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/m', $sec)
+                ) {
+                    continue;
+                }
+
+                // Lewati bagian pembuka dokumen (judul, identitas, daftar bab/materi bernomor) yang berada
+                // sebelum section soal pertama: bukan header section soal & tidak punya opsi jawaban A/B/C...
+                if (
+                    !preg_match('/Pilihan\s*Ganda|\bPG\b|Multiple\s*Choice|Essay|Uraian|Isian|Menjodohkan|Benar\s*Salah/i', $firstLine)
+                    && !preg_match('/^\s*(?:[-*•]\s*)?(?:\*{1,2})?\(?[A-Ea-e][\.\)]/m', $sec)
                 ) {
                     continue;
                 }
@@ -428,6 +642,7 @@ class AiQuestionService
                 }
 
                 $opsiJawabans = [];
+                $kunciOtomatis = false;
                 if (!empty($options)) {
                     $hasCorrect = false;
                     foreach ($options as $opt) {
@@ -455,6 +670,7 @@ class AiQuestionService
 
                     if (!$hasCorrect && !empty($opsiJawabans) && $tipe === 'pilihan_ganda') {
                         $opsiJawabans[0]['is_jawaban_benar'] = true;
+                        $kunciOtomatis = true;
                     }
                 }
 
@@ -462,50 +678,30 @@ class AiQuestionService
                     $pertanyaanText = '<p>' . nl2br(htmlspecialchars($pertanyaanText)) . '</p>';
                 }
 
+                $bloom = self::inferBloomTaxonomy($pertanyaanText);
+                $calculatedBobot = $defaultBobot !== null
+                    ? (float) $defaultBobot
+                    : self::calculateBobotByKesulitan($bloom['tingkat_kesulitan'], 2.0);
+
                 $allSoals[] = [
                     'tipe_soal' => $tipe,
-                    'bobot_nilai' => $defaultBobot ?? 2.0,
+                    'bobot_nilai' => $calculatedBobot,
+                    'tingkat_kesulitan' => $bloom['tingkat_kesulitan'],
+                    'taksonomi_bloom' => $bloom['taksonomi_bloom'],
                     'pertanyaan' => $pertanyaanText,
                     'opsi_jawabans' => $opsiJawabans,
                     'kunci_isian' => ($tipe === 'isian') ? ($kunci ?? '') : '',
                     'rubrik_essay' => ($tipe === 'essay') ? ($pembahasan ?: 'Pedoman penilaian essay...') : '',
                     'pembahasan' => $pembahasan,
+                    'kunci_otomatis' => $kunciOtomatis,
                 ];
             }
         }
 
-        // Seimbangkan bobot_nilai agar total 100 poin (Objektif : Subjektif = 75 : 25 atau 100%) jika tidak ada bobot kustom
+        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin
+        // dengan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
         if ($defaultBobot === null) {
-            $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
-            $objIndices = [];
-            $subIndices = [];
-            foreach ($allSoals as $idx => $f) {
-                if (in_array($f['tipe_soal'], $objTypes)) {
-                    $objIndices[] = $idx;
-                } else {
-                    $subIndices[] = $idx;
-                }
-            }
-
-            $hasObj = !empty($objIndices);
-            $hasSub = !empty($subIndices);
-
-            $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
-            $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
-
-            if ($hasObj) {
-                $bobotObj = round($targetObj / count($objIndices), 2);
-                foreach ($objIndices as $idx) {
-                    $allSoals[$idx]['bobot_nilai'] = $bobotObj;
-                }
-            }
-
-            if ($hasSub) {
-                $bobotSub = round($targetSub / count($subIndices), 2);
-                foreach ($subIndices as $idx) {
-                    $allSoals[$idx]['bobot_nilai'] = $bobotSub;
-                }
-            }
+            $allSoals = self::distributeBobotByRasio($allSoals, 100.0);
         }
 
         return $allSoals;
@@ -536,15 +732,24 @@ ATURAN PENGURAIAN (PARSING) WAJIB:
    - Jika tipe isian: isi field 'kunci_isian'.
    - Jika tipe essay: isi field 'rubrik_essay'.
 
-3. PEMBAHASAN & PENJELASAN:
+3. KLASIFIKASI TAKSONOMI BLOOM & TINGKAT KESULITAN (WAJIB):
+   - Analisis kata kerja operasional (KKO) dan tingkat pemikiran butir soal:
+     * LOTS (C1-C2): C1 (Mengingat/Menyebutkan/Definisi), C2 (Memahami/Menjelaskan).
+     * MOTS (C3): C3 (Menerapkan/Menghitung rumus/Mengimplementasikan).
+     * HOTS (C4-C6): C4 (Menganalisis/Menelaah/Membandingkan), C5 (Mengevaluasi/Kritik/Justifikasi), C6 (Mengkreasi/Merancang).
+   - Field 'tingkat_kesulitan': "LOTS" | "MOTS" | "HOTS"
+   - Field 'taksonomi_bloom': "C1" | "C2" | "C3" | "C4" | "C5" | "C6"
+   - Field 'bobot_nilai': Sesuaikan bobot berdasarkan kesulitan (misal LOTS = 2.0, MOTS = 3.0, HOTS = 4.0 atau kelipatannya).
+
+4. PEMBAHASAN & PENJELASAN:
    - Jika teks memuat teks pembahasan, penjelasan, atau langkah penyelesaian, simpan ke field 'pembahasan'.
 
-4. RUMUS MATEMATIKA & EKSAK (LaTeX):
+5. RUMUS MATEMATIKA & EKSAK (LaTeX):
    - Gunakan format KaTeX inline \$rumus\$ atau display \$\$rumus\$\$.
    - PENTING DALAM JSON: Setiap simbol backslash rumus LaTeX wajib di-escape ganda (contoh: \\\\frac{a}{b}, \\\\sqrt{x}, \\\\pm, \\\\times, \\\\log).
    - Pertahankan teks Arab berharakat jika ada.
 
-5. FORMAT OUTPUT WAJIB:
+6. FORMAT OUTPUT WAJIB:
    Kembalikan HANYA JSON murni (tanpa format markdown pembungkus ```json).
    JSON harus berupa objek dengan key "soals" yang berisi array butir soal.
 
@@ -553,6 +758,8 @@ Struktur JSON per butir soal:
   "soals": [
     {
       "tipe_soal": "pilihan_ganda" | "pg_kompleks" | "benar_salah" | "menjodohkan" | "isian" | "essay",
+      "tingkat_kesulitan": "LOTS" | "MOTS" | "HOTS",
+      "taksonomi_bloom": "C1" | "C2" | "C3" | "C4" | "C5" | "C6",
       "bobot_nilai": 2.0,
       "pertanyaan": "<p>Teks stimulus / pokok soal...</p>",
       "opsi_jawabans": [
@@ -603,7 +810,21 @@ PROMPT;
      */
     public function generatePembahasan(string $pertanyaan, array $opsi = [], ?string $apiKey = null, string $provider = 'gemini', ?string $model = null): string
     {
-        $key = $apiKey ?: ($provider === 'gemini' ? config('ai.gemini.api_key') : config('ai.openai.api_key'));
+        if ($provider !== 'gemini' || app()->environment('testing')) {
+            return $this->generatePembahasanSingleKey($pertanyaan, $opsi, $apiKey, $provider, $model);
+        }
+
+        $keys = $this->getGeminiApiKeys($apiKey);
+        if (empty($keys)) {
+            return $this->generatePembahasanSingleKey($pertanyaan, $opsi, null, $provider, $model);
+        }
+
+        return $this->withKeyFailover($keys, fn (string $k) => $this->generatePembahasanSingleKey($pertanyaan, $opsi, $k, $provider, $model));
+    }
+
+    protected function generatePembahasanSingleKey(string $pertanyaan, array $opsi = [], ?string $apiKey = null, string $provider = 'gemini', ?string $model = null): string
+    {
+        $key = $apiKey ?: ($provider === 'gemini' ? ($this->getGeminiApiKeys()[0] ?? null) : config('ai.openai.api_key'));
 
         if (app()->environment('testing')) {
             return "Pembahasan dibuat otomatis oleh AI: Berdasarkan konsep materi, langkah penyelesaian dilakukan dengan mengidentifikasi variabel utama lalu menerapkan rumus yang relevan.";
@@ -705,6 +926,13 @@ PROMPT;
      * Panggil Google Gemini API
      */
     protected function callGemini(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
+    {
+        $keys = $this->getGeminiApiKeys($apiKey);
+
+        return $this->withKeyFailover($keys, fn (string $k) => $this->callGeminiSingleKey($k, $systemPrompt, $userPrompt, $params));
+    }
+
+    protected function callGeminiSingleKey(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
     {
         $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
         if ($primaryModel === 'gemini-2.5-pro') {
@@ -900,9 +1128,34 @@ PROMPT;
                 }
             }
 
+            // Inferensi / fallback taksonomi jika AI belum menyertakan
+            $kesulitan = strtoupper($item['tingkat_kesulitan'] ?? '');
+            if (!in_array($kesulitan, ['LOTS', 'MOTS', 'HOTS'], true)) {
+                $bloom = self::inferBloomTaxonomy($pertanyaan);
+                $kesulitan = $bloom['tingkat_kesulitan'];
+                $bloomTax = $bloom['taksonomi_bloom'];
+            } else {
+                $bloomTax = strtoupper($item['taksonomi_bloom'] ?? '');
+                if (!preg_match('/^C[1-6]$/', $bloomTax)) {
+                    $bloomTax = match ($kesulitan) {
+                        'HOTS' => 'C4',
+                        'LOTS' => 'C2',
+                        default => 'C3',
+                    };
+                }
+            }
+
+            // Hitung bobot berjenjang berdasarkan kesulitan jika ada bobot dasar
+            $defaultBaseBobot = !empty($params['bobot_nilai']) ? (float) $params['bobot_nilai'] : null;
+            $bobotCalculated = isset($item['bobot_nilai']) && !empty($item['bobot_nilai'])
+                ? (float) $item['bobot_nilai']
+                : self::calculateBobotByKesulitan($kesulitan, $defaultBaseBobot ?? 2.0);
+
             $formatted[] = [
                 'tipe_soal' => $tipe,
-                'bobot_nilai' => (float) ($item['bobot_nilai'] ?? 2.0),
+                'tingkat_kesulitan' => $kesulitan,
+                'taksonomi_bloom' => $bloomTax,
+                'bobot_nilai' => $bobotCalculated,
                 'pertanyaan' => $pertanyaan,
                 'opsi_jawabans' => $opsiJawabans,
                 'kunci_isian' => $item['kunci_isian'] ?? '',
@@ -911,38 +1164,10 @@ PROMPT;
             ];
         }
 
-        // Seimbangkan bobot_nilai agar total 100 poin (Objektif : Subjektif = 75 : 25 atau 100%) jika tidak ada bobot kustom
-        if (empty($params['default_bobot'])) {
-            $objTypes = ['pilihan_ganda', 'pg_kompleks', 'benar_salah', 'menjodohkan'];
-            $objIndices = [];
-            $subIndices = [];
-            foreach ($formatted as $idx => $f) {
-                if (in_array($f['tipe_soal'], $objTypes)) {
-                    $objIndices[] = $idx;
-                } else {
-                    $subIndices[] = $idx;
-                }
-            }
-
-            $hasObj = !empty($objIndices);
-            $hasSub = !empty($subIndices);
-
-            $targetObj = ($hasObj && $hasSub) ? 75.0 : ($hasObj ? 100.0 : 0.0);
-            $targetSub = ($hasObj && $hasSub) ? 25.0 : ($hasSub ? 100.0 : 0.0);
-
-            if ($hasObj) {
-                $bobotObj = round($targetObj / count($objIndices), 2);
-                foreach ($objIndices as $idx) {
-                    $formatted[$idx]['bobot_nilai'] = $bobotObj;
-                }
-            }
-
-            if ($hasSub) {
-                $bobotSub = round($targetSub / count($subIndices), 2);
-                foreach ($subIndices as $idx) {
-                    $formatted[$idx]['bobot_nilai'] = $bobotSub;
-                }
-            }
+        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin
+        // dengan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
+        if (empty($params['default_bobot']) && empty($params['bobot_nilai'])) {
+            $formatted = self::distributeBobotByRasio($formatted, 100.0);
         }
 
         return $formatted;
@@ -1123,19 +1348,111 @@ PROMPT;
      */
     public function saveApiKeyToEnv(string $apiKey, string $provider = 'gemini'): void
     {
+        if ($provider === 'gemini') {
+            // Satu atau lebih key (pisah koma / spasi / baris baru): key pertama = utama, sisanya = cadangan
+            $keys = self::parseKeyList($apiKey);
+            if (empty($keys)) return;
+
+            $this->writeEnvValue('GEMINI_API_KEY', $keys[0]);
+            $this->writeEnvValue('GEMINI_API_KEYS', implode(',', array_slice($keys, 1)));
+            config(['ai.gemini.api_key' => $keys[0], 'ai.gemini.api_keys' => array_slice($keys, 1)]);
+
+            return;
+        }
+
+        $this->writeEnvValue($this->getEnvKeyName($provider), trim($apiKey));
+    }
+
+    protected function writeEnvValue(string $keyName, string $value): void
+    {
         $envPath = base_path('.env');
         if (!File::exists($envPath)) return;
 
-        $keyName = $this->getEnvKeyName($provider);
         $content = File::get($envPath);
+        $line = "{$keyName}={$value}";
 
-        if (str_contains($content, "{$keyName}=")) {
-            $content = preg_replace("/^{$keyName}=.*/m", "{$keyName}={$apiKey}", $content);
+        if (preg_match("/^{$keyName}=.*/m", $content)) {
+            $content = preg_replace_callback("/^{$keyName}=.*/m", fn () => $line, $content);
         } else {
-            $content .= "\n{$keyName}={$apiKey}";
+            $content = rtrim($content) . "\n{$line}\n";
         }
 
         File::put($envPath, $content);
+    }
+
+    /**
+     * Pecah daftar API key (dipisah koma, titik koma, spasi, atau baris baru) menjadi array unik.
+     */
+    public static function parseKeyList(?string $input): array
+    {
+        if ($input === null) return [];
+
+        return array_values(array_unique(array_filter(preg_split('/[\s,;]+/', trim($input)) ?: [])));
+    }
+
+    /**
+     * Kumpulan API key Gemini terpusat (GEMINI_API_KEY + GEMINI_API_KEYS), berurutan.
+     * $preferred (opsional) diutamakan di urutan pertama.
+     */
+    public function getGeminiApiKeys(?string $preferred = null): array
+    {
+        $pool = array_merge(
+            self::parseKeyList($preferred),
+            self::parseKeyList((string) config('ai.gemini.api_key')),
+            self::parseKeyList(implode(',', (array) config('ai.gemini.api_keys', [])))
+        );
+
+        return array_values(array_unique($pool));
+    }
+
+    /**
+     * Jalankan $fn dengan API key berurutan; jika sebuah key kena limit/kuota/tidak valid,
+     * tandai sementara (cooldown) lalu otomatis pindah ke key cadangan berikutnya.
+     */
+    protected function withKeyFailover(array $keys, callable $fn)
+    {
+        if (empty($keys)) {
+            return $fn('');
+        }
+
+        $available = array_values(array_filter($keys, fn ($k) => !Cache::has($this->keyCooldownCacheKey($k))));
+        $candidates = !empty($available) ? $available : $keys; // semua sedang cooldown: coba lagi semuanya
+
+        $lastError = null;
+        foreach ($candidates as $i => $key) {
+            try {
+                return $fn($key);
+            } catch (\Throwable $e) {
+                if (!$this->isKeyLimitError($e->getMessage())) {
+                    throw $e;
+                }
+
+                $lastError = $e;
+                Cache::put($this->keyCooldownCacheKey($key), true, now()->addMinutes($this->cooldownMinutesFor($e->getMessage())));
+                Log::warning('API Key AI #' . ($i + 1) . ' terkena limit/tidak valid, pindah ke key cadangan: ' . $e->getMessage());
+            }
+        }
+
+        throw new Exception('Semua API Key AI terpusat (' . count($candidates) . ' key) sedang limit/tidak valid. ' . ($lastError ? $lastError->getMessage() : ''));
+    }
+
+    protected function keyCooldownCacheKey(string $key): string
+    {
+        return 'ai_key_cooldown:' . sha1($key);
+    }
+
+    protected function isKeyLimitError(string $message): bool
+    {
+        return (bool) preg_match('/429|quota|rate.?limit|RESOURCE_EXHAUSTED|exceeded|API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\b403\b|billing|too many requests/i', $message);
+    }
+
+    protected function cooldownMinutesFor(string $message): int
+    {
+        if (preg_match('/per day|daily|API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\b403\b|billing/i', $message)) {
+            return 60;
+        }
+
+        return 2;
     }
 
     public function getEnvKeyName(string $provider): string

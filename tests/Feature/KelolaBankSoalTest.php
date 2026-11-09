@@ -420,7 +420,7 @@ MD;
 
         $component->callAction('sesuaikanBobot')
             ->assertHasNoErrors()
-            ->assertNotified('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (75:25)');
+            ->assertNotified('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (Rasio LOTS:MOTS:HOTS = 1:2:3)');
 
         $this->assertEquals(100.0, (float) $this->bankSoal->fresh()->total_bobot);
     }

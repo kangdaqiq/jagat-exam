@@ -224,7 +224,7 @@ class SiswaSyncTest extends TestCase
         // Uji action individual resetPassword di SiswaTable
         \Livewire\Livewire::actingAs($admin)
             ->test(\App\Filament\Resources\Siswas\Pages\ListSiswas::class)
-            ->callTableAction('resetPassword', $siswa1, ['password' => 'rahasia123'])
+            ->callTableAction('resetPassword', $siswa1, ['mode' => 'custom', 'password' => 'rahasia123'])
             ->assertHasNoTableActionErrors()
             ->assertNotified('Password Berhasil Direset');
 

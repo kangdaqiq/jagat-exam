@@ -255,6 +255,17 @@
                                     }}">
                                         {{ $tipeLabel }}
                                     </span>
+                                    @php
+                                        $ksl = strtoupper($item->tingkat_kesulitan ?? 'MOTS');
+                                        $kslBadge = match($ksl) {
+                                            'HOTS' => 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
+                                            'LOTS' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
+                                            default => 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+                                        };
+                                    @endphp
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider {{ $kslBadge }}">
+                                        {{ $ksl }}
+                                    </span>
                                 </div>
                                 <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">
                                     {{ (float) $item->bobot_nilai }} Poin
@@ -369,18 +380,45 @@
                         </div>
                     </div>
 
-                    {{-- Bobot Nilai --}}
-                    <div class="flex items-center gap-2">
-                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Bobot Nilai:</label>
+                    {{-- Tingkat Kesulitan, Bloom & Bobot Nilai --}}
+                    <div class="flex items-center gap-2 flex-wrap">
+                        {{-- Select Taksonomi Bloom & Kesulitan --}}
+                        <div class="flex items-center gap-1.5">
+                            <select
+                                wire:model.live="tingkat_kesulitan"
+                                class="text-xs font-extrabold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-1.5 px-2 focus:ring-1 focus:ring-primary-500 {{ $tingkat_kesulitan === 'HOTS' ? 'text-rose-600' : ($tingkat_kesulitan === 'LOTS' ? 'text-emerald-600' : 'text-amber-600') }}"
+                                title="Tingkat Kesulitan Kognitif"
+                            >
+                                <option value="LOTS">🟢 LOTS (C1-C2)</option>
+                                <option value="MOTS">🟡 MOTS (C3)</option>
+                                <option value="HOTS">🔴 HOTS (C4-C6)</option>
+                            </select>
+
+                            <select
+                                wire:model.live="taksonomi_bloom"
+                                class="text-xs font-bold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 py-1.5 px-2 focus:ring-1 focus:ring-primary-500"
+                                title="Taksonomi Bloom"
+                            >
+                                <option value="C1">C1 - Mengingat</option>
+                                <option value="C2">C2 - Memahami</option>
+                                <option value="C3">C3 - Menerapkan</option>
+                                <option value="C4">C4 - Menganalisis</option>
+                                <option value="C5">C5 - Mengevaluasi</option>
+                                <option value="C6">C6 - Mengkreasi</option>
+                            </select>
+                        </div>
+
+                        {{-- Bobot Nilai --}}
                         <div class="flex items-center">
                             <input
                                 type="number"
                                 step="0.5"
                                 min="0.5"
                                 wire:model.live.debounce.300ms="bobot_nilai"
-                                class="w-20 text-xs font-bold text-center rounded-l-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                title="Bobot Skor Butir Soal"
+                                class="w-16 text-xs font-bold text-center rounded-l-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
                             />
-                            <span class="inline-flex items-center px-2.5 py-1.5 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                            <span class="inline-flex items-center px-2 py-1.5 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300 font-medium">
                                 Poin
                             </span>
                         </div>
@@ -1686,45 +1724,58 @@
                         />
                     </div>
 
-                    {{-- 6. Konfigurasi API Key Google Gemini --}}
-                    <div x-data="{ showKeyConfig: {{ empty(config('ai.gemini.api_key')) ? 'true' : 'false' }} }" class="p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40">
+                    {{-- 6. Konfigurasi API Key Google Gemini (Terpusat & Failover Cadangan) --}}
+                    @php
+                        $geminiKeysCount = count(app(\App\Services\AiQuestionService::class)->getGeminiApiKeys());
+                        $isAdminUser = auth()->user()?->isAdmin() ?? false;
+                    @endphp
+                    <div x-data="{ showKeyConfig: {{ empty(config('ai.gemini.api_key')) && $isAdminUser ? 'true' : 'false' }} }" class="p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full {{ filled(config('ai.gemini.api_key')) || filled($ai_api_key) ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse' }}"></span>
+                                <span class="w-2.5 h-2.5 rounded-full {{ $geminiKeysCount > 0 || filled($ai_api_key) ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse' }}"></span>
                                 <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                                    Status API Key Gemini:
-                                    @if(filled(config('ai.gemini.api_key')) || filled($ai_api_key))
-                                        <span class="text-emerald-600 font-bold">Siap Digunakan</span>
+                                    Status API Key AI (Terpusat):
+                                    @if($geminiKeysCount > 0 || filled($ai_api_key))
+                                        <span class="text-emerald-600 font-bold">Siap Digunakan ({{ max($geminiKeysCount, 1) }} Key Aktif / Cadangan)</span>
                                     @else
-                                        <span class="text-amber-600 font-bold">Belum Diisi</span>
+                                        <span class="text-amber-600 font-bold">Belum Diatur Admin</span>
                                     @endif
                                 </span>
                             </div>
-                            <button type="button" @click="showKeyConfig = !showKeyConfig" class="text-[11px] text-primary-600 dark:text-primary-400 hover:underline">
-                                <span x-text="showKeyConfig ? 'Sembunyikan Pengaturan' : 'Ubah / Masukkan Key'"></span>
-                            </button>
+                            @if($isAdminUser)
+                                <button type="button" @click="showKeyConfig = !showKeyConfig" class="text-[11px] text-primary-600 dark:text-primary-400 hover:underline">
+                                    <span x-text="showKeyConfig ? 'Sembunyikan Pengaturan' : 'Kelola Key & Cadangan'"></span>
+                                </button>
+                            @else
+                                <span class="text-[11px] text-gray-400">Dikelola Admin</span>
+                            @endif
                         </div>
 
-                        <div x-show="showKeyConfig" x-cloak class="mt-3 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <label class="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
-                                Google Gemini API Key:
-                            </label>
-                            <input
-                                type="password"
-                                wire:model="ai_api_key"
-                                placeholder="Masukkan API Key (AIzaSy...)"
-                                class="w-full text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-3 focus:ring-1 focus:ring-primary-500"
-                            />
-                            <div class="flex items-center justify-between text-[11px]">
-                                <label class="flex items-center gap-1.5 cursor-pointer text-gray-600 dark:text-gray-400">
-                                    <input type="checkbox" wire:model="ai_simpan_api_key" class="rounded text-primary-600" />
-                                    <span>Simpan ke file .env secara otomatis</span>
-                                </label>
-                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline font-medium">
-                                    Dapatkan API Key Gratis &nearr;
-                                </a>
+                        @if($isAdminUser)
+                            <div x-show="showKeyConfig" x-cloak class="mt-3 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                                        Google Gemini API Key (Bisa multiple / cadangan jika kena limit):
+                                    </label>
+                                    <span class="text-[10px] text-gray-400">Pisahkan dengan koma atau baris baru</span>
+                                </div>
+                                <textarea
+                                    wire:model="ai_api_key"
+                                    rows="2"
+                                    placeholder="Masukkan 1 atau lebih API Key: AIzaSyKeyUtama, AIzaSyKeyCadangan1, AIzaSyKeyCadangan2..."
+                                    class="w-full text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-3 focus:ring-1 focus:ring-primary-500"
+                                ></textarea>
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <label class="flex items-center gap-1.5 cursor-pointer text-gray-600 dark:text-gray-400">
+                                        <input type="checkbox" wire:model="ai_simpan_api_key" class="rounded text-primary-600" />
+                                        <span>Simpan ke file .env secara terpusat (Key utama & GEMINI_API_KEYS cadangan)</span>
+                                    </label>
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline font-medium">
+                                        Dapatkan API Key Gratis &nearr;
+                                    </a>
+                                </div>
                             </div>
-                        </div>
+                        @endif
                     </div>
                 </div>
 
@@ -1910,42 +1961,52 @@
                             </div>
                         </div>
 
-                        {{-- API Key Accordion --}}
-                        <div x-data="{ showKeyConfig: {{ empty(config('ai.gemini.api_key')) ? 'true' : 'false' }} }" class="p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40">
+                        {{-- API Key Accordion (Terpusat & Failover Cadangan) --}}
+                        @php
+                            $geminiKeysCount = count(app(\App\Services\AiQuestionService::class)->getGeminiApiKeys());
+                            $isAdminUser = auth()->user()?->isAdmin() ?? false;
+                        @endphp
+                        <div x-data="{ showKeyConfig: {{ empty(config('ai.gemini.api_key')) && $isAdminUser ? 'true' : 'false' }} }" class="p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2">
-                                    <span class="w-2.5 h-2.5 rounded-full {{ filled(config('ai.gemini.api_key')) || filled($ai_api_key) ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse' }}"></span>
+                                    <span class="w-2.5 h-2.5 rounded-full {{ $geminiKeysCount > 0 || filled($ai_api_key) ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse' }}"></span>
                                     <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                                        Status API Key Gemini:
-                                        @if(filled(config('ai.gemini.api_key')) || filled($ai_api_key))
-                                            <span class="text-emerald-600 font-bold">Siap Digunakan</span>
+                                        Status API Key AI (Terpusat):
+                                        @if($geminiKeysCount > 0 || filled($ai_api_key))
+                                            <span class="text-emerald-600 font-bold">Siap Digunakan ({{ max($geminiKeysCount, 1) }} Key Terpasang)</span>
                                         @else
-                                            <span class="text-amber-600 font-bold">Belum Diisi (Gunakan Key Sendiri / Fallback Regex)</span>
+                                            <span class="text-amber-600 font-bold">Belum Diatur Admin (Fallback Parser Lokal)</span>
                                         @endif
                                     </span>
                                 </div>
-                                <button type="button" @click="showKeyConfig = !showKeyConfig" class="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
-                                    <span x-text="showKeyConfig ? 'Sembunyikan' : 'Ubah / Masukkan Key'"></span>
-                                </button>
+                                @if($isAdminUser)
+                                    <button type="button" @click="showKeyConfig = !showKeyConfig" class="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
+                                        <span x-text="showKeyConfig ? 'Sembunyikan' : 'Kelola Key & Cadangan'"></span>
+                                    </button>
+                                @else
+                                    <span class="text-[11px] text-gray-400">Dikelola Admin</span>
+                                @endif
                             </div>
 
-                            <div x-show="showKeyConfig" x-cloak class="mt-2.5 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                <input
-                                    type="password"
-                                    wire:model="ai_api_key"
-                                    placeholder="Masukkan Google Gemini API Key (AIzaSy...)"
-                                    class="w-full text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-3 focus:ring-1 focus:ring-emerald-500"
-                                />
-                                <div class="flex items-center justify-between text-[11px]">
-                                    <label class="flex items-center gap-1.5 cursor-pointer text-gray-600 dark:text-gray-400">
-                                        <input type="checkbox" wire:model="ai_simpan_api_key" class="rounded text-emerald-600" />
-                                        <span>Simpan ke file .env</span>
-                                    </label>
-                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:underline font-medium">
-                                        Dapatkan API Key Gratis &nearr;
-                                    </a>
+                            @if($isAdminUser)
+                                <div x-show="showKeyConfig" x-cloak class="mt-2.5 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                    <textarea
+                                        wire:model="ai_api_key"
+                                        rows="2"
+                                        placeholder="Masukkan 1 atau beberapa Google Gemini API Key (pisahkan koma/spasi/baris baru untuk cadangan)..."
+                                        class="w-full text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 px-3 focus:ring-1 focus:ring-emerald-500"
+                                    ></textarea>
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <label class="flex items-center gap-1.5 cursor-pointer text-gray-600 dark:text-gray-400">
+                                            <input type="checkbox" wire:model="ai_simpan_api_key" class="rounded text-emerald-600" />
+                                            <span>Simpan terpusat ke .env (GEMINI_API_KEY & cadangan GEMINI_API_KEYS)</span>
+                                        </label>
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:underline font-medium">
+                                            Dapatkan API Key Gratis &nearr;
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
                         </div>
 
                     @else
@@ -1974,9 +2035,34 @@
                                 </button>
                             </div>
 
+                            @php
+                                $jmlPeringatan = collect($parsed_soals_preview)->filter(fn ($p) => !empty($p['peringatan']))->count();
+                            @endphp
+                            @if($parse_source === 'ai')
+                                <div class="p-2.5 rounded-lg text-[11px] bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-blue-900 dark:text-blue-200">
+                                    <strong>Dibaca oleh AI.</strong> Tetap periksa kunci jawaban dan teks soal sebelum disimpan.
+                                </div>
+                            @elseif($parse_source === 'lokal')
+                                <div class="p-2.5 rounded-lg text-[11px] bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200">
+                                    <strong>Dibaca parser lokal (kurang akurat).</strong> API Key AI belum diisi atau AI gagal, sehingga format yang tidak umum bisa terlewat atau salah baca. Periksa setiap butir dengan teliti.
+                                </div>
+                            @endif
+                            @if($jmlPeringatan > 0)
+                                <div class="p-2.5 rounded-lg text-[11px] bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200">
+                                    <strong>{{ $jmlPeringatan }} butir perlu dicek ulang</strong> (ditandai peringatan merah di bawah).
+                                </div>
+                            @endif
+
                             <div class="space-y-3">
                                 @foreach($parsed_soals_preview as $idx => $item)
-                                    <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/60 shadow-sm relative space-y-2.5">
+                                    <div class="p-4 rounded-xl border {{ !empty($item['peringatan']) ? 'border-rose-300 dark:border-rose-800' : 'border-gray-200 dark:border-gray-800' }} bg-white dark:bg-gray-800/60 shadow-sm relative space-y-2.5">
+                                        @if(!empty($item['peringatan']))
+                                            <div class="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-[11px] text-rose-800 dark:text-rose-300 space-y-0.5">
+                                                @foreach($item['peringatan'] as $pw)
+                                                    <div>&#9888; {{ $pw }}</div>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                         {{-- Header Butir --}}
                                         <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/60 pb-2">
                                             <div class="flex items-center gap-2">
@@ -1985,6 +2071,18 @@
                                                 </span>
                                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                                                     {{ str_replace('_', ' ', $item['tipe_soal'] ?? 'pilihan_ganda') }}
+                                                </span>
+                                                @php
+                                                    $kesul = strtoupper($item['tingkat_kesulitan'] ?? 'MOTS');
+                                                    $bloom = strtoupper($item['taksonomi_bloom'] ?? 'C3');
+                                                    $badgeColor = match($kesul) {
+                                                        'HOTS' => 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300',
+                                                        'LOTS' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300',
+                                                        default => 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300',
+                                                    };
+                                                @endphp
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border {{ $badgeColor }}">
+                                                    {{ $kesul }} ({{ $bloom }})
                                                 </span>
                                                 <span class="text-xs text-gray-400">
                                                     Bobot: <strong class="text-gray-700 dark:text-gray-300">{{ $item['bobot_nilai'] }} Poin</strong>

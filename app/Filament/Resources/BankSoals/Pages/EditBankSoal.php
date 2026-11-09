@@ -43,6 +43,8 @@ class EditBankSoal extends Page
     public int $nomor_urut = 1;
     public string $tipe_soal = 'pilihan_ganda';
     public float $bobot_nilai = 2.0;
+    public string $tingkat_kesulitan = 'MOTS'; // 'LOTS' | 'MOTS' | 'HOTS'
+    public string $taksonomi_bloom = 'C3'; // 'C1' | 'C2' | 'C3' | 'C4' | 'C5' | 'C6'
     public ?string $pertanyaan = '';
     public string $media_type = 'none';
     public $media_file_upload = null;
@@ -72,6 +74,7 @@ class EditBankSoal extends Page
     public string $import_mode = 'batch'; // 'batch' | 'current'
     public float $import_default_bobot = 2.0;
     public array $parsed_soals_preview = [];
+    public string $parse_source = 'lokal'; // 'ai' | 'lokal' | 'mock'
     public bool $is_parsing_text = false;
     public bool $has_parsed = false;
 
@@ -139,6 +142,8 @@ class EditBankSoal extends Page
         $this->nomor_urut = $soal->nomor_urut;
         $this->tipe_soal = $soal->tipe_soal;
         $this->bobot_nilai = (float) $soal->bobot_nilai;
+        $this->tingkat_kesulitan = $soal->tingkat_kesulitan ?? 'MOTS';
+        $this->taksonomi_bloom = $soal->taksonomi_bloom ?? 'C3';
         $this->pertanyaan = $soal->pertanyaan ?? '';
         $this->media_type = $soal->media_type ?? 'none';
         $this->existing_media_file = $soal->media_file;
@@ -267,6 +272,8 @@ class EditBankSoal extends Page
             'nomor_urut' => $this->nomor_urut,
             'tipe_soal' => $this->tipe_soal,
             'bobot_nilai' => $this->bobot_nilai,
+            'tingkat_kesulitan' => $this->tingkat_kesulitan,
+            'taksonomi_bloom' => $this->taksonomi_bloom,
             'pertanyaan' => $this->pertanyaan,
             'media_type' => $this->media_type,
             'media_file' => $mediaPath,
@@ -434,15 +441,29 @@ class EditBankSoal extends Page
         $this->media_file_upload = null;
     }
 
+    /**
+     * API Key AI bersifat terpusat (GEMINI_API_KEY di .env, dikelola Admin).
+     * Hanya Admin yang boleh mengisi/mengganti key; Guru selalu memakai key terpusat.
+     * Mengembalikan key yang diketik Admin, atau null agar service memakai key terpusat.
+     */
+    protected function resolveApiKeyInput(): ?string
+    {
+        if (!(auth()->user()?->isAdmin() ?? false)) {
+            $this->ai_api_key = '';
+
+            return null;
+        }
+
+        $key = trim($this->ai_api_key);
+
+        return $key !== '' ? $key : null;
+    }
     public function openAiModal(string $mode = 'current'): void
     {
         $this->ai_mode = $mode;
         $this->ai_tipe_soal = $this->tipe_soal;
         if (empty($this->ai_model)) {
             $this->ai_model = config('ai.gemini.model', 'gemini-3.6-flash');
-        }
-        if (empty($this->ai_api_key)) {
-            $this->ai_api_key = config('ai.gemini.api_key', '');
         }
         if (empty($this->ai_topik)) {
             $this->ai_topik = $this->record->judul ?? '';
@@ -499,7 +520,7 @@ class EditBankSoal extends Page
         $this->is_generating_ai = true;
 
         try {
-            $apiKey = trim($this->ai_api_key);
+            $apiKey = $this->resolveApiKeyInput();
             if (filled($apiKey) && $this->ai_simpan_api_key) {
                 $aiService->saveApiKeyToEnv($apiKey, 'gemini');
                 config(['ai.gemini.api_key' => $apiKey]);
@@ -561,6 +582,8 @@ class EditBankSoal extends Page
                         'nomor_urut' => $startNomor++,
                         'tipe_soal' => $item['tipe_soal'],
                         'bobot_nilai' => $item['bobot_nilai'],
+                        'tingkat_kesulitan' => $item['tingkat_kesulitan'] ?? $this->ai_kesulitan,
+                        'taksonomi_bloom' => $item['taksonomi_bloom'] ?? (match($this->ai_kesulitan) { 'HOTS' => 'C4', 'LOTS' => 'C2', default => 'C3' }),
                         'pertanyaan' => $item['pertanyaan'],
                         'media_type' => 'none',
                         'kunci_isian' => $item['kunci_isian'] ?? '',
@@ -620,7 +643,7 @@ class EditBankSoal extends Page
         }
 
         try {
-            $apiKey = trim($this->ai_api_key);
+            $apiKey = $this->resolveApiKeyInput();
             $pembahasan = $aiService->generatePembahasan(
                 $this->pertanyaan,
                 $this->opsi_jawabans,
@@ -652,9 +675,6 @@ class EditBankSoal extends Page
         $this->parsed_soals_preview = [];
         if (empty($this->ai_model)) {
             $this->ai_model = config('ai.gemini.model', 'gemini-3.6-flash');
-        }
-        if (empty($this->ai_api_key)) {
-            $this->ai_api_key = config('ai.gemini.api_key', '');
         }
     }
 
@@ -713,7 +733,7 @@ class EditBankSoal extends Page
         $this->is_parsing_text = true;
 
         try {
-            $apiKey = trim($this->ai_api_key);
+            $apiKey = $this->resolveApiKeyInput();
             if (filled($apiKey) && $this->ai_simpan_api_key) {
                 $aiService->saveApiKeyToEnv($apiKey, 'gemini');
                 config(['ai.gemini.api_key' => $apiKey]);
@@ -731,6 +751,7 @@ class EditBankSoal extends Page
             }
 
             $this->parsed_soals_preview = $results;
+            $this->parse_source = $aiService->lastParseSource ?? 'lokal';
             $this->has_parsed = true;
 
             Notification::make()
@@ -765,6 +786,8 @@ class EditBankSoal extends Page
             $item = $this->parsed_soals_preview[0];
             $this->tipe_soal = $item['tipe_soal'];
             $this->bobot_nilai = (float) ($item['bobot_nilai'] ?? $this->import_default_bobot);
+            $this->tingkat_kesulitan = $item['tingkat_kesulitan'] ?? 'MOTS';
+            $this->taksonomi_bloom = $item['taksonomi_bloom'] ?? 'C3';
             $this->pertanyaan = $item['pertanyaan'];
             $this->opsi_jawabans = $item['opsi_jawabans'] ?? [];
             $this->kunci_isian = $item['kunci_isian'] ?? '';
@@ -795,6 +818,8 @@ class EditBankSoal extends Page
                     'nomor_urut' => $startNomor++,
                     'tipe_soal' => $item['tipe_soal'],
                     'bobot_nilai' => (float) ($item['bobot_nilai'] ?? $this->import_default_bobot),
+                    'tingkat_kesulitan' => $item['tingkat_kesulitan'] ?? 'MOTS',
+                    'taksonomi_bloom' => $item['taksonomi_bloom'] ?? 'C3',
                     'pertanyaan' => $item['pertanyaan'],
                     'media_type' => 'none',
                     'kunci_isian' => $item['kunci_isian'] ?? '',
@@ -850,17 +875,17 @@ class EditBankSoal extends Page
                 ->label('Bobot Otomatis (100 Poin)')
                 ->icon(Heroicon::OutlinedCalculator)
                 ->color('success')
-                ->tooltip('Bobot soal sudah otomatis terdistribusi 100 poin secara default (Objektif 75% : Subjektif 25%). Klik untuk sinkronisasi ulang kapan saja.')
+                ->tooltip('Bobot soal otomatis dihitung ke total 100 poin berdasarkan perbandingan kesulitan LOTS:MOTS:HOTS = 1:2:3.')
                 ->requiresConfirmation()
-                ->modalHeading('Sinkronisasi Bobot Soal Menjadi 100 Poin?')
-                ->modalDescription('Sistem secara default telah membagi bobot seluruh butir soal menjadi total 100 poin dengan rasio Objektif : Essay/Isian = 75 : 25 (atau 100% jika hanya ada satu jenis soal). Klik konfirmasi untuk sinkronisasi ulang sekarang.')
+                ->modalHeading('Hitung Ulang Bobot Soal (100 Poin)?')
+                ->modalDescription('Sistem akan mendistribusikan total 100 poin ke seluruh butir soal dengan proporsi bobot LOTS : MOTS : HOTS = 1 : 2 : 3 sesuai tingkat kesulitan masing-masing soal. Klik konfirmasi untuk memproses.')
                 ->action(function () {
                     $this->record->autoDistributeBobot();
                     $this->record->refresh();
                     if ($this->selectedSoalId) {
                         $this->selectSoal($this->selectedSoalId);
                     }
-                    Notification::make()->title('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (75:25)')->success()->send();
+                    Notification::make()->title('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (Rasio LOTS:MOTS:HOTS = 1:2:3)')->success()->send();
                 }),
 
             Action::make('pengaturanPaket')

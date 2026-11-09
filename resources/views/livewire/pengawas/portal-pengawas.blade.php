@@ -9,13 +9,13 @@
     >
         <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
-                @if($activeUjian)
+                @if($activeUjian || $activeRuang)
                     <button
                         type="button"
                         wire:click="kembaliKeDaftarUjian"
                         class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition cursor-pointer"
                         style="background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); color: #ffffff;"
-                        title="Kembali ke Daftar Ujian"
+                        title="Kembali ke Daftar Ruang / Ujian"
                     >
                         <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
@@ -29,7 +29,7 @@
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" style="background-color: #34d399;"></span>
                         <span class="text-sm sm:text-base font-black tracking-tight truncate" style="font-family: 'Outfit', sans-serif; color: #ffffff;">
-                            {{ $activeUjian ? $activeUjian->nama_ujian : 'Ruang Pengawas & Proktor CBT' }}
+                            {{ $activeRuang ? $activeRuang->nama_ruang : ($activeUjian ? $activeUjian->nama_ujian : 'Ruang Pengawas & Proktor CBT') }}
                         </span>
                     </div>
                     <div class="text-[11px] truncate font-medium" style="color: #cbd5e1;">
@@ -87,42 +87,162 @@
         @endif
 
         {{-- ============================================================= --}}
-        {{-- MODE 1: PILIH JADWAL UJIAN YANG DIAWASI                       --}}
+        {{-- MODE 1: PILIH RUANG UJIAN ATAU JADWAL UJIAN YANG DIAWASI       --}}
         {{-- ============================================================= --}}
-        @if(!$activeUjian)
+        @if(!$activeUjian && !$activeRuang)
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
                 <div>
                     <h1 class="text-lg font-black" style="font-family: 'Outfit', sans-serif; color: #041F45;">
-                        Pilih Sesi Ujian untuk Diawasi
+                        {{ $tabMode === 'ruang' ? 'Pilih Ruang Ujian untuk Diawasi' : 'Pilih Jadwal Soal Ujian' }}
                     </h1>
                     <p class="text-xs text-slate-500 mt-0.5">
-                        Ketuk salah satu jadwal ujian di bawah untuk membuka kontrol token &amp; memantau siswa real-time.
+                        {{ $tabMode === 'ruang' ? 'Rilis token akses per ruangan (1 ruang bisa mix beberapa kelas, soal otomatis sesuai tingkatan siswa).' : 'Ketuk salah satu jadwal ujian di bawah untuk memantau berdasarkan mata pelajaran.' }}
                     </p>
                 </div>
 
-                @if($user?->isGuru())
-                    <div class="inline-flex rounded-xl p-1 border border-slate-200 self-start sm:self-auto" style="background-color: #f1f5f9;">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="inline-flex rounded-xl p-1 border border-slate-200" style="background-color: #f1f5f9;">
                         <button
                             type="button"
-                            wire:click="$set('scopeUjian', 'saya')"
+                            wire:click="$set('tabMode', 'ruang')"
                             class="px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer"
-                            style="{{ $scopeUjian === 'saya' ? 'background-color: #041F45; color: #ffffff; box-shadow: 0 1px 3px rgba(4,31,69,0.25);' : 'background-color: transparent; color: #475569;' }}"
+                            style="{{ $tabMode === 'ruang' ? 'background-color: #059669; color: #ffffff; box-shadow: 0 1px 3px rgba(5,150,105,0.25);' : 'background-color: transparent; color: #475569;' }}"
                         >
-                            Ujian Saya
+                            Ruang Ujian ({{ $daftarRuang->count() }})
                         </button>
                         <button
                             type="button"
-                            wire:click="$set('scopeUjian', 'semua')"
+                            wire:click="$set('tabMode', 'ujian')"
                             class="px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer"
-                            style="{{ $scopeUjian === 'semua' ? 'background-color: #041F45; color: #ffffff; box-shadow: 0 1px 3px rgba(4,31,69,0.25);' : 'background-color: transparent; color: #475569;' }}"
+                            style="{{ $tabMode === 'ujian' ? 'background-color: #041F45; color: #ffffff; box-shadow: 0 1px 3px rgba(4,31,69,0.25);' : 'background-color: transparent; color: #475569;' }}"
                         >
-                            Semua Ujian Sekolah
+                            Per Jadwal Soal ({{ $daftarUjian->count() }})
                         </button>
                     </div>
-                @endif
+
+                    @if($tabMode === 'ujian' && $user?->isGuru())
+                        <div class="inline-flex rounded-xl p-1 border border-slate-200" style="background-color: #f1f5f9;">
+                            <button
+                                type="button"
+                                wire:click="$set('scopeUjian', 'saya')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer"
+                                style="{{ $scopeUjian === 'saya' ? 'background-color: #041F45; color: #ffffff;' : 'background-color: transparent; color: #475569;' }}"
+                            >
+                                Ujian Saya
+                            </button>
+                            <button
+                                type="button"
+                                wire:click="$set('scopeUjian', 'semua')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer"
+                                style="{{ $scopeUjian === 'semua' ? 'background-color: #041F45; color: #ffffff;' : 'background-color: transparent; color: #475569;' }}"
+                            >
+                                Semua
+                            </button>
+                        </div>
+                    @endif
+                </div>
             </div>
 
-            @if($daftarUjian->isEmpty())
+            @if($tabMode === 'ruang')
+                @if($daftarRuang->isEmpty())
+                    <div class="bg-white rounded-3xl border border-dashed border-slate-300 p-10 text-center space-y-3">
+                        <div class="text-sm font-extrabold text-slate-700">Belum ada Ruang Ujian yang dibuat</div>
+                        <p class="text-xs text-slate-500 max-w-md mx-auto">
+                            Admin dapat membuat Ruang Ujian (misal Ruang 1, Ruang 2) dan membagi siswa lintas kelas di menu <strong>Ruang Ujian &amp; Token</strong>.
+                        </p>
+                        <div class="pt-1">
+                            <button
+                                type="button"
+                                wire:click="$set('tabMode', 'ujian')"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition"
+                                style="background-color: #041F45; color: #ffffff;"
+                            >
+                                <span>Pantau Berdasarkan Jadwal Soal &raquo;</span>
+                            </button>
+                        </div>
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach($daftarRuang as $rg)
+                            @php
+                                $kelasMix = $rg->siswas->pluck('kelas.nama_kelas')->filter()->unique()->values();
+                                $tokenAktif = $rg->isTokenActive();
+                            @endphp
+                            <div
+                                class="bg-white rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4 shadow-xs hover:shadow-md transition"
+                                style="border: {{ $tokenAktif ? '2px solid #10b981' : '1px solid #e2e8f0' }};"
+                            >
+                                <div class="space-y-2.5">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 font-mono">
+                                            {{ $rg->kode_ruang ?: 'RUANG-CBT' }}
+                                        </span>
+
+                                        @if($tokenAktif)
+                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold" style="background-color: #d1fae5; color: #065f46;">
+                                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                                                TOKEN AKTIF
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
+                                                Siap Digunakan
+                                            </span>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <div class="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
+                                            Ruang Ujian Terpadu (Mix Kelas)
+                                        </div>
+                                        <h3 class="text-lg font-black text-slate-900 leading-snug mt-0.5" style="font-family: 'Outfit', sans-serif;">
+                                            {{ $rg->nama_ruang }}
+                                        </h3>
+                                    </div>
+
+                                    <div class="text-xs text-slate-600 space-y-1 pt-1">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-slate-400">Komposisi Kelas:</span>
+                                            <span class="font-bold text-slate-800 text-right">{{ $kelasMix->isNotEmpty() ? $kelasMix->join(', ') : 'Belum ada siswa' }}</span>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-slate-400">Jumlah Peserta:</span>
+                                            <span class="font-bold text-slate-800">{{ $rg->siswas_count }} / {{ $rg->kapasitas }} Siswa</span>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-slate-400">Pengawas Ruang:</span>
+                                            <span class="font-semibold text-slate-700">{{ $rg->pengawas?->name ?: 'Semua Pengawas' }}</span>
+                                        </div>
+                                    </div>
+
+                                    @if($rg->token_ruang)
+                                        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                                            <span class="text-[11px] font-bold text-slate-500 uppercase">Token Ruangan:</span>
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-mono text-base font-black tracking-widest" style="color: #041F45;">{{ $rg->token_ruang }}</span>
+                                                <span
+                                                    class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                                    style="{{ $tokenAktif ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #ffe4e6; color: #be123c;' }}"
+                                                >
+                                                    {{ $rg->sisaWaktuTokenFormatted() }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <button
+                                    type="button"
+                                    wire:click="pilihRuang({{ $rg->id }})"
+                                    class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
+                                    style="background: linear-gradient(135deg, #041F45 0%, #059669 100%); color: #ffffff;"
+                                >
+                                    <span>Buka Ruang &amp; Rilis Token &raquo;</span>
+                                </button>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            @elseif($daftarUjian->isEmpty())
                 <div class="bg-white rounded-3xl border border-dashed border-slate-300 p-10 text-center space-y-3">
                     <div class="text-sm font-extrabold text-slate-700">Belum ada jadwal ujian ditemukan</div>
                     <p class="text-xs text-slate-500 max-w-md mx-auto">
@@ -234,7 +354,383 @@
             @endif
 
         {{-- ============================================================= --}}
-        {{-- MODE 2: RUANG KONTROL & MONITORING SISWA REAL-TIME            --}}
+        {{-- MODE 2A: PENGAWASAN PER RUANG UJIAN (MIX LINTAS KELAS)        --}}
+        {{-- ============================================================= --}}
+        @elseif($activeRuang)
+            @php
+                $tokenActive = $activeRuang->isTokenActive();
+                $sisaDetikToken = $activeRuang->sisaDetikToken();
+                $menitSisa = floor($sisaDetikToken / 60);
+                $detikSisa = $sisaDetikToken % 60;
+                $jadwalRuangHabis = $activeRuang->isSemuaJadwalBerakhir();
+                $activeUjiansInRoom = $activeRuang->getActiveUjiansForRoom();
+                $kelasInRoom = $activeRuang->siswas->pluck('kelas')->filter()->unique('id')->values();
+
+                $allRows = $pesertasRuang;
+                $totalSiswa = $activeRuang->siswas->count();
+                $sedangMengerjakan = $allRows->where('status', 'SEDANG_MENGERJAKAN')->count();
+                $sudahSelesai = $allRows->where('status', 'SELESAI')->count();
+                $belumMulai = max(0, $totalSiswa - ($sedangMengerjakan + $sudahSelesai));
+                $totalPelanggaranSiswa = $allRows->filter(fn ($r) => ((int) ($r->sesi?->jumlah_pelanggaran ?? 0)) > 0)->count();
+            @endphp
+
+            {{-- 1. KARTU KONTROL TOKEN RUANGAN --}}
+            <div class="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 shadow-xs">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    <div class="space-y-2 min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                wire:click="kembaliKeDaftarUjian"
+                                class="inline-flex items-center gap-1 text-xs font-extrabold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition cursor-pointer"
+                            >
+                                &larr; Daftar Ruang
+                            </button>
+                            <span class="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">
+                                {{ $activeRuang->kode_ruang ?: 'RUANG-UJIAN' }}
+                            </span>
+                            @if($tokenActive)
+                                <span class="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-lg" style="background-color: #d1fae5; color: #065f46;">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                                    TOKEN RUANGAN AKTIF
+                                </span>
+                            @else
+                                <span class="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg" style="background-color: #fef3c7; color: #92400e;">
+                                    SIAP RILIS TOKEN
+                                </span>
+                            @endif
+                        </div>
+
+                        <h2 class="text-xl sm:text-2xl font-black" style="font-family: 'Outfit', sans-serif; color: #041F45;">
+                            {{ $activeRuang->nama_ruang }}
+                        </h2>
+
+                        <div class="flex items-center gap-x-3 gap-y-1 text-xs text-slate-500 flex-wrap font-medium">
+                            <span>Mix Rombel: <strong class="text-slate-800">{{ $kelasInRoom->pluck('nama_kelas')->join(', ') ?: 'Belum ada siswa' }}</strong></span>
+                            <span>&bull;</span>
+                            <span>Kapasitas: <strong class="text-slate-800">{{ $totalSiswa }} / {{ $activeRuang->kapasitas }} Siswa</strong></span>
+                            <span>&bull;</span>
+                            <span>Soal Aktif: <strong class="text-emerald-700">{{ $activeUjiansInRoom->map(fn($u) => ($u->mapel?->nama_mapel ?: $u->nama_ujian))->unique()->join(', ') ?: 'Sesuai Jadwal Kelas' }}</strong></span>
+                        </div>
+                    </div>
+
+                    {{-- Panel Token Ruangan & Tombol Aksi --}}
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                        <div class="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 flex flex-col items-center justify-center min-w-[215px]">
+                            <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                Kode Token {{ $activeRuang->nama_ruang }}
+                            </span>
+
+                            @if($activeRuang->token_ruang)
+                                <div class="mt-1 font-mono text-3xl font-black tracking-[0.2em] select-all" style="color: #041F45;">
+                                    {{ $activeRuang->token_ruang }}
+                                </div>
+                                <div class="mt-1">
+                                    @if($tokenActive)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold" style="background-color: #d1fae5; color: #065f46;">
+                                            Aktif {{ sprintf('%02d:%02d', $menitSisa, $detikSisa) }}
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold" style="background-color: #ffe4e6; color: #be123c;">
+                                            Token Kedaluwarsa (10m Habis)
+                                        </span>
+                                    @endif
+                                </div>
+                            @else
+                                <span class="mt-1 text-sm font-bold text-slate-500">Belum Dirilis</span>
+                            @endif
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            @if($jadwalRuangHabis)
+                                <button
+                                    type="button"
+                                    disabled
+                                    class="px-4 py-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-not-allowed opacity-75"
+                                    style="background-color: #e2e8f0; color: #64748b; border: 1px solid #cbd5e1;"
+                                >
+                                    <span>Rilis Token Ditutup (Waktu Habis)</span>
+                                </button>
+                            @else
+                                <button
+                                    type="button"
+                                    wire:click="rilisTokenRuang"
+                                    wire:confirm="Rilis kode token 6 karakter baru untuk {{ $activeRuang->nama_ruang }} (aktif 10 menit untuk seluruh siswa lintas kelas di ruangan ini)?"
+                                    class="px-4 py-3 rounded-xl text-xs font-extrabold shadow-sm transition cursor-pointer flex items-center justify-center gap-2"
+                                    style="background-color: #059669; color: #ffffff;"
+                                >
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                    <span>{{ $activeRuang->token_ruang ? 'Rilis Token Baru (10m)' : 'Rilis Token Ruangan (10m)' }}</span>
+                                </button>
+                            @endif
+
+                            <a
+                                href="{{ route('kartu-peserta.print', ['ruang_ujian_id' => $activeRuang->id]) }}"
+                                target="_blank"
+                                class="px-4 py-2.5 rounded-xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                                <svg class="w-4 h-4 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                <span>Cetak Kartu Ruang Ini</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- 2. RINGKASAN METRIK REALTIME RUANGAN --}}
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                    <div class="text-[11px] font-bold uppercase text-slate-400">Peserta Ruangan</div>
+                    <div class="mt-1 text-2xl font-black text-slate-900" style="font-family: 'Outfit', sans-serif;">
+                        {{ $totalSiswa }} <span class="text-xs font-semibold text-slate-500">Siswa</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
+                    <div class="text-[11px] font-bold uppercase text-amber-600">Sedang Mengerjakan</div>
+                    <div class="mt-1 text-2xl font-black text-amber-600" style="font-family: 'Outfit', sans-serif;">
+                        {{ $sedangMengerjakan }} <span class="text-xs font-semibold text-slate-500">Aktif</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-emerald-200 shadow-2xs">
+                    <div class="text-[11px] font-bold uppercase text-emerald-600">Sudah Selesai</div>
+                    <div class="mt-1 text-2xl font-black text-emerald-600" style="font-family: 'Outfit', sans-serif;">
+                        {{ $sudahSelesai }} <span class="text-xs font-semibold text-slate-500">/ {{ $totalSiswa }}</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border shadow-2xs" style="{{ $totalPelanggaranSiswa > 0 ? 'border-color: #fda4af; background-color: #fff1f2;' : 'border-color: #e2e8f0;' }}">
+                    <div class="text-[11px] font-bold uppercase" style="color: {{ $totalPelanggaranSiswa > 0 ? '#e11d48' : '#94a3b8' }};">Pelanggaran Tab</div>
+                    <div class="mt-1 text-2xl font-black" style="font-family: 'Outfit', sans-serif; color: {{ $totalPelanggaranSiswa > 0 ? '#e11d48' : '#1e293b' }};">
+                        {{ $totalPelanggaranSiswa }} <span class="text-xs font-semibold text-slate-500">Siswa</span>
+                    </div>
+                </div>
+            </div>
+
+            {{-- 3. FILTER & PENCARIAN SISWA DI RUANGAN --}}
+            <div class="bg-white rounded-2xl border border-slate-200 p-3.5 space-y-3 shadow-2xs">
+                <div class="flex flex-col sm:flex-row gap-2.5">
+                    <div class="relative flex-1">
+                        <input
+                            type="text"
+                            wire:model.live.debounce.300ms="search"
+                            placeholder="Cari nama atau NIS siswa di ruangan ini..."
+                            class="w-full h-10 pl-3.5 pr-4 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-slate-900 focus:outline-none"
+                        />
+                    </div>
+
+                    @if($kelasInRoom->count() > 1)
+                        <select
+                            wire:model.live="filterKelas"
+                            class="h-10 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 text-slate-800"
+                        >
+                            <option value="">Semua Kelas di Ruangan ({{ $kelasInRoom->count() }} Kelas)</option>
+                            @foreach($kelasInRoom as $k)
+                                <option value="{{ $k->id }}">{{ $k->nama_kelas }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+                </div>
+
+                <div class="grid grid-cols-2 sm:flex sm:items-center sm:flex-wrap gap-1.5">
+                    <button
+                        type="button"
+                        wire:click="$set('filterStatus', 'all')"
+                        class="px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer text-center"
+                        style="{{ $filterStatus === 'all' ? 'background-color: #041F45; color: #ffffff;' : 'background-color: #f1f5f9; color: #475569;' }}"
+                    >
+                        Semua ({{ $totalSiswa }})
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="$set('filterStatus', 'SEDANG_MENGERJAKAN')"
+                        class="px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer text-center"
+                        style="{{ $filterStatus === 'SEDANG_MENGERJAKAN' ? 'background-color: #d97706; color: #ffffff;' : 'background-color: #f1f5f9; color: #475569;' }}"
+                    >
+                        Mengerjakan ({{ $sedangMengerjakan }})
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="$set('filterStatus', 'BELUM_MULAI')"
+                        class="px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer text-center"
+                        style="{{ $filterStatus === 'BELUM_MULAI' ? 'background-color: #334155; color: #ffffff;' : 'background-color: #f1f5f9; color: #475569;' }}"
+                    >
+                        Belum Mulai ({{ $belumMulai }})
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="$set('filterStatus', 'SELESAI')"
+                        class="px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer text-center"
+                        style="{{ $filterStatus === 'SELESAI' ? 'background-color: #059669; color: #ffffff;' : 'background-color: #f1f5f9; color: #475569;' }}"
+                    >
+                        Selesai ({{ $sudahSelesai }})
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="$set('filterStatus', 'PELANGGARAN')"
+                        class="col-span-2 sm:col-span-1 px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer text-center"
+                        style="{{ $filterStatus === 'PELANGGARAN' ? 'background-color: #e11d48; color: #ffffff;' : ($totalPelanggaranSiswa > 0 ? 'background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3;' : 'background-color: #f1f5f9; color: #475569;') }}"
+                    >
+                        Pelanggaran Tab ({{ $totalPelanggaranSiswa }})
+                    </button>
+                </div>
+            </div>
+
+            {{-- 4. DAFTAR SISWA LINTAS KELAS DI RUANGAN --}}
+            <div class="space-y-2.5">
+                @forelse($pesertasRuang as $index => $row)
+                    @php
+                        $siswaItem = $row->siswa;
+                        $peserta = $row->peserta;
+                        $ujianItem = $row->ujian;
+                        $sesi = $row->sesi;
+                        $totalSoalSiswa = $ujianItem?->bankSoal?->soals_count ?? ($ujianItem?->bankSoal?->soals()->count() ?: 0);
+                        $jawabansCount = $sesi ? $sesi->jawabans->filter(fn($j) => !empty($j->jawaban_pilihan) || !empty($j->jawaban_teks))->count() : 0;
+                        $persenJawab = $totalSoalSiswa > 0 ? round(($jawabansCount / $totalSoalSiswa) * 100) : 0;
+                        $jmlPelanggaran = (int) ($sesi?->jumlah_pelanggaran ?? 0);
+                    @endphp
+
+                    <div
+                        class="bg-white rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                        style="border: {{ $jmlPelanggaran > 0 ? '1.5px solid #fda4af' : '1px solid #e2e8f0' }};"
+                    >
+                        <div class="flex items-start gap-3 min-w-0 flex-1">
+                            <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center shrink-0">
+                                {{ $index + 1 }}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-extrabold text-sm text-slate-900 truncate">
+                                        {{ $siswaItem->nama }}
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                        Kelas {{ $siswaItem->kelas?->nama_kelas ?: '-' }}
+                                    </span>
+                                    @if($ujianItem)
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            Soal: {{ $ujianItem->mapel?->nama_mapel ?: $ujianItem->nama_ujian }}
+                                        </span>
+                                    @endif
+                                    <span class="font-mono text-[11px] font-semibold text-slate-400">
+                                        NIS: {{ $siswaItem->nis ?: '-' }}
+                                    </span>
+                                </div>
+
+                                <div class="mt-2 flex items-center gap-2 flex-wrap">
+                                    @if($row->status === 'SELESAI')
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold" style="background-color: #d1fae5; color: #065f46;">
+                                            &#10003; Selesai {{ $peserta?->nilai !== null ? '• Nilai: ' . (float) $peserta->nilai : '' }}
+                                        </span>
+                                    @elseif($row->status === 'SEDANG_MENGERJAKAN')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold" style="background-color: #fef3c7; color: #92400e;">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                            Sedang Mengerjakan
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+                                            Belum Mulai
+                                        </span>
+                                    @endif
+
+                                    @if($jmlPelanggaran >= 3)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold animate-pulse" style="background-color: #991b1b; color: #ffffff;">
+                                            🔒 TERKUNCI ({{ $jmlPelanggaran }}x Pindah Tab)
+                                        </span>
+                                    @elseif($jmlPelanggaran > 0)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold" style="background-color: #ffe4e6; color: #9f1239; border: 1px solid #fda4af;">
+                                            ⚠️ {{ $jmlPelanggaran }}x Pindah Tab
+                                        </span>
+                                    @elseif($sesi)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold" style="background-color: #ecfdf5; color: #047857;">
+                                            Integritas Aman
+                                        </span>
+                                    @endif
+                                </div>
+
+                                @if($sesi)
+                                    <div class="mt-2.5 max-w-md">
+                                        <div class="flex items-center justify-between text-[11px] mb-1">
+                                            <span class="font-bold text-slate-600">Progress: {{ $jawabansCount }} / {{ $totalSoalSiswa }} Soal</span>
+                                            <span class="font-extrabold text-emerald-700">{{ $persenJawab }}%</span>
+                                        </div>
+                                        <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                                            <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: {{ $persenJawab }}%; background-color: #10b981;"></div>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        @if($peserta && $sesi)
+                            <div class="grid {{ $row->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
+                                <button
+                                    type="button"
+                                    wire:click="resetSesiSiswa({{ $peserta->id }})"
+                                    wire:confirm="Reset login & buka kunci sesi untuk {{ $siswaItem->nama }}? Jawaban yang sudah dikerjakan tetap aman."
+                                    class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                    style="{{ $jmlPelanggaran >= 3 ? 'background-color: #dc2626; color: #ffffff; border: 1px solid #b91c1c;' : 'background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a;' }}"
+                                >
+                                    <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci & Reset' : 'Reset Login' }}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
+                                    wire:confirm="Tambahkan waktu pengerjaan +10 menit untuk {{ $siswaItem->nama }}?"
+                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                    style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+                                >
+                                    <span>+10m Waktu</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    wire:click="bukaLembarJawaban({{ $peserta->id }})"
+                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+                                >
+                                    <span>Jawaban</span>
+                                </button>
+
+                                @if($row->status === 'SEDANG_MENGERJAKAN')
+                                    <button
+                                        type="button"
+                                        wire:click="paksaSelesaiSiswa({{ $peserta->id }})"
+                                        wire:confirm="Selesaikan paksa ujian untuk {{ $siswaItem->nama }} sekarang?"
+                                        class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                        style="background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3;"
+                                    >
+                                        <span>Selesaikan</span>
+                                    </button>
+                                @endif
+                            </div>
+                        @else
+                            <div class="flex items-center justify-end pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
+                                <button
+                                    type="button"
+                                    wire:click="resetLoginSiswaById({{ $siswaItem->id }})"
+                                    wire:confirm="Reset kunci login perangkat untuk {{ $siswaItem->nama }}?"
+                                    class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold active:scale-95 transition cursor-pointer"
+                                    style="background-color: #f8fafc; color: #475569; border: 1px solid #cbd5e1;"
+                                >
+                                    <span>Reset Login</span>
+                                </button>
+                            </div>
+                        @endif
+                    </div>
+                @empty
+                    <div class="bg-white rounded-2xl border border-slate-200 p-10 text-center text-xs text-slate-400 italic">
+                        Tidak ada data peserta di ruangan ini yang sesuai dengan filter pencarian.
+                    </div>
+                @endforelse
+            </div>
+
+        {{-- ============================================================= --}}
+        {{-- MODE 2B: RUANG KONTROL PER JADWAL SOAL UJIAN                  --}}
         {{-- ============================================================= --}}
         @else
             @php

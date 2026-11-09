@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Resources\BankSoals\BankSoalResource;
 use App\Filament\Resources\HasilUjians\HasilUjianResource;
+use App\Filament\Resources\RuangUjians\RuangUjianResource;
 use App\Filament\Resources\Ujians\UjianResource;
 use App\Filament\Widgets\TailadminCbtMetricsWidget;
 use App\Filament\Widgets\TailadminLiveExamsWidget;
@@ -64,6 +65,7 @@ class GuruPanelProvider extends PanelProvider
             ])
             ->resources([
                 UjianResource::class,
+                RuangUjianResource::class,
                 HasilUjianResource::class,
                 BankSoalResource::class,
             ])

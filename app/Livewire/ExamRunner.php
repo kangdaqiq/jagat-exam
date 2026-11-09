@@ -582,6 +582,21 @@ class ExamRunner extends Component
         $this->dispatch('ujian-selesai-resmi');
     }
 
+    /**
+     * Pengumpulan manual oleh siswa: hanya diizinkan setelah waktu pengerjaan habis.
+     */
+    public function submitUjianManual(): void
+    {
+        if (!$this->sesi || $this->is_submitted) return;
+
+        if ($this->sesi->sisaDetik() > 0) {
+            $this->showConfirmSubmitModal = false;
+            return;
+        }
+
+        $this->submitUjianFinal();
+    }
+
     public function autoSubmitOnTimeout(): void
     {
         $this->submitUjianFinal();

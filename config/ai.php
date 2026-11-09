@@ -18,6 +18,8 @@ return [
     */
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY', ''),
+        // Key cadangan (dipisah koma). Dipakai otomatis jika key utama kena limit/kuota.
+        'api_keys' => array_values(array_filter(array_map('trim', explode(',', (string) env('GEMINI_API_KEYS', ''))))),
         'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
         'base_url' => 'https://generativelanguage.googleapis.com/v1beta',
     ],

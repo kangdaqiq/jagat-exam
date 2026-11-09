@@ -17,6 +17,7 @@ class UjianSesi extends Model
 
     protected $fillable = [
         'ujian_id',
+        'ruang_ujian_id',
         'bank_soal_id',
         'user_id',
         'token_sesi',
@@ -51,6 +52,11 @@ class UjianSesi extends Model
     public function ujian(): BelongsTo
     {
         return $this->belongsTo(Ujian::class, 'ujian_id');
+    }
+
+    public function ruangUjian(): BelongsTo
+    {
+        return $this->belongsTo(RuangUjian::class, 'ruang_ujian_id');
     }
 
     public function bankSoal(): BelongsTo

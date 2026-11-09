@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Siswa;
 
+use App\Models\RuangUjian;
 use App\Models\Siswa;
 use App\Models\Ujian;
 use App\Models\UjianJawaban;
@@ -16,6 +17,13 @@ use Livewire\Component;
 class PortalUjian extends Component
 {
     public string $token_input = '';
+    public ?int $selected_ujian_id = null;
+
+    public function pilihTargetUjian(int $ujianId): void
+    {
+        $this->selected_ujian_id = $ujianId;
+        $this->resetErrorBag('token_input');
+    }
 
     public function mount()
     {
@@ -50,16 +58,79 @@ class PortalUjian extends Component
 
         $token = strtoupper(trim($this->token_input));
         $user = Auth::user();
-        $siswa = $user->siswa;
+        $siswa = $user->siswa?->loadMissing(['kelas', 'ruangUjian']);
 
-        // 1. Cari Ujian yang sedang ONGOING dengan token ini
-        $ujian = Ujian::where('token_ujian', $token)
-            ->where('status', 'ONGOING')
+        $ujian = null;
+        $ruangToken = RuangUjian::where('token_ruang', $token)
+            ->where('is_active', true)
             ->first();
 
-        if (!$ujian) {
-            $this->addError('token_input', 'Kode token salah, sudah diganti, atau ujian belum dibuka oleh Guru Pengawas.');
-            return;
+        // 1A. PRIORITAS UTAMA: Token Ruangan Ujian (1 ruang bisa mix beberapa kelas, soal sesuai kelas/tingkat masing-masing siswa)
+        if ($ruangToken) {
+            if ($siswa && $siswa->ruang_ujian_id && (int) $siswa->ruang_ujian_id !== (int) $ruangToken->id) {
+                $namaRuangSiswa = $siswa->ruangUjian?->nama_ruang ?: 'ruang lain';
+                $this->addError('token_input', "Kode token tersebut adalah token untuk {$ruangToken->nama_ruang}, sedangkan Anda terdaftar di {$namaRuangSiswa}.");
+                return;
+            }
+
+            if ($ruangToken->isTokenExpired()) {
+                $this->addError('token_input', "Kode token {$ruangToken->nama_ruang} telah KEDALUWARSA (masa berlaku 10 menit telah habis). Silakan minta Guru Pengawas ruangan untuk rilis token baru.");
+                return;
+            }
+
+            if (!$siswa || !$siswa->kelas_id) {
+                $this->addError('token_input', 'Akun Anda belum terhubung dengan Rombel Kelas/Tingkatan. Hubungi Proktor/Admin.');
+                return;
+            }
+
+            // Cari jadwal ujian yang sesuai dengan kelas/tingkatan siswa ini
+            $kandidatUjians = Ujian::query()
+                ->whereIn('status', ['ONGOING', 'SCHEDULED'])
+                ->where(function ($q) use ($siswa, $user) {
+                    $q->whereHas('kelas', fn ($kq) => $kq->where('kelas.id', $siswa->kelas_id))
+                      ->orWhereHas('pesertas', fn ($pq) => $pq->where('siswa_id', $siswa->id)->orWhere('user_id', $user->id));
+                })
+                ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 1 ELSE 2 END")
+                ->orderBy('tanggal', 'asc')
+                ->get();
+
+            if ($this->selected_ujian_id) {
+                $ujian = $kandidatUjians->firstWhere('id', $this->selected_ujian_id);
+            }
+
+            if (!$ujian) {
+                // Utamakan ujian yang belum diselesaikan oleh siswa ini dan jadwalnya belum berakhir
+                $selesaiUjianIds = UjianPeserta::where('user_id', $user->id)
+                    ->where('status', 'SELESAI')
+                    ->pluck('ujian_id')
+                    ->all();
+
+                $ujian = $kandidatUjians
+                    ->reject(fn (Ujian $u) => in_array($u->id, $selesaiUjianIds) || $u->isJadwalBerakhir())
+                    ->first()
+                    ?: $kandidatUjians->first();
+            }
+
+            if (!$ujian) {
+                $namaKelas = $siswa->kelas?->nama_kelas ?: 'Anda';
+                $this->addError('token_input', "Token {$ruangToken->nama_ruang} valid, tetapi belum ada jadwal soal ujian aktif untuk Kelas/Tingkatan {$namaKelas}.");
+                return;
+            }
+
+            // Jika status ujian untuk kelas ini masih SCHEDULED, otomatis aktifkan menjadi ONGOING saat token ruang digunakan
+            if ($ujian->status === 'SCHEDULED' && !$ujian->isJadwalBerakhir()) {
+                $ujian->update(['status' => 'ONGOING']);
+            }
+        } else {
+            // 1B. FALLBACK: Cari Ujian yang sedang ONGOING dengan token per-ujian (untuk Ulangan Harian tanpa ruang / kompatibilitas)
+            $ujian = Ujian::where('token_ujian', $token)
+                ->where('status', 'ONGOING')
+                ->first();
+
+            if (!$ujian) {
+                $this->addError('token_input', 'Kode token ruangan/ujian salah, sudah diganti, atau sesi belum dibuka oleh Guru Pengawas.');
+                return;
+            }
         }
 
         // Cek apakah siswa sudah punya sesi aktif yang sedang dikerjakan pada ujian ini
@@ -68,8 +139,8 @@ class PortalUjian extends Component
             ->where('status', 'mengerjakan')
             ->first();
 
-        // Cek kedaluwarsa token (masa berlaku 10 menit) - kecuali siswa sudah punya sesi aktif
-        if (!$existingActiveSesi && $ujian->isTokenExpired()) {
+        // Cek kedaluwarsa token per-ujian (jika masuk lewat token ujian langsung, bukan token ruang)
+        if (!$ruangToken && !$existingActiveSesi && $ujian->isTokenExpired()) {
             $this->addError('token_input', 'Kode token ujian telah KEDALUWARSA (masa berlaku 10 menit telah habis). Silakan minta Guru Pengawas / Proktor untuk generate token baru.');
             return;
         }
@@ -146,6 +217,7 @@ class PortalUjian extends Component
 
             $sesi = UjianSesi::create([
                 'ujian_id' => $ujian->id,
+                'ruang_ujian_id' => $ruangToken?->id ?? $siswa?->ruang_ujian_id,
                 'bank_soal_id' => $bankSoal->id,
                 'user_id' => $user->id,
                 'token_sesi' => $tokenSesi,
@@ -257,7 +329,7 @@ class PortalUjian extends Component
     public function render()
     {
         $user = Auth::user();
-        $siswa = $user->siswa;
+        $siswa = $user->siswa?->loadMissing(['kelas', 'ruangUjian']);
 
         // Auto-close sesi siswa yang sudah melewati batas waktu
         $expiredUserSesis = UjianSesi::where('user_id', $user->id)

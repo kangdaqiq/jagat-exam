@@ -19,11 +19,47 @@ class Siswa extends Model
         'school_id',
         'school_name',
         'kelas_id',
+        'ruang_ujian_id',
         'nis',
+        'password_cbt',
         'nama',
         'no_wa',
         'is_active',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Siswa $siswa) {
+            if (empty($siswa->password_cbt)) {
+                $siswa->password_cbt = self::generateSixDigitPin();
+            }
+        });
+
+        static::created(function (Siswa $siswa) {
+            if (empty($siswa->user_id)) {
+                $siswa->resetPassword($siswa->password_cbt ?: self::generateSixDigitPin());
+            }
+        });
+    }
+
+    /**
+     * Generate 6 karakter angka acak (contoh: 482915) untuk password CBT siswa.
+     */
+    public static function generateSixDigitPin(): string
+    {
+        return (string) random_int(100000, 999999);
+    }
+
+    /**
+     * Generate password 6 angka acak baru dan langsung simpan ke akun User & Siswa.
+     */
+    public function generateRandomPassword(): string
+    {
+        $pin = self::generateSixDigitPin();
+        $this->resetPassword($pin);
+
+        return $pin;
+    }
 
     protected function casts(): array
     {
@@ -42,6 +78,11 @@ class Siswa extends Model
     public function kelas(): BelongsTo
     {
         return $this->belongsTo(Kelas::class, 'kelas_id');
+    }
+
+    public function ruangUjian(): BelongsTo
+    {
+        return $this->belongsTo(RuangUjian::class, 'ruang_ujian_id');
     }
 
     public function ujianPesertas(): HasMany
@@ -80,6 +121,10 @@ class Siswa extends Model
      */
     public function resetPassword(string $newPassword): User
     {
+        if ($this->password_cbt !== $newPassword) {
+            $this->update(['password_cbt' => $newPassword]);
+        }
+
         if ($this->user) {
             $user = $this->user;
             $user->password = \Illuminate\Support\Facades\Hash::make($newPassword);
@@ -108,7 +153,10 @@ class Siswa extends Model
             'is_active' => true,
         ]);
 
-        $this->update(['user_id' => $user->id]);
+        $this->update([
+            'user_id' => $user->id,
+            'password_cbt' => $newPassword,
+        ]);
 
         return $user;
     }

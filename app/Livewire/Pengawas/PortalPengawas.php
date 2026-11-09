@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Pengawas;
 
+use App\Models\RuangUjian;
+use App\Models\Siswa;
 use App\Models\Ujian;
 use App\Models\UjianPeserta;
 use Illuminate\Support\Facades\Auth;
@@ -14,9 +16,13 @@ use Livewire\Component;
 #[Title('Portal Pengawas Ujian - Examuna PWA')]
 class PortalPengawas extends Component
 {
+    #[Url(as: 'ruang')]
+    public ?int $selectedRuangId = null;
+
     #[Url(as: 'ujian')]
     public ?int $selectedUjianId = null;
 
+    public string $tabMode = 'ruang'; // 'ruang' | 'ujian'
     public string $scopeUjian = 'saya'; // 'saya' | 'semua'
     public string $search = '';
     public string $filterStatus = 'all'; // 'all' | 'SEDANG_MENGERJAKAN' | 'BELUM_MULAI' | 'SELESAI' | 'PELANGGARAN'
@@ -42,7 +48,28 @@ class PortalPengawas extends Component
 
         if ($ujian) {
             $this->selectedUjianId = $ujian;
+            $this->tabMode = 'ujian';
+        } elseif ($this->selectedRuangId) {
+            $this->tabMode = 'ruang';
+        } elseif (RuangUjian::where('is_active', true)->count() === 0) {
+            $this->tabMode = 'ujian';
         }
+    }
+
+    public function pilihRuang(int $ruangId): void
+    {
+        $ruang = RuangUjian::find($ruangId);
+        if (!$ruang) {
+            return;
+        }
+
+        $this->selectedRuangId = $ruang->id;
+        $this->selectedUjianId = null;
+        $this->search = '';
+        $this->filterStatus = 'all';
+        $this->filterKelas = null;
+        $this->selectedPesertaId = null;
+        $this->flashMessage = null;
     }
 
     public function pilihUjian(int $ujianId): void
@@ -53,6 +80,7 @@ class PortalPengawas extends Component
         }
 
         $this->selectedUjianId = $ujian->id;
+        $this->selectedRuangId = null;
         $this->search = '';
         $this->filterStatus = 'all';
         $this->filterKelas = null;
@@ -63,8 +91,168 @@ class PortalPengawas extends Component
     public function kembaliKeDaftarUjian(): void
     {
         $this->selectedUjianId = null;
+        $this->selectedRuangId = null;
         $this->selectedPesertaId = null;
         $this->flashMessage = null;
+    }
+
+    public function getDaftarRuangProperty()
+    {
+        return RuangUjian::with(['pengawas', 'siswas.kelas'])
+            ->withCount('siswas')
+            ->where('is_active', true)
+            ->orderBy('nama_ruang', 'asc')
+            ->get();
+    }
+
+    public function getActiveRuangProperty(): ?RuangUjian
+    {
+        if (!$this->selectedRuangId) {
+            return null;
+        }
+
+        $ruang = RuangUjian::with(['pengawas', 'siswas.kelas'])->find($this->selectedRuangId);
+        if (!$ruang) {
+            return null;
+        }
+
+        // Auto-close sesi kedaluwarsa untuk seluruh jadwal ujian yang aktif di ruangan ini
+        $activeUjians = $ruang->getActiveUjiansForRoom();
+        foreach ($activeUjians as $uj) {
+            if ($uj->status === 'ONGOING') {
+                $uj->autoCloseExpiredSessions();
+            }
+        }
+
+        return $ruang;
+    }
+
+    /**
+     * Daftar peserta di dalam Ruang Ujian terpilih (bisa campuran berbagai kelas,
+     * masing-masing terhubung ke Ujian sesuai kelas/tingkatannya).
+     */
+    public function getPesertasRuangListProperty()
+    {
+        $ruang = $this->activeRuang;
+        if (!$ruang) {
+            return collect();
+        }
+
+        $activeUjians = $ruang->getActiveUjiansForRoom();
+        $activeUjianIds = $activeUjians->pluck('id')->all();
+
+        // Pastikan setiap siswa di ruangan ini sudah tersinkron ke UjianPeserta sesuai kelasnya
+        $siswasQuery = Siswa::with(['kelas', 'user'])
+            ->where('ruang_ujian_id', $ruang->id)
+            ->where('is_active', true);
+
+        if (!empty($this->search)) {
+            $term = '%' . trim($this->search) . '%';
+            $siswasQuery->where(function ($q) use ($term) {
+                $q->where('nama', 'like', $term)
+                  ->orWhere('nis', 'like', $term);
+            });
+        }
+
+        if (!empty($this->filterKelas)) {
+            $siswasQuery->where('kelas_id', $this->filterKelas);
+        }
+
+        $siswas = $siswasQuery->orderBy('kelas_id', 'asc')->orderBy('nama', 'asc')->get();
+
+        // Map Ujian aktif berdasarkan kelas_id
+        $ujianByKelas = [];
+        foreach ($activeUjians as $uj) {
+            foreach ($uj->kelas as $kls) {
+                // Utamakan ONGOING jika ada lebih dari 1 ujian pada kelas yang sama
+                if (!isset($ujianByKelas[$kls->id]) || $uj->status === 'ONGOING') {
+                    $ujianByKelas[$kls->id] = $uj;
+                }
+            }
+        }
+
+        // Ambil seluruh UjianPeserta milik siswa di ruangan ini untuk jadwal ujian yang aktif
+        $pesertasMap = collect();
+        if (!empty($activeUjianIds) && $siswas->isNotEmpty()) {
+            $pesertas = UjianPeserta::with(['ujian.mapel', 'ujian.bankSoal' => fn ($q) => $q->withCount('soals'), 'ujianSesi.jawabans'])
+                ->whereIn('ujian_id', $activeUjianIds)
+                ->whereIn('siswa_id', $siswas->pluck('id')->all())
+                ->get();
+
+            foreach ($pesertas as $p) {
+                $existing = $pesertasMap->get($p->siswa_id);
+                if (!$existing || $p->status === 'SEDANG_MENGERJAKAN' || ($existing->status === 'BELUM_MULAI' && $p->status === 'SELESAI')) {
+                    $pesertasMap->put($p->siswa_id, $p);
+                }
+            }
+        }
+
+        $rows = collect();
+        foreach ($siswas as $siswa) {
+            $peserta = $pesertasMap->get($siswa->id);
+            $ujianKelas = $siswa->kelas_id ? ($ujianByKelas[$siswa->kelas_id] ?? null) : null;
+
+            // Jika belum ada record UjianPeserta padahal kelasnya punya ujian aktif, buatkan otomatis
+            if (!$peserta && $ujianKelas) {
+                $peserta = UjianPeserta::firstOrCreate(
+                    [
+                        'ujian_id' => $ujianKelas->id,
+                        'siswa_id' => $siswa->id,
+                    ],
+                    [
+                        'user_id' => $siswa->user_id,
+                        'status' => 'BELUM_MULAI',
+                    ]
+                );
+                $peserta->load(['ujian.mapel', 'ujian.bankSoal' => fn ($q) => $q->withCount('soals'), 'ujianSesi.jawabans']);
+            }
+
+            $status = $peserta?->status ?: 'BELUM_MULAI';
+            $sesi = $peserta?->ujianSesi;
+            $jmlPelanggaran = (int) ($sesi?->jumlah_pelanggaran ?? 0);
+
+            if ($this->filterStatus === 'PELANGGARAN' && $jmlPelanggaran <= 0) {
+                continue;
+            } elseif ($this->filterStatus !== 'all' && $this->filterStatus !== 'PELANGGARAN' && $status !== $this->filterStatus) {
+                continue;
+            }
+
+            $rows->push((object) [
+                'siswa' => $siswa,
+                'peserta' => $peserta,
+                'ujian' => $peserta?->ujian ?: $ujianKelas,
+                'sesi' => $sesi,
+                'status' => $status,
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Rilis Token 6 Karakter untuk Ruang Ujian (10 menit)
+     */
+    public function rilisTokenRuang(): void
+    {
+        $ruang = $this->activeRuang;
+        if (!$ruang) return;
+
+        if ($ruang->siswas()->count() === 0) {
+            $this->flashType = 'warning';
+            $this->flashMessage = "Ruang {$ruang->nama_ruang} belum memiliki peserta. Silakan atur penempatan siswa di menu Ruang Ujian.";
+            return;
+        }
+
+        if ($ruang->isSemuaJadwalBerakhir()) {
+            $this->flashType = 'warning';
+            $this->flashMessage = 'Waktu jadwal ujian untuk kelas di ruangan ini telah berakhir. Rilis token ditutup.';
+            return;
+        }
+
+        $token = $ruang->rilisToken();
+
+        $this->flashType = 'success';
+        $this->flashMessage = "Token {$ruang->nama_ruang} berhasil dirilis: {$token} (Aktif 10 menit untuk seluruh siswa di ruangan ini).";
     }
 
     public function getDaftarUjianProperty()
@@ -112,7 +300,7 @@ class PortalPengawas extends Component
         }
 
         $query = $ujian->pesertas()
-            ->with(['siswa.kelas', 'user', 'ujianSesi.jawabans'])
+            ->with(['siswa.kelas', 'siswa.ruangUjian', 'user', 'ujianSesi.jawabans'])
             ->join('siswas', 'ujian_pesertas.siswa_id', '=', 'siswas.id')
             ->select('ujian_pesertas.*');
 
@@ -209,17 +397,27 @@ class PortalPengawas extends Component
     }
 
     /**
+     * Reset login akun siswa berdasarkan siswa_id (untuk siswa yang belum memiliki sesi)
+     */
+    public function resetLoginSiswaById(int $siswaId): void
+    {
+        $siswa = Siswa::with('user')->find($siswaId);
+        if (!$siswa) return;
+
+        if ($siswa->user) {
+            $siswa->user->resetDeviceLogin();
+        }
+
+        $this->flashType = 'success';
+        $this->flashMessage = "Kunci perangkat untuk {$siswa->nama} berhasil di-reset.";
+    }
+
+    /**
      * Reset login & buka kunci sesi siswa (tanpa menghapus jawaban tersimpan)
      */
     public function resetSesiSiswa(int $pesertaId): void
     {
-        $ujian = $this->activeUjian;
-        if (!$ujian) return;
-
-        $peserta = UjianPeserta::where('ujian_id', $ujian->id)
-            ->with(['ujianSesi', 'siswa.user', 'user'])
-            ->find($pesertaId);
-
+        $peserta = UjianPeserta::with(['ujianSesi', 'siswa.user', 'user'])->find($pesertaId);
         if (!$peserta) return;
 
         // Lepas kunci sesi perangkat aktif pada akun siswa
@@ -262,13 +460,7 @@ class PortalPengawas extends Component
      */
     public function tambahWaktuSiswa(int $pesertaId, int $menit = 10): void
     {
-        $ujian = $this->activeUjian;
-        if (!$ujian) return;
-
-        $peserta = UjianPeserta::where('ujian_id', $ujian->id)
-            ->with(['ujianSesi', 'siswa'])
-            ->find($pesertaId);
-
+        $peserta = UjianPeserta::with(['ujianSesi', 'siswa'])->find($pesertaId);
         if (!$peserta || !$peserta->ujianSesi) return;
 
         $sesi = $peserta->ujianSesi;
@@ -295,13 +487,7 @@ class PortalPengawas extends Component
      */
     public function paksaSelesaiSiswa(int $pesertaId): void
     {
-        $ujian = $this->activeUjian;
-        if (!$ujian) return;
-
-        $peserta = UjianPeserta::where('ujian_id', $ujian->id)
-            ->with(['ujianSesi', 'siswa'])
-            ->find($pesertaId);
-
+        $peserta = UjianPeserta::with(['ujianSesi', 'siswa'])->find($pesertaId);
         if (!$peserta) return;
 
         $sesi = $peserta->ujianSesi;
@@ -322,16 +508,14 @@ class PortalPengawas extends Component
 
     public function getSelectedPesertaProperty(): ?UjianPeserta
     {
-        if (!$this->selectedPesertaId || !$this->selectedUjianId) {
+        if (!$this->selectedPesertaId) {
             return null;
         }
 
-        return UjianPeserta::where('ujian_id', $this->selectedUjianId)
-            ->with([
-                'siswa.kelas',
-                'ujianSesi.jawabans.soal.opsiJawabans',
-            ])
-            ->find($this->selectedPesertaId);
+        return UjianPeserta::with([
+            'siswa.kelas',
+            'ujianSesi.jawabans.soal.opsiJawabans',
+        ])->find($this->selectedPesertaId);
     }
 
     public function bukaLembarJawaban(int $pesertaId): void
@@ -358,6 +542,9 @@ class PortalPengawas extends Component
         if (!Auth::check()) {
             return view('livewire.pengawas.portal-pengawas', [
                 'user' => null,
+                'daftarRuang' => collect(),
+                'activeRuang' => null,
+                'pesertasRuang' => collect(),
                 'daftarUjian' => collect(),
                 'activeUjian' => null,
                 'pesertas' => collect(),
@@ -366,10 +553,12 @@ class PortalPengawas extends Component
 
         return view('livewire.pengawas.portal-pengawas', [
             'user' => Auth::user(),
+            'daftarRuang' => $this->daftarRuang,
+            'activeRuang' => $this->activeRuang,
+            'pesertasRuang' => $this->pesertasRuangList,
             'daftarUjian' => $this->daftarUjian,
             'activeUjian' => $this->activeUjian,
             'pesertas' => $this->pesertasList,
         ]);
     }
 }
-

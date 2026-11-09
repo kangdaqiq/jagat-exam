@@ -785,6 +785,7 @@
                         updateTimer() {
                             const nowSec = Math.floor(Date.now() / 1000);
                             this.remainingSeconds = Math.max(0, this.endTimestamp - nowSec);
+                            window.dispatchEvent(new CustomEvent('cbt-timer-state', { detail: this.remainingSeconds }));
 
                             if (this.remainingSeconds <= 0 && !this.submitted) {
                                 this.submitted = true;
@@ -1120,11 +1121,11 @@
                         @else
                             <button
                                 type="button"
-                                @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
-                                :disabled="answeredCount < totalSoals"
+                                @click="if (canSubmit) showConfirmSubmitModal = true"
+                                :disabled="!canSubmit"
                                 class="exam-nav-btn exam-nav-btn-finish"
-                                :class="answeredCount < totalSoals ? 'is-disabled' : ''"
-                                :title="answeredCount < totalSoals ? 'Harap jawab seluruh ' + totalSoals + ' butir soal terlebih dahulu (' + belumCount + ' butir belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
+                                :class="!canSubmit ? 'is-disabled' : ''"
+                                :title="submitHint"
                             >
                                 <span>Selesai Ujian &#10003;</span>
                             </button>
@@ -1200,18 +1201,18 @@
             <div style="padding: 14px 18px; border-top: 1px solid #f1f5f9; background: #f8fafc;">
                 <button
                     type="button"
-                    @click="if (answeredCount >= totalSoals) showConfirmSubmitModal = true"
-                    :disabled="answeredCount < totalSoals"
+                    @click="if (canSubmit) showConfirmSubmitModal = true"
+                    :disabled="!canSubmit"
                     class="exam-btn-finish-custom"
-                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
-                    :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
+                    :class="!canSubmit ? 'is-disabled' : ''"
+                    :title="submitHint"
                     style="width: 100%;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
                 </button>
-                <template x-if="answeredCount < totalSoals">
+                <template x-if="!canSubmit">
                     <p style="margin: 7px 0 0; font-size: 11px; font-weight: 700; color: #dc2626; text-align: center; line-height: 1.4;">
-                        Jawab <span x-text="belumCount"></span> soal lagi untuk mengumpulkan.
+                        <span x-text="submitHint"></span>
                     </p>
                 </template>
             </div>
@@ -1292,11 +1293,11 @@
                 </button>
                 <button
                     type="button"
-                    @click="if (answeredCount >= totalSoals) { showDaftarSoalMobile = false; showConfirmSubmitModal = true; }"
-                    :disabled="answeredCount < totalSoals"
+                    @click="if (canSubmit) { showDaftarSoalMobile = false; showConfirmSubmitModal = true; }"
+                    :disabled="!canSubmit"
                     class="exam-btn-finish-custom"
-                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
-                    :title="answeredCount < totalSoals ? 'Harap jawab seluruh butir soal terlebih dahulu (' + belumCount + ' belum dijawab)' : 'Selesai dan kumpulkan lembar jawaban'"
+                    :class="!canSubmit ? 'is-disabled' : ''"
+                    :title="submitHint"
                     style="flex: 1.5;"
                 >
                     Selesai &amp; Kumpulkan &#10003;
@@ -1357,10 +1358,10 @@
                 </button>
                 <button
                     type="button"
-                    @click="if (answeredCount >= totalSoals) submitFinal()"
-                    :disabled="answeredCount < totalSoals"
+                    @click="if (canSubmit) submitFinal()"
+                    :disabled="!canSubmit"
                     class="exam-btn-finish-custom"
-                    :class="answeredCount < totalSoals ? 'is-disabled' : ''"
+                    :class="!canSubmit ? 'is-disabled' : ''"
                     style="flex: 1.2;"
                 >
                     Kirim Jawaban &#10003;
@@ -1543,6 +1544,12 @@ function examRunner($wire, config) {
         },
 
         init() {
+            window.addEventListener('cbt-timer-state', (e) => {
+                const s = Number(e.detail);
+                this.sisaWaktuDetik = s;
+                this.waktuHabis = s <= 0;
+            });
+
             // Restore dari localStorage jika ada data lokal tersimpan
             try {
                 const local = localStorage.getItem(this.storageKey);
@@ -1852,7 +1859,29 @@ function examRunner($wire, config) {
             return Math.max(0, this.totalSoals - this.answeredCount);
         },
 
+        // Tombol kumpulkan hanya aktif jika semua soal terjawab DAN waktu pengerjaan sudah habis
+        waktuHabis: false,
+        sisaWaktuDetik: null,
+
+        get canSubmit() {
+            return this.answeredCount >= this.totalSoals && this.waktuHabis;
+        },
+
+        get submitHint() {
+            if (this.belumCount > 0) {
+                return 'Jawab ' + this.belumCount + ' soal lagi untuk mengumpulkan.';
+            }
+            if (!this.waktuHabis) {
+                const s = this.sisaWaktuDetik ?? 0;
+                const m = Math.floor(s / 60);
+                const d = String(s % 60).padStart(2, '0');
+                return 'Semua soal terjawab. Lembar jawaban baru bisa dikumpulkan setelah waktu habis (sisa ' + m + ':' + d + ').';
+            }
+            return 'Selesai dan kumpulkan lembar jawaban';
+        },
+
         async submitFinal() {
+            if (!this.canSubmit) return;
             if (this.pendingSync.length > 0) {
                 await this.flushQueue();
             }
@@ -1862,7 +1891,7 @@ function examRunner($wire, config) {
             } catch (e) {}
             const wire = this.getWire();
             if (wire && typeof wire.submitUjianFinal === 'function') {
-                wire.submitUjianFinal();
+                wire.submitUjianManual();
             }
         }
     };

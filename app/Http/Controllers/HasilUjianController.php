@@ -134,8 +134,12 @@ class HasilUjianController extends Controller
         $hasAssignedKelas = $user->isGuru() && $user->kelases()->exists();
 
         $query = \App\Models\Siswa::query()
-            ->with(['kelas', 'user'])
+            ->with(['kelas', 'user', 'ruangUjian'])
             ->where('is_active', true);
+
+        if ($request->filled('ruang_ujian_id')) {
+            $query->where('ruang_ujian_id', (int) $request->input('ruang_ujian_id'));
+        }
 
         if ($hasAssignedKelas) {
             $query->forUser($user);
@@ -160,6 +164,19 @@ class HasilUjianController extends Controller
             ->orderBy('nama', 'asc')
             ->get();
 
+        // Aksi cepat dari halaman Cetak Kartu: Generate 6 angka acak atau Reset ke Default NIS
+        if (in_array($request->input('reset_mode'), ['generator', 'nis'], true)) {
+            $mode = $request->input('reset_mode');
+            foreach ($siswas as $s) {
+                $newPass = $mode === 'generator'
+                    ? \App\Models\Siswa::generateSixDigitPin()
+                    : ($s->nis ?: \App\Models\Siswa::generateSixDigitPin());
+                $s->resetPassword($newPass);
+            }
+
+            return redirect()->route('kartu-peserta.print', $request->except('reset_mode'));
+        }
+
         $daftarKelasQuery = \App\Models\Kelas::query();
         if ($hasAssignedKelas) {
             $daftarKelasQuery->forUser($user);
@@ -174,6 +191,7 @@ class HasilUjianController extends Controller
             'siswas' => $siswas,
             'selectedKelas' => $selectedKelas,
             'daftarKelas' => $daftarKelas,
+            'daftarRuang' => \App\Models\RuangUjian::orderBy('nama_ruang')->get(),
         ]);
     }
 }

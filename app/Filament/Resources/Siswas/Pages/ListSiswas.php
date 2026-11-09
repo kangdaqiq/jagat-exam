@@ -33,41 +33,54 @@ class ListSiswas extends ListRecords
                 ->color('danger')
                 ->requiresConfirmation()
                 ->modalHeading('Reset Password SELURUH Siswa')
-                ->modalDescription('PERHATIAN: Tindakan ini akan mereset password akun login seluruh siswa aktif. Silakan pilih metode password baru:')
+                ->modalDescription('PERHATIAN: Tindakan ini akan mereset password akun login seluruh siswa aktif dan memperbarui Kartu Peserta:')
                 ->modalSubmitActionLabel('Proses Reset Seluruh Siswa')
                 ->form([
                     Radio::make('mode')
                         ->label('Metode Reset Password')
                         ->options([
-                            'nis' => 'Reset ke NIS masing-masing siswa (Rekomendasi CBT)',
+                            'generator' => 'Auto-Generator 6 Karakter Angka Acak (Unik tiap siswa)',
+                            'nis' => 'Reset ke Default NIS masing-masing siswa',
                             'custom' => 'Reset ke satu password serentak untuk seluruh siswa',
                         ])
-                        ->default('nis')
+                        ->default('generator')
                         ->live(),
 
                     TextInput::make('custom_password')
                         ->label('Password Seragam Baru')
-                        ->placeholder('Contoh: siswa12345')
+                        ->placeholder('Contoh: 123456')
                         ->visible(fn ($get) => $get('mode') === 'custom')
                         ->required(fn ($get) => $get('mode') === 'custom')
                         ->minLength(4),
                 ])
                 ->action(function (array $data) {
-                    $mode = $data['mode'] ?? 'nis';
-                    $custom = $data['custom_password'] ?? 'siswa12345';
+                    $mode = $data['mode'] ?? 'generator';
+                    $custom = $data['custom_password'] ?? '123456';
 
                     $query = Siswa::query()->with('user')->forUser(auth()->user());
                     $count = 0;
 
                     foreach ($query->lazy() as $siswa) {
-                        $pass = ($mode === 'nis') ? ($siswa->nis ?: 'siswa12345') : $custom;
+                        if ($mode === 'generator') {
+                            $pass = Siswa::generateSixDigitPin();
+                        } elseif ($mode === 'nis') {
+                            $pass = $siswa->nis ?: Siswa::generateSixDigitPin();
+                        } else {
+                            $pass = $custom;
+                        }
                         $siswa->resetPassword($pass);
                         $count++;
                     }
 
+                    $ket = match ($mode) {
+                        'generator' => '6 karakter angka acak unik untuk masing-masing siswa.',
+                        'nis' => 'default NIS masing-masing siswa.',
+                        default => "password seragam: {$custom}",
+                    };
+
                     Notification::make()
                         ->title('Reset Seluruh Password Selesai')
-                        ->body("Sebanyak {$count} siswa berhasil direset passwordnya ke " . ($mode === 'nis' ? 'NIS masing-masing siswa.' : "password seragam: {$custom}"))
+                        ->body("Sebanyak {$count} siswa berhasil direset passwordnya ke {$ket}")
                         ->success()
                         ->send();
                 }),
