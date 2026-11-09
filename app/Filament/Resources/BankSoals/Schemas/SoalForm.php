@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BankSoals\Schemas;
 
 use App\Filament\Plugins\MathematicsPlugin;
+use App\Services\MediaCompressionService;
 use Closure;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
@@ -255,8 +256,15 @@ class SoalForm
                         'video' => ['video/mp4', 'video/webm'],
                         default => null,
                     })
-                    ->helperText('Maks. 30 MB.')
-                    ->maxSize(30720),
+                    ->helperText('Otomatis dikompresi agar siswa memuat soal secara cepat.')
+                    ->maxSize(51200)
+                    ->saveUploadedFileUsing(function ($file, Get $get) {
+                        return app(MediaCompressionService::class)->compressAndStore(
+                            $file,
+                            'soal-media',
+                            in_array($get('media_type'), ['image', 'video', 'audio']) ? $get('media_type') : null
+                        );
+                    }),
 
                 TextInput::make('audio_max_play')
                     ->label('Batas Putar Audio')
@@ -324,6 +332,13 @@ class SoalForm
                     ->image()
                     ->imagePreviewHeight('60')
                     ->panelLayout('compact')
+                    ->saveUploadedFileUsing(function ($file) {
+                        return app(MediaCompressionService::class)->compressAndStore(
+                            $file,
+                            'soal-media/opsi',
+                            'image'
+                        );
+                    })
                     ->visible($isTipeOpsi),
 
                 Checkbox::make('is_jawaban_benar')

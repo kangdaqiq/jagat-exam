@@ -8,6 +8,7 @@ use App\Models\Mapel;
 use App\Models\Soal;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -489,6 +490,34 @@ MD;
         // Soal 4: Essay
         $this->assertEquals('essay', $results[3]['tipe_soal']);
         $this->assertEmpty($results[3]['opsi_jawabans']);
+    }
+
+    public function test_upload_media_gambar_dikompresi_otomatis_ke_webp(): void
+    {
+        Storage::fake('public');
+
+        $soal = $this->bankSoal->soals()->create([
+            'nomor_urut' => 1,
+            'tipe_soal' => 'pilihan_ganda',
+            'pertanyaan' => 'Perhatikan gambar berikut ini:',
+        ]);
+
+        $uploaded = \Illuminate\Http\UploadedFile::fake()->image('diagram_stimulus.jpg', 1800, 1400);
+
+        $component = Livewire::actingAs($this->admin)
+            ->test(EditBankSoal::class, ['record' => $this->bankSoal->id]);
+
+        $component->call('selectSoal', $soal->id)
+            ->set('media_type', 'image')
+            ->set('media_file_upload', $uploaded)
+            ->call('simpanSoal')
+            ->assertHasNoErrors();
+
+        $soal->refresh();
+
+        $this->assertNotNull($soal->media_file);
+        $this->assertStringEndsWith('.webp', $soal->media_file);
+        Storage::disk('public')->assertExists($soal->media_file);
     }
 }
 

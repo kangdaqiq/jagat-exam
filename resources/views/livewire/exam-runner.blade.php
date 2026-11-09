@@ -915,11 +915,15 @@
                         {{-- Media Stimulus --}}
                         @if($soal->media_type === 'image' && $soal->media_file)
                             <div style="padding: 6px; border-radius: 14px; border: 1px solid #e2e8f0; background: #f8fafc; max-width: 480px; margin: 0 auto; width: 100%; box-sizing: border-box;">
-                                <img src="{{ Storage::url($soal->media_file) }}" alt="Gambar Stimulus" style="border-radius: 10px; width: 100%; max-height: 260px; object-fit: contain;" />
+                                <img src="{{ Storage::url($soal->media_file) }}" alt="Gambar Stimulus" loading="lazy" style="border-radius: 10px; width: 100%; max-height: 260px; object-fit: contain;" />
                             </div>
                         @elseif($soal->media_type === 'audio' && $soal->media_file)
                             <div style="padding: 12px 14px; border-radius: 14px; border: 1px solid #ddd6fe; background: #f5f3ff; display: flex; align-items: center; gap: 10px; max-width: 400px; width: 100%;">
-                                <audio controls src="{{ Storage::url($soal->media_file) }}" style="width: 100%;"></audio>
+                                <audio controls preload="none" src="{{ Storage::url($soal->media_file) }}" style="width: 100%;"></audio>
+                            </div>
+                        @elseif($soal->media_type === 'video' && $soal->media_file)
+                            <div style="padding: 6px; border-radius: 14px; border: 1px solid #e2e8f0; background: #000000; max-width: 520px; margin: 0 auto; width: 100%; box-sizing: border-box;">
+                                <video controls preload="metadata" playsinline src="{{ Storage::url($soal->media_file) }}" style="border-radius: 10px; width: 100%; max-height: 320px; display: block; margin: 0 auto;"></video>
                             </div>
                         @endif
 
@@ -957,12 +961,17 @@
                                             {{ $optLabel }}
                                         </div>
 
-                                        {{-- Teks Opsi --}}
+                                        {{-- Teks Opsi & Gambar --}}
                                         <div
                                             class="katex-content"
                                             :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }"
                                             style="flex: 1; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;"
                                         >
+                                            @if($opsi->gambar_opsi)
+                                                <div style="margin-bottom: 6px;">
+                                                    <img src="{{ Storage::url($opsi->gambar_opsi) }}" loading="lazy" alt="Gambar Opsi {{ $optLabel }}" style="max-height: 120px; max-width: 100%; object-fit: contain; border-radius: 6px;" />
+                                                </div>
+                                            @endif
                                             {!! $opsi->teks_opsi !!}
                                         </div>
 
@@ -1003,6 +1012,11 @@
                                             :style="{ fontSize: zoomLevel === 'lg' ? '15px' : (zoomLevel === 'sm' ? '12px' : '14px') }"
                                             style="flex: 1; color: #1e293b; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;"
                                         >
+                                            @if($opsi->gambar_opsi)
+                                                <div style="margin-bottom: 6px;">
+                                                    <img src="{{ Storage::url($opsi->gambar_opsi) }}" loading="lazy" alt="Gambar Opsi {{ $optLabel }}" style="max-height: 120px; max-width: 100%; object-fit: contain; border-radius: 6px;" />
+                                                </div>
+                                            @endif
                                             {!! $opsi->teks_opsi !!}
                                         </div>
                                         <div

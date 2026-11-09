@@ -7,6 +7,7 @@ use App\Models\BankSoal;
 use App\Models\Mapel;
 use App\Models\Soal;
 use App\Services\AiQuestionService;
+use App\Services\MediaCompressionService;
 use Filament\Actions\Action;
 
 use Filament\Schemas\Components\Grid;
@@ -260,10 +261,14 @@ class EditBankSoal extends Page
         $soal = $this->record->soals()->find($this->selectedSoalId);
         if (! $soal) return;
 
-        // Upload media file jika ada
+        // Upload media file jika ada (otomatis dikompresi)
         $mediaPath = $this->existing_media_file;
         if ($this->media_file_upload) {
-            $mediaPath = $this->media_file_upload->store('soal-media', 'public');
+            $mediaPath = app(MediaCompressionService::class)->compressAndStore(
+                $this->media_file_upload,
+                'soal-media',
+                $this->media_type !== 'none' ? $this->media_type : null
+            );
             $this->existing_media_file = $mediaPath;
             $this->media_file_upload = null;
         }
@@ -435,10 +440,51 @@ class EditBankSoal extends Page
             ->send();
     }
 
+    public function updatedMediaFileUpload(): void
+    {
+        if (! $this->media_file_upload) return;
+
+        try {
+            $mediaPath = app(MediaCompressionService::class)->compressAndStore(
+                $this->media_file_upload,
+                'soal-media',
+                $this->media_type !== 'none' ? $this->media_type : null
+            );
+
+            $this->existing_media_file = $mediaPath;
+            $this->media_file_upload = null;
+
+            if ($this->selectedSoalId) {
+                $this->record->soals()->where('id', $this->selectedSoalId)->update([
+                    'media_file' => $mediaPath,
+                    'media_type' => $this->media_type,
+                ]);
+            }
+
+            Notification::make()
+                ->title('File media berhasil dikompresi & disimpan')
+                ->body('Media telah dioptimalkan agar siswa dapat memuat soal dengan cepat.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal mengompresi media')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
     public function hapusMediaFile(): void
     {
         $this->existing_media_file = null;
         $this->media_file_upload = null;
+
+        if ($this->selectedSoalId) {
+            $this->record->soals()->where('id', $this->selectedSoalId)->update([
+                'media_file' => null,
+            ]);
+        }
     }
 
     /**

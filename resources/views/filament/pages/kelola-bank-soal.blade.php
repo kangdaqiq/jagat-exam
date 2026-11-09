@@ -650,16 +650,73 @@
 
                             @if($media_type !== 'none')
                                 <div class="sm:col-span-2 space-y-2">
-                                    <label class="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
-                                        Upload File Media ({{ ucfirst($media_type) }})
-                                    </label>
-                                    <input
-                                        type="file"
-                                        wire:model="media_file_upload"
-                                        class="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-950 dark:file:text-primary-300"
-                                    />
-                                    <div wire:loading wire:target="media_file_upload" class="text-xs text-primary-600">
-                                        Mengunggah file media...
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="text-[11px] font-medium text-gray-600 dark:text-gray-400 block">
+                                            Upload File Media ({{ ucfirst($media_type) }})
+                                        </label>
+                                        <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium inline-flex items-center gap-1">
+                                            <svg width="12" height="12" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            Kompresi Otomatis Aktif
+                                        </span>
+                                    </div>
+
+                                    <div x-data="{
+                                        compressing: false,
+                                        handleFileSelect(e) {
+                                            const file = e.target.files[0];
+                                            if (!file) return;
+
+                                            if (file.type.startsWith('image/')) {
+                                                this.compressing = true;
+                                                const reader = new FileReader();
+                                                reader.onload = (loadEvt) => {
+                                                    const img = new Image();
+                                                    img.onload = () => {
+                                                        const maxDim = 1280;
+                                                        let w = img.width;
+                                                        let h = img.height;
+                                                        if (w > maxDim || h > maxDim) {
+                                                            const r = Math.min(maxDim / w, maxDim / h);
+                                                            w = Math.round(w * r);
+                                                            h = Math.round(h * r);
+                                                        }
+                                                        const canvas = document.createElement('canvas');
+                                                        canvas.width = w;
+                                                        canvas.height = h;
+                                                        const ctx = canvas.getContext('2d');
+                                                        ctx.drawImage(img, 0, 0, w, h);
+                                                        canvas.toBlob((blob) => {
+                                                            this.compressing = false;
+                                                            const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), {
+                                                                type: 'image/webp',
+                                                                lastModified: Date.now()
+                                                            });
+                                                            @this.upload('media_file_upload', compressedFile);
+                                                        }, 'image/webp', 0.82);
+                                                    };
+                                                    img.src = loadEvt.target.result;
+                                                };
+                                                reader.readAsDataURL(file);
+                                            } else {
+                                                @this.upload('media_file_upload', file);
+                                            }
+                                        }
+                                    }">
+                                        <input
+                                            type="file"
+                                            @change="handleFileSelect($event)"
+                                            accept="{{ $media_type === 'image' ? 'image/*' : ($media_type === 'audio' ? 'audio/*' : ($media_type === 'video' ? 'video/*' : '*')) }}"
+                                            class="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-950 dark:file:text-primary-300"
+                                        />
+                                        <div x-show="compressing" x-cloak class="text-xs text-primary-600 flex items-center gap-1.5 mt-1 font-medium">
+                                            <svg class="animate-spin w-3 h-3 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                                            Mengompresi gambar sebelum diunggah...
+                                        </div>
+                                        <div wire:loading wire:target="media_file_upload" class="text-xs text-primary-600 mt-1 font-medium">
+                                            Mengunggah & mengoptimalkan media di server...
+                                        </div>
                                     </div>
 
                                     @if($existing_media_file)
@@ -668,6 +725,8 @@
                                                 <img src="{{ Storage::url($existing_media_file) }}" alt="Media Soal" class="max-h-24 max-w-xs rounded object-contain border border-gray-200 dark:border-gray-700" />
                                             @elseif($media_type === 'audio')
                                                 <audio controls src="{{ Storage::url($existing_media_file) }}" class="h-8 max-w-xs"></audio>
+                                            @elseif($media_type === 'video')
+                                                <video controls preload="metadata" src="{{ Storage::url($existing_media_file) }}" class="max-h-24 max-w-xs rounded border border-gray-200 dark:border-gray-700"></video>
                                             @endif
                                             <button
                                                 type="button"
@@ -1658,14 +1717,45 @@
                             <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 Tingkat Kognitif / Kesulitan
                             </label>
-                            <div class="grid grid-cols-3 gap-1">
-                                @foreach(['LOTS' => 'Mudah', 'MOTS' => 'Sedang', 'HOTS' => 'Sulit'] as $k => $label)
-                                    <label class="cursor-pointer text-center py-1.5 px-2 rounded-lg border text-xs font-semibold transition {{ $ai_kesulitan === $k ? 'border-primary-500 bg-primary-600 text-white shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50' }}">
-                                        <input type="radio" wire:model="ai_kesulitan" value="{{ $k }}" class="sr-only" />
-                                        <span>{{ $k }}</span>
-                                        <span class="block text-[10px] font-normal opacity-80">{{ $label }}</span>
-                                    </label>
-                                @endforeach
+                            <div class="grid grid-cols-3 gap-1.5" x-data="{ ksl: @entangle('ai_kesulitan').live }">
+                                {{-- LOTS --}}
+                                <button
+                                    type="button"
+                                    @click="ksl = 'LOTS'; $wire.set('ai_kesulitan', 'LOTS')"
+                                    style="{{ $ai_kesulitan === 'LOTS' ? 'background-color: #059669; color: #ffffff; border-color: #059669;' : '' }}"
+                                    :style="ksl === 'LOTS' ? 'background-color: #059669; color: #ffffff; border-color: #059669;' : ''"
+                                    class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
+                                    :class="ksl === 'LOTS' ? 'ring-2 ring-emerald-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-gray-700'"
+                                >
+                                    <span class="flex items-center gap-1 font-extrabold text-xs">🟢 LOTS</span>
+                                    <span class="block text-[10px] font-normal" :class="ksl === 'LOTS' ? 'text-emerald-100' : 'text-gray-500 dark:text-gray-400'">Mudah (C1-C2)</span>
+                                </button>
+
+                                {{-- MOTS --}}
+                                <button
+                                    type="button"
+                                    @click="ksl = 'MOTS'; $wire.set('ai_kesulitan', 'MOTS')"
+                                    style="{{ $ai_kesulitan === 'MOTS' ? 'background-color: #d97706; color: #ffffff; border-color: #d97706;' : '' }}"
+                                    :style="ksl === 'MOTS' ? 'background-color: #d97706; color: #ffffff; border-color: #d97706;' : ''"
+                                    class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
+                                    :class="ksl === 'MOTS' ? 'ring-2 ring-amber-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-amber-50 hover:border-amber-300 dark:hover:bg-gray-700'"
+                                >
+                                    <span class="flex items-center gap-1 font-extrabold text-xs">🟡 MOTS</span>
+                                    <span class="block text-[10px] font-normal" :class="ksl === 'MOTS' ? 'text-amber-100' : 'text-gray-500 dark:text-gray-400'">Sedang (C3)</span>
+                                </button>
+
+                                {{-- HOTS --}}
+                                <button
+                                    type="button"
+                                    @click="ksl = 'HOTS'; $wire.set('ai_kesulitan', 'HOTS')"
+                                    style="{{ $ai_kesulitan === 'HOTS' ? 'background-color: #e11d48; color: #ffffff; border-color: #e11d48;' : '' }}"
+                                    :style="ksl === 'HOTS' ? 'background-color: #e11d48; color: #ffffff; border-color: #e11d48;' : ''"
+                                    class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
+                                    :class="ksl === 'HOTS' ? 'ring-2 ring-rose-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-gray-700'"
+                                >
+                                    <span class="flex items-center gap-1 font-extrabold text-xs">🔴 HOTS</span>
+                                    <span class="block text-[10px] font-normal" :class="ksl === 'HOTS' ? 'text-rose-100' : 'text-gray-500 dark:text-gray-400'">Sulit (C4-C6)</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1702,7 +1792,8 @@
                                     <button
                                         type="button"
                                         wire:click="$set('ai_jumlah', {{ $preset }})"
-                                        class="px-2 py-0.5 text-[11px] font-semibold rounded border transition {{ (int)$ai_jumlah === $preset ? 'bg-primary-600 text-white border-primary-600 shadow-xs' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50' }}"
+                                        style="{{ (int)$ai_jumlah === $preset ? 'background-color: #4f46e5; color: #ffffff; border-color: #4f46e5;' : '' }}"
+                                        class="px-2 py-0.5 text-[11px] font-semibold rounded border transition cursor-pointer {{ (int)$ai_jumlah === $preset ? 'shadow-xs' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50' }}"
                                     >
                                         {{ $preset }}
                                     </button>
