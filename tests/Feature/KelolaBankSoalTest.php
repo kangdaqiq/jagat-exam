@@ -421,7 +421,7 @@ MD;
 
         $component->callAction('sesuaikanBobot')
             ->assertHasNoErrors()
-            ->assertNotified('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (Rasio LOTS:MOTS:HOTS = 1:2:3)');
+            ->assertNotified('Bobot seluruh butir soal berhasil dibagi sama rata ke total 100 poin!');
 
         $this->assertEquals(100.0, (float) $this->bankSoal->fresh()->total_bobot);
     }
@@ -518,6 +518,35 @@ MD;
         $this->assertNotNull($soal->media_file);
         $this->assertStringEndsWith('.webp', $soal->media_file);
         Storage::disk('public')->assertExists($soal->media_file);
+    }
+
+    public function test_kesulitan_mots_hots_preserved_when_generating_with_ai(): void
+    {
+        $ai = app(\App\Services\AiQuestionService::class);
+
+        // Test 1: Generate MOTS
+        $resMots = $ai->generateSoals([
+            'topik' => 'Fiqih Salat',
+            'tipe_soal' => 'pilihan_ganda',
+            'kesulitan' => 'MOTS',
+            'jumlah' => 2,
+        ]);
+        $this->assertEquals('MOTS', $resMots[0]['tingkat_kesulitan']);
+
+        // Test 2: Generate HOTS
+        $resHots = $ai->generateSoals([
+            'topik' => 'Fiqih Salat',
+            'tipe_soal' => 'pilihan_ganda',
+            'kesulitan' => 'HOTS',
+            'jumlah' => 2,
+        ]);
+        $this->assertEquals('HOTS', $resHots[0]['tingkat_kesulitan']);
+
+        // Test 3: Inferensi soal studi kasus kontekstual yang berakhiran 'adalah'
+        $q = 'Ahmad sedang melaksanakan salat Zuhur. Pada rakaat kedua, ia baru menyadari lupa tasyahud awal. Tindakan yang tepat adalah...';
+        $inferred = \App\Services\AiQuestionService::inferBloomTaxonomy($q);
+        $this->assertNotEquals('LOTS', $inferred['tingkat_kesulitan']);
+        $this->assertEquals('MOTS', $inferred['tingkat_kesulitan']);
     }
 }
 

@@ -27,6 +27,13 @@ class ListSiswas extends ListRecords
                 ->url(fn () => route('kartu-peserta.print'))
                 ->openUrlInNewTab(),
 
+            Action::make('cetakKartuMeja')
+                ->label('Cetak Kartu Meja (Hide Akun)')
+                ->icon(Heroicon::OutlinedTag)
+                ->color('success')
+                ->url(fn () => route('kartu-peserta.print', ['tipe' => 'meja']))
+                ->openUrlInNewTab(),
+
             Action::make('resetAllPassword')
                 ->label('Reset Password Seluruh Siswa')
                 ->icon(Heroicon::OutlinedKey)

@@ -21,6 +21,7 @@ class Siswa extends Model
         'kelas_id',
         'ruang_ujian_id',
         'nis',
+        'nisn',
         'password_cbt',
         'nama',
         'no_wa',
@@ -159,5 +160,10 @@ class Siswa extends Model
         ]);
 
         return $user;
+    }
+
+    public function getNisnOrNisAttribute(): string
+    {
+        return $this->nisn ?: ($this->nis ?: '-');
     }
 }

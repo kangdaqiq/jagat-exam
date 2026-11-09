@@ -1835,39 +1835,39 @@
                                 <button
                                     type="button"
                                     @click="ksl = 'LOTS'; $wire.set('ai_kesulitan', 'LOTS')"
-                                    style="{{ $ai_kesulitan === 'LOTS' ? 'background-color: #059669; color: #ffffff; border-color: #059669;' : '' }}"
-                                    :style="ksl === 'LOTS' ? 'background-color: #059669; color: #ffffff; border-color: #059669;' : ''"
+                                    style="{{ $ai_kesulitan === 'LOTS' ? 'background-color: #059669; color: #ffffff; border-color: #059669;' : 'background-color: #ffffff; color: #374151; border-color: #e5e7eb;' }}"
+                                    :style="ksl === 'LOTS' ? 'background-color: #059669 !important; color: #ffffff !important; border-color: #059669 !important;' : 'background-color: #ffffff !important; color: #374151 !important; border-color: #e5e7eb !important;'"
                                     class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
-                                    :class="ksl === 'LOTS' ? 'ring-2 ring-emerald-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-gray-700'"
+                                    :class="ksl === 'LOTS' ? 'ring-2 ring-emerald-400/50 shadow-sm' : 'hover:bg-emerald-50 hover:border-emerald-300'"
                                 >
                                     <span class="flex items-center gap-1 font-extrabold text-xs">🟢 LOTS</span>
-                                    <span class="block text-[10px] font-normal" :class="ksl === 'LOTS' ? 'text-emerald-100' : 'text-gray-500 dark:text-gray-400'">Mudah (C1-C2)</span>
+                                    <span class="block text-[10px] font-normal" :style="ksl === 'LOTS' ? 'color: #d1fae5 !important;' : 'color: #6b7280 !important;'">Mudah (C1-C2)</span>
                                 </button>
 
                                 {{-- MOTS --}}
                                 <button
                                     type="button"
                                     @click="ksl = 'MOTS'; $wire.set('ai_kesulitan', 'MOTS')"
-                                    style="{{ $ai_kesulitan === 'MOTS' ? 'background-color: #d97706; color: #ffffff; border-color: #d97706;' : '' }}"
-                                    :style="ksl === 'MOTS' ? 'background-color: #d97706; color: #ffffff; border-color: #d97706;' : ''"
+                                    style="{{ $ai_kesulitan === 'MOTS' ? 'background-color: #d97706; color: #ffffff; border-color: #d97706;' : 'background-color: #ffffff; color: #374151; border-color: #e5e7eb;' }}"
+                                    :style="ksl === 'MOTS' ? 'background-color: #d97706 !important; color: #ffffff !important; border-color: #d97706 !important;' : 'background-color: #ffffff !important; color: #374151 !important; border-color: #e5e7eb !important;'"
                                     class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
-                                    :class="ksl === 'MOTS' ? 'ring-2 ring-amber-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-amber-50 hover:border-amber-300 dark:hover:bg-gray-700'"
+                                    :class="ksl === 'MOTS' ? 'ring-2 ring-amber-400/50 shadow-sm' : 'hover:bg-amber-50 hover:border-amber-300'"
                                 >
                                     <span class="flex items-center gap-1 font-extrabold text-xs">🟡 MOTS</span>
-                                    <span class="block text-[10px] font-normal" :class="ksl === 'MOTS' ? 'text-amber-100' : 'text-gray-500 dark:text-gray-400'">Sedang (C3)</span>
+                                    <span class="block text-[10px] font-normal" :style="ksl === 'MOTS' ? 'color: #fef3c7 !important;' : 'color: #6b7280 !important;'">Sedang (C3)</span>
                                 </button>
 
                                 {{-- HOTS --}}
                                 <button
                                     type="button"
                                     @click="ksl = 'HOTS'; $wire.set('ai_kesulitan', 'HOTS')"
-                                    style="{{ $ai_kesulitan === 'HOTS' ? 'background-color: #e11d48; color: #ffffff; border-color: #e11d48;' : '' }}"
-                                    :style="ksl === 'HOTS' ? 'background-color: #e11d48; color: #ffffff; border-color: #e11d48;' : ''"
+                                    style="{{ $ai_kesulitan === 'HOTS' ? 'background-color: #e11d48; color: #ffffff; border-color: #e11d48;' : 'background-color: #ffffff; color: #374151; border-color: #e5e7eb;' }}"
+                                    :style="ksl === 'HOTS' ? 'background-color: #e11d48 !important; color: #ffffff !important; border-color: #e11d48 !important;' : 'background-color: #ffffff !important; color: #374151 !important; border-color: #e5e7eb !important;'"
                                     class="text-center py-2 px-1 rounded-lg border text-xs font-bold transition shadow-xs flex flex-col items-center justify-center cursor-pointer select-none"
-                                    :class="ksl === 'HOTS' ? 'ring-2 ring-rose-400/50 shadow-sm' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-gray-700'"
+                                    :class="ksl === 'HOTS' ? 'ring-2 ring-rose-400/50 shadow-sm' : 'hover:bg-rose-50 hover:border-rose-300'"
                                 >
                                     <span class="flex items-center gap-1 font-extrabold text-xs">🔴 HOTS</span>
-                                    <span class="block text-[10px] font-normal" :class="ksl === 'HOTS' ? 'text-rose-100' : 'text-gray-500 dark:text-gray-400'">Sulit (C4-C6)</span>
+                                    <span class="block text-[10px] font-normal" :style="ksl === 'HOTS' ? 'color: #ffe4e6 !important;' : 'color: #6b7280 !important;'">Sulit (C4-C6)</span>
                                 </button>
                             </div>
                         </div>

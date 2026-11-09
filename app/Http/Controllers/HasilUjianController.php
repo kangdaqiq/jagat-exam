@@ -159,10 +159,16 @@ class HasilUjianController extends Controller
             }
         }
 
+        $urutanMode = (string) $request->input('urutan', 'selang_seling');
+
         $siswas = $query
+            ->orderBy('ruang_ujian_id', 'asc')
             ->orderBy('kelas_id', 'asc')
             ->orderBy('nama', 'asc')
             ->get();
+
+        // Susun urutan meja dalam setiap ruangan secara berselang-seling antar kelas
+        $siswas = $this->arrangeSiswasForMejaUjian($siswas, $urutanMode);
 
         // Aksi cepat dari halaman Cetak Kartu: Generate 6 angka acak atau Reset ke Default NIS
         if (in_array($request->input('reset_mode'), ['generator', 'nis'], true)) {
@@ -193,6 +199,96 @@ class HasilUjianController extends Controller
             'daftarKelas' => $daftarKelas,
             'daftarRuang' => \App\Models\RuangUjian::orderBy('nama_ruang')->get(),
         ]);
+    }
+
+    /**
+     * Susun urutan siswa dalam ruangan agar meja berselang-seling antar kelas
+     */
+    protected function arrangeSiswasForMejaUjian($siswas, string $mode = 'selang_seling')
+    {
+        if ($siswas->isEmpty()) {
+            return $siswas;
+        }
+
+        // Kelompokkan siswa per ruangan
+        $byRuang = $siswas->groupBy(fn ($s) => (int) ($s->ruang_ujian_id ?? 0));
+        $ordered = collect();
+
+        foreach ($byRuang as $ruangId => $roomSiswas) {
+            $sortedRoomSiswas = $mode === 'selang_seling'
+                ? $this->interleaveSiswasByKelas($roomSiswas)
+                : $roomSiswas->values();
+
+            // Tetapkan nomor meja berurutan mulai dari 01 per ruangan
+            foreach ($sortedRoomSiswas as $idx => $s) {
+                $s->nomor_meja = sprintf('%02d', $idx + 1);
+                $ordered->push($s);
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * Interleave siswa dalam 1 ruangan agar kelas berselang-seling (tidak berdekatan)
+     */
+    protected function interleaveSiswasByKelas($siswasInRoom)
+    {
+        if ($siswasInRoom->count() <= 2) {
+            return $siswasInRoom->values();
+        }
+
+        // Kelompokkan siswa berdasarkan kelas
+        $byKelas = [];
+        foreach ($siswasInRoom as $s) {
+            $kId = $s->kelas_id ?? 0;
+            $byKelas[$kId][] = $s;
+        }
+
+        // Jika hanya ada 1 kelas di ruangan ini, kembalikan terurut nama
+        if (count($byKelas) <= 1) {
+            return $siswasInRoom->sortBy('nama', SORT_NATURAL | SORT_FLAG_CASE)->values();
+        }
+
+        // Urutkan kelas dari yang siswanya terbanyak
+        uasort($byKelas, fn ($a, $b) => count($b) <=> count($a));
+
+        // Ambil kelas terbesar sebagai basis bucket
+        $classes = array_values($byKelas);
+        $largestClass = array_shift($classes);
+        usort($largestClass, fn ($a, $b) => strcasecmp($a->nama, $b->nama));
+
+        $bucketCount = count($largestClass);
+        $buckets = [];
+        for ($i = 0; $i < $bucketCount; $i++) {
+            $buckets[$i] = [$largestClass[$i]];
+        }
+
+        // Kumpulkan siswa dari kelas-kelas lainnya
+        $otherStudents = [];
+        foreach ($classes as $classMembers) {
+            usort($classMembers, fn ($a, $b) => strcasecmp($a->nama, $b->nama));
+            foreach ($classMembers as $m) {
+                $otherStudents[] = $m;
+            }
+        }
+
+        // Masukkan sisa siswa ke dalam bucket secara berputar (round-robin)
+        $bucketIdx = 0;
+        foreach ($otherStudents as $st) {
+            $buckets[$bucketIdx][] = $st;
+            $bucketIdx = ($bucketIdx + 1) % $bucketCount;
+        }
+
+        // Rangkai kembali seluruh bucket menjadi urutan meja berselang-seling
+        $result = [];
+        foreach ($buckets as $b) {
+            foreach ($b as $item) {
+                $result[] = $item;
+            }
+        }
+
+        return collect($result);
     }
 }
 

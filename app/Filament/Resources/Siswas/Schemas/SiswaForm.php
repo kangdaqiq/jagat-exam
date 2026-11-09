@@ -19,6 +19,11 @@ class SiswaForm
                     ->required()
                     ->maxLength(50),
 
+                TextInput::make('nisn')
+                    ->label('NISN (Nomor Induk Siswa Nasional)')
+                    ->placeholder('Contoh: 0071234567')
+                    ->maxLength(20),
+
                 TextInput::make('nama')
                     ->label('Nama Lengkap Siswa')
                     ->placeholder('Contoh: Muhammad Rizki')

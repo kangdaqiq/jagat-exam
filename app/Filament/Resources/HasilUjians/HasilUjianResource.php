@@ -29,7 +29,7 @@ class HasilUjianResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Ujian';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
 
     public static function canAccess(): bool
     {

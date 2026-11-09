@@ -124,10 +124,17 @@ class RuangUjianTable
                     }),
 
                 Action::make('cetakKartuRuang')
-                    ->label('Kartu Ruang')
+                    ->label('Kartu Peserta')
                     ->icon(Heroicon::OutlinedPrinter)
                     ->color('info')
                     ->url(fn (RuangUjian $record) => route('kartu-peserta.print', ['ruang_ujian_id' => $record->id]))
+                    ->openUrlInNewTab(),
+
+                Action::make('cetakKartuMeja')
+                    ->label('Kartu Meja')
+                    ->icon(Heroicon::OutlinedTag)
+                    ->color('success')
+                    ->url(fn (RuangUjian $record) => route('kartu-peserta.print', ['ruang_ujian_id' => $record->id, 'tipe' => 'meja']))
                     ->openUrlInNewTab(),
 
                 Action::make('jadwalRuang')

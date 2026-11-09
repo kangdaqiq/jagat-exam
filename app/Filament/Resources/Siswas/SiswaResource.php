@@ -27,7 +27,7 @@ class SiswaResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Data Master CBT';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'nama';
 

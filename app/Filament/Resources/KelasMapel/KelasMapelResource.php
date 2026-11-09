@@ -26,9 +26,9 @@ class KelasMapelResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Kelas & Mapel yang Diampu';
 
-    protected static string|UnitEnum|null $navigationGroup = null;
+    protected static string|UnitEnum|null $navigationGroup = 'Data Master CBT';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 4;
 
     public static function canAccess(): bool
     {

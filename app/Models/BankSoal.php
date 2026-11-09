@@ -100,12 +100,11 @@ class BankSoal extends Model
     }
 
     /**
-     * Otomatis membagi bobot soal ke total 100 poin dengan rasio perbandingan kesulitan:
-     * LOTS : MOTS : HOTS = 1 : 2 : 3.
+     * Otomatis membagi bobot soal ke total 100 poin secara sama rata (flat).
      *
      * Jika bank soal memuat soal campuran objektif (PG/PGK/BS/Menjodohkan) dan subjektif (Isian/Essay),
      * bobot dialokasikan dengan standar komposisi 75% objektif : 25% subjektif, di mana di dalam
-     * masing-masing kelompok soal didistribusikan secara proporsional sesuai rasio kesulitan 1 : 2 : 3.
+     * masing-masing kelompok soal didistribusikan sama rata ke setiap butir soal.
      */
     public function autoDistributeBobot(float $targetTotal = 100.0): void
     {
@@ -125,37 +124,15 @@ class BankSoal extends Model
             $count = $groupSoals->count();
             if ($count === 0) return;
 
-            $totalUnits = 0.0;
-            foreach ($groupSoals as $s) {
-                $kesulitan = strtoupper($s->tingkat_kesulitan ?? 'MOTS');
-                $multiplier = match ($kesulitan) {
-                    'HOTS' => 3.0,
-                    'MOTS' => 2.0,
-                    default => 1.0, // LOTS
-                };
-                $totalUnits += $multiplier;
-            }
-
-            if ($totalUnits <= 0) {
-                $totalUnits = (float) $count;
-            }
-
-            $unitValue = $target / $totalUnits;
+            $unitValue = round($target / $count, 2);
             $accumulated = 0.0;
             $lastIdx = $count - 1;
 
             foreach ($groupSoals->values() as $idx => $s) {
-                $kesulitan = strtoupper($s->tingkat_kesulitan ?? 'MOTS');
-                $multiplier = match ($kesulitan) {
-                    'HOTS' => 3.0,
-                    'MOTS' => 2.0,
-                    default => 1.0, // LOTS
-                };
-
                 if ($idx === $lastIdx) {
                     $val = round($target - $accumulated, 2);
                 } else {
-                    $val = round($unitValue * $multiplier, 2);
+                    $val = $unitValue;
                     $accumulated += $val;
                 }
 

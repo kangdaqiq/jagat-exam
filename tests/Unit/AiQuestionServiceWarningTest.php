@@ -62,20 +62,15 @@ class AiQuestionServiceWarningTest extends TestCase
         $this->assertEquals('HOTS', $hots['tingkat_kesulitan']);
         $this->assertContains($hots['taksonomi_bloom'], ['C4', 'C5']);
 
-        // Uji perhitungan bobot berjenjang dengan rasio 1 : 2 : 3
+        // Uji perhitungan bobot flat
         $this->assertEquals(2.0, AiQuestionService::calculateBobotByKesulitan('LOTS', 2.0));
-        $this->assertEquals(4.0, AiQuestionService::calculateBobotByKesulitan('MOTS', 2.0));
-        $this->assertEquals(6.0, AiQuestionService::calculateBobotByKesulitan('HOTS', 2.0));
+        $this->assertEquals(2.0, AiQuestionService::calculateBobotByKesulitan('MOTS', 2.0));
+        $this->assertEquals(2.0, AiQuestionService::calculateBobotByKesulitan('HOTS', 2.0));
     }
 
-    public function test_distribute_bobot_by_rasio_1_2_3(): void
+    public function test_distribute_bobot_by_rasio_flat(): void
     {
-        // Kasus 1: 3 soal (1 LOTS, 1 MOTS, 1 HOTS)
-        // Unit: 1 + 2 + 3 = 6 unit.
-        // Unit value = 100 / 6 = 16.666...
-        // LOTS: 16.67
-        // MOTS: 33.33
-        // HOTS: 100 - (16.67 + 33.33) = 50.00
+        // Kasus 1: 3 soal -> 100 / 3 = 33.33, 33.33, 33.34
         $soals = [
             ['pertanyaan' => 'Soal 1', 'tingkat_kesulitan' => 'LOTS'],
             ['pertanyaan' => 'Soal 2', 'tingkat_kesulitan' => 'MOTS'],
@@ -84,16 +79,14 @@ class AiQuestionServiceWarningTest extends TestCase
 
         $distributed = AiQuestionService::distributeBobotByRasio($soals, 100.0);
 
-        $this->assertEquals(16.67, $distributed[0]['bobot_nilai']);
+        $this->assertEquals(33.33, $distributed[0]['bobot_nilai']);
         $this->assertEquals(33.33, $distributed[1]['bobot_nilai']);
-        $this->assertEquals(50.0, $distributed[2]['bobot_nilai']);
+        $this->assertEquals(33.34, $distributed[2]['bobot_nilai']);
 
         $totalScore = array_sum(array_column($distributed, 'bobot_nilai'));
         $this->assertEquals(100.0, $totalScore);
 
-        // Kasus 2: 10 soal (3 LOTS, 5 MOTS, 2 HOTS)
-        // Unit: 3*(1) + 5*(2) + 2*(3) = 3 + 10 + 6 = 19 unit.
-        // Unit value = 100 / 19 ≈ 5.26315...
+        // Kasus 2: 10 soal (3 LOTS, 5 MOTS, 2 HOTS) -> Semua sama rata 10.0 poin
         $mixedSoals = [
             ['pertanyaan' => 'L1', 'tingkat_kesulitan' => 'LOTS'],
             ['pertanyaan' => 'L2', 'tingkat_kesulitan' => 'LOTS'],
@@ -113,10 +106,9 @@ class AiQuestionServiceWarningTest extends TestCase
         // Harus tepat 100.0
         $this->assertEquals(100.0, round($totalMixed, 2));
 
-        // LOTS per butir sekitar 5.26, MOTS sekitar 10.53, HOTS sekitar 15.79
-        $this->assertEquals(5.26, $resMixed[0]['bobot_nilai']);
-        $this->assertEquals(10.53, $resMixed[3]['bobot_nilai']);
-        // Butir terakhir disesuaikan sisa pembulatan
-        $this->assertGreaterThan(15.0, $resMixed[9]['bobot_nilai']);
+        // Semua butir soal bernilai sama rata 10.00
+        $this->assertEquals(10.0, $resMixed[0]['bobot_nilai']);
+        $this->assertEquals(10.0, $resMixed[3]['bobot_nilai']);
+        $this->assertEquals(10.0, $resMixed[9]['bobot_nilai']);
     }
 }

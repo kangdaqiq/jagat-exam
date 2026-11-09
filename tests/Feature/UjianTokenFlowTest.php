@@ -795,8 +795,80 @@ class UjianTokenFlowTest extends TestCase
         $this->actingAs($this->guru)
             ->get(route('kartu-peserta.print'))
             ->assertStatus(200)
-            ->assertSee('KARTU PESERTA UJIAN CBT')
-            ->assertSee('10234');
+            ->assertSee('KARTU PESERTA')
+            ->assertSee('10234')
+            ->assertSee('Mahsun, M.Pd.')
+            ->assertSee('E-SIGN VALID');
+
+        // Test mode Kartu Meja (Hide Akun)
+        $this->actingAs($this->guru)
+            ->get(route('kartu-peserta.print', ['tipe' => 'meja']))
+            ->assertStatus(200)
+            ->assertSee('hide-credentials')
+            ->assertSee('KARTU MEJA PESERTA')
+            ->assertSee('No. Meja')
+            ->assertSee('Mahsun, M.Pd.')
+            ->assertSee('E-SIGN VALID');
+    }
+
+    public function test_kartu_meja_urutan_berselang_seling_antar_kelas(): void
+    {
+        $ruang = \App\Models\RuangUjian::create([
+            'nama_ruang' => 'Ruang Khusus Ujian',
+            'kapasitas' => 40,
+            'is_active' => true,
+        ]);
+
+        $kelasA = \App\Models\Kelas::create([
+            'nama_kelas' => 'X TB A',
+            'tingkat' => '10',
+            'jurusan' => 'Tata Busana',
+        ]);
+
+        $kelasB = \App\Models\Kelas::create([
+            'nama_kelas' => 'X TBSM B',
+            'tingkat' => '10',
+            'jurusan' => 'Teknik Sepeda Motor',
+        ]);
+
+        // 3 Siswa Kelas A
+        $sA1 = \App\Models\Siswa::create(['nama' => 'Andi TB', 'nis' => '1101', 'kelas_id' => $kelasA->id, 'ruang_ujian_id' => $ruang->id, 'is_active' => true]);
+        $sA2 = \App\Models\Siswa::create(['nama' => 'Budi TB', 'nis' => '1102', 'kelas_id' => $kelasA->id, 'ruang_ujian_id' => $ruang->id, 'is_active' => true]);
+        $sA3 = \App\Models\Siswa::create(['nama' => 'Cici TB', 'nis' => '1103', 'kelas_id' => $kelasA->id, 'ruang_ujian_id' => $ruang->id, 'is_active' => true]);
+
+        // 2 Siswa Kelas B
+        $sB1 = \App\Models\Siswa::create(['nama' => 'Dedi TBSM', 'nis' => '1201', 'kelas_id' => $kelasB->id, 'ruang_ujian_id' => $ruang->id, 'is_active' => true]);
+        $sB2 = \App\Models\Siswa::create(['nama' => 'Eka TBSM', 'nis' => '1202', 'kelas_id' => $kelasB->id, 'ruang_ujian_id' => $ruang->id, 'is_active' => true]);
+
+        $admin = \App\Models\User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('kartu-peserta.print', [
+                'ruang_ujian_id' => $ruang->id,
+                'tipe' => 'meja',
+                'urutan' => 'selang_seling',
+            ]));
+
+        $response->assertStatus(200);
+
+        // Ambil urutan siswa dari view data
+        $viewSiswas = $response->viewData('siswas');
+        $this->assertCount(5, $viewSiswas);
+
+        $kelasOrder = $viewSiswas->map(fn ($s) => $s->kelas->nama_kelas)->toArray();
+        $mejaOrder = $viewSiswas->map(fn ($s) => $s->nomor_meja)->toArray();
+
+        // Verifikasi nomor meja berurutan mulai 01 s/d 05
+        $this->assertEquals(['01', '02', '03', '04', '05'], $mejaOrder);
+
+        // Verifikasi selang-seling: tidak ada 2 meja berurutan dengan kelas yang sama!
+        for ($i = 0; $i < count($kelasOrder) - 1; $i++) {
+            $this->assertNotEquals(
+                $kelasOrder[$i],
+                $kelasOrder[$i + 1],
+                "Meja " . ($i + 1) . " dan Meja " . ($i + 2) . " tidak boleh satu kelas!"
+            );
+        }
     }
 }
 

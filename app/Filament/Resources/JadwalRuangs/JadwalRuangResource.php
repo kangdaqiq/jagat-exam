@@ -31,7 +31,7 @@ class JadwalRuangResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Ujian';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $recordTitleAttribute = 'sesi_ke';
 

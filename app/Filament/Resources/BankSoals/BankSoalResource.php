@@ -33,7 +33,7 @@ class BankSoalResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Ujian';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'judul';
 

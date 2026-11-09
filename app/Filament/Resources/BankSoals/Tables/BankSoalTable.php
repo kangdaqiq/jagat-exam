@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BankSoals\Tables;
 
 use App\Models\BankSoal;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Support\Icons\Heroicon;

@@ -174,27 +174,38 @@
             justify-content: center;
         }
 
-        /* Body Table */
+        /* Body Table & E-Sign Layout */
         .kartu-body {
-            padding: 7px 10px 8px;
+            padding: 5px 8px 6px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .kartu-body-inner {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 6px;
         }
         .bio-table {
-            width: 100%;
+            flex: 1;
+            min-width: 0;
             border-collapse: collapse;
-            font-size: 10.5px;
-            line-height: 1.35;
+            font-size: 10px;
+            line-height: 1.32;
         }
         .bio-table td {
-            padding: 1.5px 0;
+            padding: 1px 0;
             vertical-align: top;
             color: #000000;
         }
         .bio-table td.lbl {
-            width: 78px;
+            width: 58px;
             font-weight: 400;
         }
         .bio-table td.sep {
-            width: 10px;
+            width: 8px;
             text-align: center;
         }
         .bio-table td.val {
@@ -203,6 +214,68 @@
         }
         .bio-table td.val-bold {
             font-weight: 700;
+        }
+
+        /* TTD Kepala Sekolah & E-Sign QR Code */
+        .ttd-box {
+            width: 108px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            font-size: 8px;
+            line-height: 1.15;
+            color: #000000;
+            padding-top: 1px;
+        }
+        .ttd-titimangsa {
+            font-size: 8px;
+            white-space: nowrap;
+            color: #1e293b;
+        }
+        .ttd-jabatan {
+            font-size: 8.5px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .ttd-esign-wrapper {
+            margin: 1px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .ttd-esign-qr {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #334155;
+            padding: 1px;
+            background: #ffffff;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .ttd-esign-qr img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .ttd-badge-esign {
+            font-size: 6.5px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: #047857;
+            margin-top: 1.5px;
+        }
+        .ttd-nama {
+            font-size: 9px;
+            font-weight: 800;
+            text-decoration: underline;
+            margin-top: 2px;
+            white-space: nowrap;
         }
 
         @page {
@@ -224,14 +297,41 @@
                 max-width: 100%;
             }
         }
+
+        /* Mode Sembunyikan Username & Password (Kartu Meja Ujian) */
+        body.hide-credentials .row-kredensial {
+            display: none !important;
+        }
+        body.hide-credentials .row-meja {
+            display: table-row !important;
+        }
+        body.hide-credentials .bio-table td {
+            padding: 2.2px 0;
+            font-size: 10.5px;
+        }
+        body.hide-credentials .ttd-box {
+            padding-top: 4px;
+        }
+        body.hide-credentials .label-kartu-peserta {
+            display: none !important;
+        }
+        body.hide-credentials .label-kartu-meja {
+            display: inline-block !important;
+        }
+        .label-kartu-meja {
+            display: none !important;
+        }
     </style>
 </head>
-<body>
-    @php
-        $judulKegiatan = request('kegiatan', 'Sumatif Akhir Semester Gasal');
-        $tahunPelajaran = request('tp', 'Tahun Pelajaran 2026-2027');
-        $ruangDefault = request('ruang', 'Ruang 1');
-    @endphp
+@php
+    $judulKegiatan = request('kegiatan', 'Sumatif Akhir Semester Gasal');
+    $tahunPelajaran = request('tp', 'Tahun Pelajaran 2026-2027');
+    $ruangDefault = request('ruang', 'Ruang 1');
+    $namaKepsek = request('kepsek', 'Mahsun, M.Pd.');
+    $titimangsa = request('titimangsa', 'Tumijajar, ' . now()->translatedFormat('d F Y'));
+    $isKartuMeja = request('tipe') === 'meja' || request()->boolean('hide_akun') || request()->boolean('hide_credentials');
+@endphp
+<body class="{{ $isKartuMeja ? 'hide-credentials' : '' }}">
 
     <div class="top-action-bar no-print">
         <div class="top-bar-row">
@@ -241,6 +341,17 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <label style="display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,0.14); padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.25); user-select: none;">
+                    <input
+                        type="checkbox"
+                        id="chkHideCredentials"
+                        onchange="toggleHideCredentials(this.checked)"
+                        {{ $isKartuMeja ? 'checked' : '' }}
+                        style="cursor: pointer; width: 15px; height: 15px; accent-color: #10b981;"
+                    >
+                    <span>&#129681; Hide Akun (Kartu Meja)</span>
+                </label>
+
                 <a
                     href="{{ route('kartu-peserta.print', array_merge(request()->query(), ['reset_mode' => 'generator'])) }}"
                     onclick="return confirm('Generate password 6 karakter angka acak baru untuk {{ $siswas->count() }} siswa yang tampil di halaman ini?')"
@@ -256,8 +367,8 @@
                 >
                     &#128260; Reset ke Default NIS
                 </a>
-                <button type="button" onclick="window.print()" class="btn btn-print">
-                    &#128424; Cetak Kartu Peserta
+                <button type="button" onclick="window.print()" class="btn btn-print" id="btnPrintAction">
+                    &#128424; <span id="btnPrintLabelText">{{ $isKartuMeja ? 'Cetak Kartu Meja' : 'Cetak Kartu Peserta' }}</span>
                 </button>
                 <button type="button" onclick="window.close()" class="btn btn-secondary">
                     Tutup
@@ -269,6 +380,22 @@
             @if(request()->filled('ids'))
                 <input type="hidden" name="ids" value="{{ request('ids') }}">
             @endif
+
+            <div class="control-group" style="min-width: 175px;">
+                <label>Format Kartu</label>
+                <select name="tipe" id="tipeKartuSelect" onchange="toggleHideCredentials(this.value === 'meja')" class="filter-select" style="background: rgba(255,255,255,0.18); font-weight: 700;">
+                    <option value="peserta" @selected(!$isKartuMeja)>&#129690; Kartu Peserta (Lengkap)</option>
+                    <option value="meja" @selected($isKartuMeja)>&#129681; Kartu Meja (Hide Akun)</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="min-width: 185px;">
+                <label>Urutan Meja</label>
+                <select name="urutan" onchange="this.form.submit()" class="filter-select" style="background: rgba(255,255,255,0.18); font-weight: 600;">
+                    <option value="selang_seling" @selected(request('urutan', 'selang_seling') === 'selang_seling')>&#128256; Selang-Seling Kelas (Rekomendasi)</option>
+                    <option value="per_kelas" @selected(request('urutan') === 'per_kelas')>&#128203; Berurutan per Kelas</option>
+                </select>
+            </div>
 
             <div class="control-group">
                 <label>Filter Rombel Kelas</label>
@@ -316,7 +443,7 @@
                 />
             </div>
 
-            <div class="control-group" style="width: 130px;">
+            <div class="control-group" style="width: 120px;">
                 <label>Ruang Ujian</label>
                 <input
                     type="text"
@@ -325,6 +452,30 @@
                     oninput="document.querySelectorAll('.js-ruang').forEach(el => el.textContent = this.value)"
                     class="filter-input"
                     placeholder="Ruang 1"
+                />
+            </div>
+
+            <div class="control-group" style="min-width: 150px;">
+                <label>Kepala Sekolah (TTD)</label>
+                <input
+                    type="text"
+                    name="kepsek"
+                    value="{{ $namaKepsek }}"
+                    oninput="document.querySelectorAll('.js-nama-kepsek').forEach(el => el.textContent = this.value)"
+                    class="filter-input"
+                    placeholder="Mahsun, M.Pd."
+                />
+            </div>
+
+            <div class="control-group" style="min-width: 170px;">
+                <label>Titimangsa TTD</label>
+                <input
+                    type="text"
+                    name="titimangsa"
+                    value="{{ $titimangsa }}"
+                    oninput="document.querySelectorAll('.js-titimangsa').forEach(el => el.textContent = this.value)"
+                    class="filter-input"
+                    placeholder="Tumijajar, {{ now()->translatedFormat('d F Y') }}"
                 />
             </div>
         </form>
@@ -339,8 +490,13 @@
             <div class="cards-grid">
                 @foreach($siswas as $index => $siswa)
                     @php
-                        // Deterministic 9x9 mini QR-like matrix based on NIS + ID so every student card has a crisp scannable-style QR graphic offline
-                        $seed = crc32(($siswa->nis ?: '0') . '-' . $siswa->id);
+                        // QR Code Pojok Kanan Atas Menggunakan NISN (fallback ke NIS jika NISN kosong)
+                        $studentNisnPayload = (string) ($siswa->nisn ?: ($siswa->nis ?: (string) $siswa->id));
+                        $studentQrUri = \App\Services\QrCodeService::svg($studentNisnPayload);
+
+                        // E-Sign QR Code Scannable (Opsi A: Metadata Validasi Digital Resmi)
+                        $esignPayload = \App\Services\QrCodeService::getEsignPayload($namaKepsek, $siswa->nama, $siswa->nisn ?: $siswa->nis);
+                        $esignQrUri = \App\Services\QrCodeService::svg($esignPayload);
                     @endphp
                     <div class="kartu">
                         <div class="kartu-header">
@@ -352,80 +508,109 @@
                             >
 
                             <div class="kartu-header-text">
-                                <div class="line-1">KARTU PESERTA</div>
+                                <div class="line-1">
+                                    <span class="label-kartu-peserta">KARTU PESERTA</span>
+                                    <span class="label-kartu-meja">KARTU MEJA PESERTA</span>
+                                </div>
                                 <div class="line-2 js-kegiatan">{{ $judulKegiatan }}</div>
                                 <div class="line-3">SMK ASSUNIYAH TUMIJAJAR</div>
                                 <div class="line-4 js-tp">{{ $tahunPelajaran }}</div>
                             </div>
 
-                            <div class="kartu-qr" aria-hidden="true">
-                                <svg width="42" height="42" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-                                    {{-- Top-left finder pattern --}}
-                                    <path fill="#000" d="M0 0h7v7H0V0zm1 1v5h5V1H1zm1 1h3v3H2V2z"/>
-                                    {{-- Top-right finder pattern --}}
-                                    <path fill="#000" d="M14 0h7v7h-7V0zm1 1v5h5V1h-5zm1 1h3v3h-3V2z"/>
-                                    {{-- Bottom-left finder pattern --}}
-                                    <path fill="#000" d="M0 14h7v7H0v-7zm1 1v5h5v-5H1zm1 1h3v3H2v-3z"/>
-                                    {{-- Timing & data modules --}}
-                                    <rect x="8" y="6" width="1" height="1" fill="#000"/>
-                                    <rect x="10" y="6" width="1" height="1" fill="#000"/>
-                                    <rect x="12" y="6" width="1" height="1" fill="#000"/>
-                                    <rect x="6" y="8" width="1" height="1" fill="#000"/>
-                                    <rect x="6" y="10" width="1" height="1" fill="#000"/>
-                                    <rect x="6" y="12" width="1" height="1" fill="#000"/>
-                                    @for($r = 0; $r < 21; $r++)
-                                        @for($c = 0; $c < 21; $c++)
-                                            @php
-                                                $inFinder = ($r < 8 && $c < 8) || ($r < 8 && $c > 12) || ($r > 12 && $c < 8) || $r === 6 || $c === 6;
-                                                $bit = (($seed >> (($r * 7 + $c * 3) % 30)) ^ ($r * 13 + $c * 17 + (int) $siswa->id)) & 1;
-                                            @endphp
-                                            @if(!$inFinder && $bit)
-                                                <rect x="{{ $c }}" y="{{ $r }}" width="1" height="1" fill="#000"/>
-                                            @endif
-                                        @endfor
-                                    @endfor
-                                </svg>
+                            <div class="kartu-qr" title="Scan NISN / NIS: {{ $studentNisnPayload }}">
+                                <img src="{{ $studentQrUri }}" alt="QR NISN/NIS {{ $studentNisnPayload }}" style="width: 44px; height: 44px; object-fit: contain; display: block;" />
                             </div>
                         </div>
 
                         <div class="kartu-body">
-                            <table class="bio-table">
-                                <tr>
-                                    <td class="lbl">Nama</td>
-                                    <td class="sep">:</td>
-                                    <td class="val">{{ strtoupper($siswa->nama) }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">NIS</td>
-                                    <td class="sep">:</td>
-                                    <td class="val">{{ $siswa->nis ?: '-' }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Kelas</td>
-                                    <td class="sep">:</td>
-                                    <td class="val">{{ $siswa->kelas?->nama_kelas ?: '-' }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Username</td>
-                                    <td class="sep">:</td>
-                                    <td class="val-bold">{{ $siswa->nis ?: ($siswa->user?->email ?: '-') }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Password</td>
-                                    <td class="sep">:</td>
-                                    <td class="val-bold">{{ $siswa->password_cbt ?: ($siswa->nis ?: '123456') }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Ruang</td>
-                                    <td class="sep">:</td>
-                                    <td class="val {{ $siswa->ruangUjian ? '' : 'js-ruang' }}">{{ $siswa->ruangUjian?->nama_ruang ?: $ruangDefault }}</td>
-                                </tr>
-                            </table>
+                            <div class="kartu-body-inner">
+                                <table class="bio-table">
+                                    <tr>
+                                        <td class="lbl">Nama</td>
+                                        <td class="sep">:</td>
+                                        <td class="val val-bold">{{ strtoupper($siswa->nama) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="lbl">{{ $siswa->nisn ? 'NISN / NIS' : 'NIS' }}</td>
+                                        <td class="sep">:</td>
+                                        <td class="val">{{ $siswa->nisn ? ($siswa->nis ? "{$siswa->nisn} / {$siswa->nis}" : $siswa->nisn) : ($siswa->nis ?: '-') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="lbl">Kelas</td>
+                                        <td class="sep">:</td>
+                                        <td class="val">{{ $siswa->kelas?->nama_kelas ?: '-' }}</td>
+                                    </tr>
+                                    <tr class="row-kredensial">
+                                        <td class="lbl">Username</td>
+                                        <td class="sep">:</td>
+                                        <td class="val-bold">{{ $siswa->nis ?: ($siswa->user?->email ?: '-') }}</td>
+                                    </tr>
+                                    <tr class="row-kredensial">
+                                        <td class="lbl">Password</td>
+                                        <td class="sep">:</td>
+                                        <td class="val-bold">{{ $siswa->password_cbt ?: ($siswa->nis ?: '123456') }}</td>
+                                    </tr>
+                                    <tr class="row-meja" style="display: none;">
+                                        <td class="lbl">No. Meja</td>
+                                        <td class="sep">:</td>
+                                        <td class="val-bold">{{ $siswa->nomor_meja ?: sprintf('%02d', ($index % 40) + 1) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="lbl">Ruang</td>
+                                        <td class="sep">:</td>
+                                        <td class="val {{ $siswa->ruangUjian ? '' : 'js-ruang' }}">{{ $siswa->ruangUjian?->nama_ruang ?: $ruangDefault }}</td>
+                                    </tr>
+                                </table>
+
+                                {{-- Area Tanda Tangan & E-Sign QR Code Kepala Sekolah --}}
+                                <div class="ttd-box">
+                                    <div class="ttd-titimangsa js-titimangsa">{{ $titimangsa }}</div>
+                                    <div class="ttd-jabatan">Kepala Sekolah,</div>
+                                    <div class="ttd-esign-wrapper">
+                                        <div class="ttd-esign-qr" title="Scan dengan Kamera HP untuk Validasi E-Sign - {{ $namaKepsek }}">
+                                            <img src="{{ $esignQrUri }}" alt="E-Sign QR {{ $namaKepsek }}" />
+                                        </div>
+                                        <div class="ttd-badge-esign">&#10003; E-SIGN VALID</div>
+                                    </div>
+                                    <div class="ttd-nama js-nama-kepsek">{{ $namaKepsek }}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 @endforeach
             </div>
         @endif
     </div>
+
+    <script>
+        function toggleHideCredentials(hide) {
+            if (hide) {
+                document.body.classList.add('hide-credentials');
+            } else {
+                document.body.classList.remove('hide-credentials');
+            }
+
+            const chk = document.getElementById('chkHideCredentials');
+            if (chk) chk.checked = hide;
+            const sel = document.getElementById('tipeKartuSelect');
+            if (sel) sel.value = hide ? 'meja' : 'peserta';
+
+            const btnLabel = document.getElementById('btnPrintLabelText');
+            if (btnLabel) {
+                btnLabel.textContent = hide ? 'Cetak Kartu Meja' : 'Cetak Kartu Peserta';
+            }
+
+            // Simpan status ke URL parameter tanpa reload halaman
+            try {
+                const url = new URL(window.location.href);
+                if (hide) {
+                    url.searchParams.set('tipe', 'meja');
+                } else {
+                    url.searchParams.delete('tipe');
+                }
+                window.history.replaceState({}, '', url.toString());
+            } catch (e) {}
+        }
+    </script>
 </body>
 </html>

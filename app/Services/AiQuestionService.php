@@ -92,8 +92,8 @@ class AiQuestionService
     {
         $text = mb_strtolower(strip_tags($pertanyaan));
 
-        // C4-C6 (HOTS): Menganalisis, Mengevaluasi, Mengkreasi
-        if (preg_match('/\b(analis|bandingkan|bedakan|telaah|kritik|evaluasi|simpulkan|merancang|buatlah|rancang|hipotesis|hubungan|kaitan|mengapa|argumen|kemungkinan|bukti|fakta dan opini|solusi|pecahkan masalah|bagaimana cara|interpretasi)\b/u', $text)) {
+        // C4-C6 (HOTS): Menganalisis, Mengevaluasi, Mengkreasi, Studi Kasus Kompleks, Problem Solving
+        if (preg_match('/\b(analis|bandingkan|bedakan|telaah|kritik|evaluasi|simpulkan|merancang|buatlah|rancang|hipotesis|hubungan|kaitan|mengapa|argumen|kemungkinan|bukti|fakta dan opini|solusi|pecahkan masalah|bagaimana cara|interpretasi|konsekuensi|penyebab|dampak|kesalahan|faktor yang mempengaruhi|alasan|hikmah|keabsahan|sah atau batal|istinbath)\b/u', $text)) {
             // Bedakan apakah Evaluasi / Kreasi (C5-C6) atau Analisis (C4)
             if (preg_match('/\b(evaluasi|kritik|nilai keabsahan|justifikasi|merancang|ciptakan|buatlah desain|solusi baru|rekomendasi)\b/u', $text)) {
                 return ['tingkat_kesulitan' => 'HOTS', 'taksonomi_bloom' => 'C5'];
@@ -101,18 +101,18 @@ class AiQuestionService
             return ['tingkat_kesulitan' => 'HOTS', 'taksonomi_bloom' => 'C4'];
         }
 
-        // C3 (MOTS): Menerapkan, Menghitung, Mengimplementasikan, Mengklasifikasikan
-        if (preg_match('/\b(hitung|tentukan|berapakah|carilah|gunakan|terapkan|klasifikasi|urutan|tunjukkan|contohkan|bagaimana rumus|berdasarkan data|sesuai tabel|konversikan)\b/u', $text)) {
+        // C3 (MOTS): Menerapkan, Menghitung, Skenario Kasus Kontekstual, Menganalisis Pernyataan
+        if (preg_match('/\b(hitung|tentukan|berapakah|carilah|gunakan|terapkan|klasifikasi|urutan|tunjukkan|contohkan|bagaimana rumus|berdasarkan data|sesuai tabel|konversikan|ketika|sedang|apabila|jika|suatu hari|seorang|perhatikan pernyataan|perhatikan tabel|perhatikan gambar|perhatikan ilustrasi|perhatikan kasus|tindakan yang harus|apa yang harus dilakukan|hukumnya|cara yang tepat|manakah pernyataan)\b/u', $text)) {
             return ['tingkat_kesulitan' => 'MOTS', 'taksonomi_bloom' => 'C3'];
         }
 
-        // C2 (LOTS): Memahami, Menjelaskan
-        if (preg_match('/\b(jelaskan|uraikan|maksud|makna|deskripsikan|rangkum|terangkan|apakah yang dimaksud)\b/u', $text)) {
+        // C2 (LOTS): Memahami, Menjelaskan, Mengkategorikan
+        if (preg_match('/\b(jelaskan|uraikan|maksud|makna|deskripsikan|rangkum|terangkan|apakah yang dimaksud|apa fungsi|tujuan utama)\b/u', $text)) {
             return ['tingkat_kesulitan' => 'LOTS', 'taksonomi_bloom' => 'C2'];
         }
 
-        // C1 (LOTS): Mengingat, Menyebutkan, Siapakah, Dimanakah, Kapankah, Sebutkan
-        if (preg_match('/\b(siapa|kapan|dimana|mana|sebutkan|tuliskan|apa definisi|istilah|nama|berikut ini yang bukan|adalah)\b/u', $text)) {
+        // C1 (LOTS): Mengingat, Menyebutkan Fakta Murni, Hafalan
+        if (preg_match('/\b(siapakah|kapankah|di manakah|dimanakah|sebutkan|tuliskan|apa definisi|istilah untuk|nama kitab|tahun berapa|siapa nama)\b/u', $text)) {
             return ['tingkat_kesulitan' => 'LOTS', 'taksonomi_bloom' => 'C1'];
         }
 
@@ -121,33 +121,24 @@ class AiQuestionService
     }
 
     /**
-     * Hitung bobot nilai rekomendasi berdasarkan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
+     * Hitung bobot nilai rekomendasi (rata / flat).
      *
      * @param string $kesulitan 'LOTS' | 'MOTS' | 'HOTS'
-     * @param float $baseUnit Poin dasar untuk 1 unit (bobot LOTS = 1x, MOTS = 2x, HOTS = 3x)
+     * @param float $baseUnit Poin dasar (default 2.0)
      */
     public static function calculateBobotByKesulitan(string $kesulitan, float $baseUnit = 2.0): float
     {
-        $multiplier = match (strtoupper($kesulitan)) {
-            'HOTS' => 3.0,
-            'MOTS' => 2.0,
-            default => 1.0, // LOTS
-        };
-
-        return round($baseUnit * $multiplier, 2);
+        return round($baseUnit, 2);
     }
 
     /**
-     * Distribusikan bobot sekumpulan soal secara otomatis sehingga totalnya tepat bernilai $targetTotal (default 100 poin),
-     * dengan proporsi bobot LOTS : MOTS : HOTS = 1 : 2 : 3.
+     * Distribusikan bobot sekumpulan soal secara otomatis sehingga totalnya tepat bernilai $targetTotal (default 100 poin)
+     * dengan pembagian sama rata (flat).
      *
      * Contoh:
-     * Jika ada 10 soal (3 LOTS, 5 MOTS, 2 HOTS), maka total bobot unit = 3*(1) + 5*(2) + 2*(3) = 19 unit.
-     * Nilai 1 unit = 100 / 19 ≈ 5.26 poin.
-     * Maka per butir soal:
-     * - LOTS: 1 * 5.26 = 5.26 poin
-     * - MOTS: 2 * 5.26 = 10.53 poin
-     * - HOTS: 3 * 5.26 = 15.79 poin
+     * - 10 soal = masing-masing 10.0 poin (Total 100)
+     * - 20 soal = masing-masing 5.0 poin (Total 100)
+     * - 40 soal = masing-masing 2.5 poin (Total 100)
      * Sisa pembulatan otomatis disesuaikan pada butir terakhir agar jumlah pas 100.
      *
      * @param array $soals List butir soal (array of array)
@@ -161,42 +152,17 @@ class AiQuestionService
         }
 
         $count = count($soals);
-
-        // Hitung total unit bobot berdasarkan rasio 1 : 2 : 3
-        $totalUnits = 0.0;
-        foreach ($soals as $s) {
-            $kesulitan = strtoupper($s['tingkat_kesulitan'] ?? 'MOTS');
-            $multiplier = match ($kesulitan) {
-                'HOTS' => 3.0,
-                'MOTS' => 2.0,
-                default => 1.0, // LOTS
-            };
-            $totalUnits += $multiplier;
-        }
-
-        if ($totalUnits <= 0) {
-            $totalUnits = (float) $count;
-        }
-
-        // Nilai per 1 unit bobot
-        $unitValue = $targetTotal / $totalUnits;
+        $unitValue = round($targetTotal / $count, 2);
 
         $accumulated = 0.0;
         $lastIdx = $count - 1;
 
         foreach ($soals as $idx => &$item) {
-            $kesulitan = strtoupper($item['tingkat_kesulitan'] ?? 'MOTS');
-            $multiplier = match ($kesulitan) {
-                'HOTS' => 3.0,
-                'MOTS' => 2.0,
-                default => 1.0, // LOTS
-            };
-
             if ($idx === $lastIdx) {
                 // Sesuaikan selisih pembulatan pada soal terakhir agar tepat $targetTotal
                 $val = round($targetTotal - $accumulated, 2);
             } else {
-                $val = round($unitValue * $multiplier, 2);
+                $val = $unitValue;
                 $accumulated += $val;
             }
 
@@ -698,8 +664,7 @@ class AiQuestionService
             }
         }
 
-        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin
-        // dengan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
+        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin secara sama rata
         if ($defaultBobot === null) {
             $allSoals = self::distributeBobotByRasio($allSoals, 100.0);
         }
@@ -1129,13 +1094,26 @@ PROMPT;
             }
 
             // Inferensi / fallback taksonomi jika AI belum menyertakan
-            $kesulitan = strtoupper($item['tingkat_kesulitan'] ?? '');
+            $kesulitan = strtoupper(trim((string) ($item['tingkat_kesulitan'] ?? '')));
+            $requestedKesulitan = strtoupper(trim((string) ($params['kesulitan'] ?? '')));
+
             if (!in_array($kesulitan, ['LOTS', 'MOTS', 'HOTS'], true)) {
-                $bloom = self::inferBloomTaxonomy($pertanyaan);
-                $kesulitan = $bloom['tingkat_kesulitan'];
-                $bloomTax = $bloom['taksonomi_bloom'];
+                // PRIORITAS 1: Gunakan tingkat kesulitan yang diminta oleh guru saat generate!
+                if (in_array($requestedKesulitan, ['LOTS', 'MOTS', 'HOTS'], true)) {
+                    $kesulitan = $requestedKesulitan;
+                    $bloomTax = match ($kesulitan) {
+                        'HOTS' => 'C4',
+                        'LOTS' => 'C2',
+                        default => 'C3',
+                    };
+                } else {
+                    // Fallback inferensi teks jika tidak ada parameter requested
+                    $bloom = self::inferBloomTaxonomy($pertanyaan);
+                    $kesulitan = $bloom['tingkat_kesulitan'];
+                    $bloomTax = $bloom['taksonomi_bloom'];
+                }
             } else {
-                $bloomTax = strtoupper($item['taksonomi_bloom'] ?? '');
+                $bloomTax = strtoupper(trim((string) ($item['taksonomi_bloom'] ?? '')));
                 if (!preg_match('/^C[1-6]$/', $bloomTax)) {
                     $bloomTax = match ($kesulitan) {
                         'HOTS' => 'C4',
@@ -1164,8 +1142,7 @@ PROMPT;
             ];
         }
 
-        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin
-        // dengan rasio perbandingan kesulitan LOTS : MOTS : HOTS = 1 : 2 : 3
+        // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin secara sama rata
         if (empty($params['default_bobot']) && empty($params['bobot_nilai'])) {
             $formatted = self::distributeBobotByRasio($formatted, 100.0);
         }
@@ -1228,8 +1205,12 @@ ATURAN WAJIB FORMAT & KONTEN:
 2. TEKS ARAB & AL-QUR'AN:
    - Wajib gunakan harakat lengkap dan tanda baca yang benar untuk ayat atau kosakata Arab.
 
-3. KUALITAS BUTIR SOAL:
-   - Sesuai dengan Taksonomi Bloom (LOTS = C1-C2, MOTS = C3, HOTS = C4-C6).
+3. KUALITAS BUTIR SOAL & TAKSONOMI BLOOM:
+   - WAJIB cantumkan field 'tingkat_kesulitan' ("LOTS", "MOTS", atau "HOTS") sesuai permintaan.
+   - WAJIB cantumkan field 'taksonomi_bloom' ("C1", "C2", "C3", "C4", "C5", atau "C6").
+   - Soal HOTS (C4-C6): Harus berupa analisis masalah, studi kasus kontekstual, evaluasi, atau perancangan solusi.
+   - Soal MOTS (C3): Penerapan rumus, prosedur, atau implementasi kaidah pada skenario tertentu.
+   - Soal LOTS (C1-C2): Pemahaman definisi, ingatan fakta, atau konsep dasar.
    - Opsi pengecoh (distractor) harus logis, realistis, dan berbobot (bukan opsi asal-asalan).
    - Hindari opsi negatif ganda ("kecuali yang bukan").
    - Panjang pilihan jawaban relatif homogen/seimbang.
@@ -1243,6 +1224,8 @@ Struktur JSON per butir soal:
   "soals": [
     {
       "tipe_soal": "pilihan_ganda" | "pg_kompleks" | "benar_salah" | "menjodohkan" | "isian" | "essay",
+      "tingkat_kesulitan": "LOTS" | "MOTS" | "HOTS",
+      "taksonomi_bloom": "C1" | "C2" | "C3" | "C4" | "C5" | "C6",
       "bobot_nilai": 2.0,
       "pertanyaan": "<p>Teks stimulus / pokok soal...</p>",
       "opsi_jawabans": [
@@ -1278,7 +1261,7 @@ PROMPT;
         $prompt .= "- Tingkat / Kelas: {$tingkat}\n";
         $prompt .= "- Topik / Materi Pokok: {$topik}\n";
         $prompt .= "- Tipe Soal: {$tipeSoal}\n";
-        $prompt .= "- Tingkat Kesulitan / Kognitif: {$kesulitan}\n";
+        $prompt .= "- Tingkat Kesulitan / Kognitif: {$kesulitan} (Wajib cantumkan \"tingkat_kesulitan\": \"{$kesulitan}\" pada setiap butir soal)\n";
 
         if ($tipeSoal === 'pilihan_ganda') {
             $prompt .= "- Aturan Opsi: Buat 4 opsi (A, B, C, D) untuk SMP atau 5 opsi (A, B, C, D, E) untuk SMA/SMK. TEPAT 1 opsi yang is_jawaban_benar: true.\n";
@@ -1308,6 +1291,12 @@ PROMPT;
     {
         $topik = $params['topik'] ?? 'Sistem Persamaan Linier';
         $tipe = $params['tipe_soal'] ?? 'pilihan_ganda';
+        $kesulitan = strtoupper($params['kesulitan'] ?? 'MOTS');
+        $bloom = match($kesulitan) {
+            'HOTS' => 'C4',
+            'LOTS' => 'C2',
+            default => 'C3',
+        };
         $jumlah = max(1, min(50, (int) ($params['jumlah'] ?? 1)));
 
         $result = [];
@@ -1315,6 +1304,8 @@ PROMPT;
             if ($tipe === 'pilihan_ganda') {
                 $result[] = [
                     'tipe_soal' => 'pilihan_ganda',
+                    'tingkat_kesulitan' => $kesulitan,
+                    'taksonomi_bloom' => $bloom,
                     'bobot_nilai' => 2.0,
                     'pertanyaan' => "<p>Berdasarkan konsep materi <strong>{$topik}</strong> (Butir {$i}), jika diketahui persamaan kuadrat \$f(x) = x^2 - 4x + 4 = 0\$, tentukan nilai \$x\$ yang memenuhi:</p>",
                     'opsi_jawabans' => [
@@ -1330,6 +1321,8 @@ PROMPT;
             } else {
                 $result[] = [
                     'tipe_soal' => $tipe,
+                    'tingkat_kesulitan' => $kesulitan,
+                    'taksonomi_bloom' => $bloom,
                     'bobot_nilai' => 2.0,
                     'pertanyaan' => "<p>Jelaskan atau selesaikan permasalahan terkait <strong>{$topik}</strong> berikut ini secara komprehensif:</p>",
                     'opsi_jawabans' => [],

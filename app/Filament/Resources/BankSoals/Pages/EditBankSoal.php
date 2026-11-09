@@ -917,21 +917,78 @@ class EditBankSoal extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('aturKesulitanMasal')
+                ->label('Atur Kesulitan (MOTS/HOTS)')
+                ->icon(Heroicon::OutlinedScale)
+                ->color('info')
+                ->tooltip('Ubah tingkat kesulitan soal secara masal atau sinkronkan ulang Taksonomi Bloom.')
+                ->modalHeading('Atur Tingkat Kesulitan Soal Masal')
+                ->modalDescription('Pilih metode pengaturan tingkat kesulitan untuk butir soal pada paket ujian ini.')
+                ->form([
+                    Select::make('mode_atur')
+                        ->label('Metode Pengaturan')
+                        ->options([
+                            'deteksi_ai' => '⚡ Deteksi Ulang Otomatis (Berdasarkan KKO & Skenario Kasus)',
+                            'semua_mots' => 'Ubah Semua Soal Menjadi MOTS (C3)',
+                            'semua_hots' => 'Ubah Semua Soal Menjadi HOTS (C4)',
+                            'semua_lots' => 'Ubah Semua Soal Menjadi LOTS (C2)',
+                        ])
+                        ->default('deteksi_ai')
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $mode = $data['mode_atur'] ?? 'deteksi_ai';
+                    $soals = $this->record->soals()->orderBy('nomor_urut')->get();
+
+                    if ($mode === 'semua_mots') {
+                        foreach ($soals as $s) {
+                            $s->update(['tingkat_kesulitan' => 'MOTS', 'taksonomi_bloom' => 'C3']);
+                        }
+                    } elseif ($mode === 'semua_hots') {
+                        foreach ($soals as $s) {
+                            $s->update(['tingkat_kesulitan' => 'HOTS', 'taksonomi_bloom' => 'C4']);
+                        }
+                    } elseif ($mode === 'semua_lots') {
+                        foreach ($soals as $s) {
+                            $s->update(['tingkat_kesulitan' => 'LOTS', 'taksonomi_bloom' => 'C2']);
+                        }
+                    } else { // deteksi_ai
+                        foreach ($soals as $s) {
+                            $bloom = AiQuestionService::inferBloomTaxonomy((string) $s->pertanyaan);
+                            $s->update([
+                                'tingkat_kesulitan' => $bloom['tingkat_kesulitan'],
+                                'taksonomi_bloom' => $bloom['taksonomi_bloom'],
+                            ]);
+                        }
+                    }
+
+                    $this->record->autoDistributeBobot();
+                    $this->record->refresh();
+                    if ($this->selectedSoalId) {
+                        $this->selectSoal($this->selectedSoalId);
+                    }
+
+                    Notification::make()
+                        ->title('Tingkat kesulitan dan pembagian bobot 100 poin berhasil diperbarui!')
+                        ->success()
+                        ->send();
+                }),
+
             Action::make('sesuaikanBobot')
-                ->label('Bobot Otomatis (100 Poin)')
+                ->label('Bagi Rata Bobot (100 Poin)')
                 ->icon(Heroicon::OutlinedCalculator)
                 ->color('success')
-                ->tooltip('Bobot soal otomatis dihitung ke total 100 poin berdasarkan perbandingan kesulitan LOTS:MOTS:HOTS = 1:2:3.')
+                ->tooltip('Bobot soal otomatis dibagi sama rata ke total 100 poin (misal 10 soal = masing-masing 10 poin, 40 soal = 2.5 poin).')
                 ->requiresConfirmation()
-                ->modalHeading('Hitung Ulang Bobot Soal (100 Poin)?')
-                ->modalDescription('Sistem akan mendistribusikan total 100 poin ke seluruh butir soal dengan proporsi bobot LOTS : MOTS : HOTS = 1 : 2 : 3 sesuai tingkat kesulitan masing-masing soal. Klik konfirmasi untuk memproses.')
+                ->modalHeading('Hitung Ulang & Bagi Rata Bobot Soal (100 Poin)?')
+                ->modalDescription('Sistem akan membagi rata total 100 poin ke seluruh butir soal secara seimbang dan rapi (untuk soal campuran: 75% objektif dan 25% essay). Klik konfirmasi untuk memproses.')
                 ->action(function () {
                     $this->record->autoDistributeBobot();
                     $this->record->refresh();
                     if ($this->selectedSoalId) {
                         $this->selectSoal($this->selectedSoalId);
                     }
-                    Notification::make()->title('Bobot seluruh butir soal berhasil disesuaikan ke total 100 poin (Rasio LOTS:MOTS:HOTS = 1:2:3)')->success()->send();
+                    Notification::make()->title('Bobot seluruh butir soal berhasil dibagi sama rata ke total 100 poin!')->success()->send();
                 }),
 
             Action::make('pengaturanPaket')
