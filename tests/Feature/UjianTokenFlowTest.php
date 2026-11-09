@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\RuangUjians\RuangUjianResource;
 use App\Livewire\ExamRunner;
 use App\Livewire\Siswa\PortalUjian;
 use App\Livewire\Siswa\SiswaLogin;
 use App\Models\BankSoal;
 use App\Models\Kelas;
 use App\Models\Mapel;
+use App\Models\RuangUjian;
 use App\Models\Siswa;
 use App\Models\Soal;
 use App\Models\Ujian;
@@ -202,9 +204,40 @@ class UjianTokenFlowTest extends TestCase
 
         $ujian->kelas()->attach($this->kelas->id);
 
-        // Verifikasi Exam ID otomatis dibuat dan diawali 'EXAM-'
+        // Verifikasi Exam ID otomatis dibuat dan diawali prefix sesuai tipe ujian (Default: SH untuk Ulangan Harian)
         $this->assertNotEmpty($ujian->exam_id);
-        $this->assertStringStartsWith('EXAM-', $ujian->exam_id);
+        $this->assertStringStartsWith('SH-', $ujian->exam_id);
+
+        // Verifikasi prefix STS untuk Tengah Semester dan SAS untuk Akhir Semester
+        $ujianSts = Ujian::create([
+            'nama_ujian' => 'PTS Semester Ganjil',
+            'tipe_ujian' => Ujian::TIPE_TENGAH_SEMESTER,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'tanggal' => now(),
+            'waktu_mulai' => '07:30',
+            'waktu_selesai' => '09:00',
+            'durasi_menit' => 90,
+        ]);
+        $this->assertStringStartsWith('STS-', $ujianSts->exam_id);
+
+        $ujianSas = Ujian::create([
+            'nama_ujian' => 'PAS Semester Ganjil',
+            'tipe_ujian' => Ujian::TIPE_AKHIR_SEMESTER,
+            'mapel_id' => $this->mapel->id,
+            'bank_soal_id' => $this->bankSoal->id,
+            'guru_id' => $this->guru->id,
+            'tanggal' => now(),
+            'waktu_mulai' => '07:30',
+            'waktu_selesai' => '09:00',
+            'durasi_menit' => 90,
+        ]);
+        $this->assertStringStartsWith('SAS-', $ujianSas->exam_id);
+
+        // Verifikasi update tipe ujian otomatis memperbarui prefix exam_id
+        $ujian->update(['tipe_ujian' => Ujian::TIPE_TENGAH_SEMESTER]);
+        $this->assertStringStartsWith('STS-', $ujian->fresh()->exam_id);
 
         // Verifikasi Status awal adalah SCHEDULED dan belum ada token
         $this->assertEquals('SCHEDULED', $ujian->status);
@@ -869,6 +902,104 @@ class UjianTokenFlowTest extends TestCase
                 "Meja " . ($i + 1) . " dan Meja " . ($i + 2) . " tidak boleh satu kelas!"
             );
         }
+    }
+
+    public function test_cetak_daftar_hadir_per_ruangan_dan_format_tanda_tangan(): void
+    {
+        $ruang = RuangUjian::create([
+            'nama_ruang' => 'LAB KOMPUTER 1',
+            'kode_ruang' => 'LAB-01',
+            'kapasitas' => 20,
+            'is_active' => true,
+        ]);
+
+        $siswa = Siswa::create([
+            'nama' => 'Budi Peserta Hadir',
+            'nis' => '998877',
+            'kelas_id' => $this->kelas->id,
+            'ruang_ujian_id' => $ruang->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->guru)
+            ->get(route('daftar-hadir.print', ['ruang_ujian_id' => $ruang->id]));
+
+        $response->assertStatus(200);
+        $response->assertSee('DAFTAR HADIR PESERTA');
+        $response->assertSee('LAB KOMPUTER 1');
+        $response->assertSee('Budi Peserta Hadir');
+        $response->assertSee('998877');
+        $response->assertSee('Tanda Tangan');
+        $response->assertSee('Proktor');
+        $response->assertSee('Pengawas');
+    }
+
+    public function test_isi_dan_cetak_berita_acara_ruangan(): void
+    {
+        $ruang = RuangUjian::create([
+            'nama_ruang' => 'RUANG 2',
+            'kode_ruang' => 'R-02',
+            'kapasitas' => 25,
+            'is_active' => true,
+        ]);
+
+        $bap = \App\Models\BeritaAcara::create([
+            'ruang_ujian_id' => $ruang->id,
+            'nama_ujian' => 'TES KEMAMPUAN AKADEMIK SMK',
+            'tahun_pelajaran' => '2026',
+            'hari' => 'Senin',
+            'tanggal' => now()->toDateString(),
+            'waktu_mulai' => '07:30',
+            'waktu_selesai' => '09:30',
+            'username_sekolah' => 'K12130106',
+            'nama_sekolah' => 'SMKS ASSUNIYAH',
+            'id_server' => 'K12130106-AJ9K',
+            'ruang' => 'RUANG 2',
+            'sesi' => '1',
+            'jumlah_peserta_seharusnya' => 20,
+            'jumlah_hadir' => 19,
+            'jumlah_tidak_hadir' => 1,
+            'usernames_tidak_hadir' => ['TK1213010600134-3'],
+            'catatan' => 'Pelaksanaan berjalan aman dan kondusif.',
+            'nama_pengawas' => 'ATHIQ NUR AZIZAH',
+            'nip_pengawas' => '198705122010012004',
+            'nama_ketua_ujian' => 'Ahmad Daqiqi Syahrulloh, S.H.',
+            'nip_ketua_ujian' => '198904152014021003',
+            'nama_kepala_sekolah' => 'Mahsun, M.Pd.',
+            'nip_kepala_sekolah' => '197508102005011008',
+            'created_by' => $this->guru->id,
+        ]);
+
+        $response = $this->actingAs($this->guru)
+            ->get(route('berita-acara.print', ['id' => $bap->id]));
+
+        $response->assertStatus(200);
+        $response->assertSee('BERITA ACARA PELAKSANAAN');
+        $response->assertSee('RUANG 2');
+        $response->assertSee('K12130106');
+        $response->assertSee('SMKS ASSUNIYAH');
+        $response->assertSee('TK1213010600134-3');
+        $response->assertSee('Pelaksanaan berjalan aman dan kondusif.');
+        $response->assertSee('Pengawas');
+        $response->assertSee('Ketua Ujian');
+        $response->assertSee('Kepala Sekolah');
+        $response->assertSee('Mahsun, M.Pd.');
+    }
+
+    public function test_can_render_ruang_ujian_admin_page_with_actions(): void
+    {
+        RuangUjian::create([
+            'nama_ruang' => 'RUANG 1',
+            'kode_ruang' => 'R-01',
+            'kapasitas' => 20,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(RuangUjianResource::getUrl('index'));
+
+        $response->assertSuccessful();
+        $response->assertSee('RUANG 1');
     }
 }
 

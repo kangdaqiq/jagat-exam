@@ -149,6 +149,20 @@ class HasilUjianTable
                     ->color('primary')
                     ->url(fn (HasilUjian $record): string => ViewHasilUjian::getUrl(['record' => $record])),
 
+                Action::make('daftarHadir')
+                    ->label('Daftar Hadir')
+                    ->icon(Heroicon::OutlinedClipboardDocumentList)
+                    ->color('warning')
+                    ->url(fn (HasilUjian $record): string => route('daftar-hadir.print', ['ujian_id' => $record->id]))
+                    ->openUrlInNewTab(true),
+
+                Action::make('beritaAcara')
+                    ->label('Berita Acara')
+                    ->icon(Heroicon::OutlinedDocumentCheck)
+                    ->color('info')
+                    ->url(fn (HasilUjian $record): string => route('berita-acara.print', ['ujian_id' => $record->id]))
+                    ->openUrlInNewTab(true),
+
                 Action::make('export_csv')
                     ->label('Export CSV')
                     ->icon(Heroicon::OutlinedArrowDownTray)

@@ -173,12 +173,20 @@
                                     </button>
                                 @endif
                                 <a
-                                    href="{{ route('hasil-ujian.berita-acara', ['ujian' => $jadwal->ujian_id, 'ruang_ujian_id' => $jadwal->ruang_ujian_id]) }}"
+                                    href="{{ route('daftar-hadir.print', ['ruang_ujian_id' => $jadwal->ruang_ujian_id, 'jadwal_ruang_id' => $jadwal->id, 'ujian_id' => $jadwal->ujian_id]) }}"
                                     target="_blank"
-                                    class="py-1.5 px-2 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
-                                    title="Cetak Berita Acara Ujian"
+                                    class="py-1.5 px-2 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 transition"
+                                    title="Cetak Daftar Hadir (Sebelum Ujian)"
                                 >
-                                    📄
+                                    📋
+                                </a>
+                                <a
+                                    href="{{ route('berita-acara.print', ['ruang_ujian_id' => $jadwal->ruang_ujian_id, 'jadwal_ruang_id' => $jadwal->id, 'ujian_id' => $jadwal->ujian_id]) }}"
+                                    target="_blank"
+                                    class="py-1.5 px-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition"
+                                    title="Cetak Berita Acara (Setelah Ujian)"
+                                >
+                                    📝
                                 </a>
                             </div>
                         </div>
@@ -570,12 +578,36 @@
                             <a
                                 href="{{ route('kartu-peserta.print', ['ruang_ujian_id' => $activeRuang->id]) }}"
                                 target="_blank"
-                                class="px-4 py-2.5 rounded-xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                                class="px-3.5 py-2.5 rounded-xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer flex items-center justify-center gap-1.5"
                             >
                                 <svg class="w-4 h-4 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                <span>Cetak Kartu Ruang Ini</span>
+                                <span>Cetak Kartu</span>
+                            </a>
+
+                            <a
+                                href="{{ route('daftar-hadir.print', ['ruang_ujian_id' => $activeRuang->id]) }}"
+                                target="_blank"
+                                class="px-3.5 py-2.5 rounded-xl text-xs font-extrabold border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 transition cursor-pointer flex items-center justify-center gap-1.5"
+                                title="Cetak Daftar Hadir Peserta Ruangan (Sebelum Ujian Dimulai)"
+                            >
+                                <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span>Daftar Hadir</span>
+                            </a>
+
+                            <a
+                                href="{{ route('berita-acara.print', ['ruang_ujian_id' => $activeRuang->id]) }}"
+                                target="_blank"
+                                class="px-3.5 py-2.5 rounded-xl text-xs font-extrabold border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition cursor-pointer flex items-center justify-center gap-1.5"
+                                title="Cetak Berita Acara Pelaksanaan (Setelah Ujian Selesai)"
+                            >
+                                <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                </svg>
+                                <span>Berita Acara (BAP)</span>
                             </a>
                         </div>
                     </div>

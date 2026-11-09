@@ -99,18 +99,46 @@ class Ujian extends Model
     {
         static::creating(function (Ujian $ujian) {
             if (empty($ujian->exam_id)) {
-                $ujian->exam_id = static::generateExamId();
+                $ujian->exam_id = static::generateExamId($ujian->tipe_ujian);
+            }
+        });
+
+        static::updating(function (Ujian $ujian) {
+            if ($ujian->isDirty('tipe_ujian') && !empty($ujian->exam_id)) {
+                $newPrefix = match ($ujian->tipe_ujian) {
+                    self::TIPE_TENGAH_SEMESTER => 'STS',
+                    self::TIPE_AKHIR_SEMESTER => 'SAS',
+                    default => 'SH',
+                };
+
+                $parts = explode('-', $ujian->exam_id);
+                if (count($parts) >= 3) {
+                    $parts[0] = $newPrefix;
+                    $newCode = implode('-', $parts);
+                    if (!static::where('exam_id', $newCode)->where('id', '!=', $ujian->id)->exists()) {
+                        $ujian->exam_id = $newCode;
+                    }
+                }
             }
         });
     }
 
     /**
-     * Generate unique exam_id (contoh: EXAM-202611-7B8A)
+     * Generate unique exam_id dengan prefix sesuai tipe asesmen:
+     * - Ulangan Harian (asesmen_harian) => SH (contoh: SH-202611-7B8A)
+     * - Tengah Semester (asesmen_tengah_semester) => STS (contoh: STS-202611-7B8A)
+     * - Akhir Semester (asesmen_akhir_semester) => SAS (contoh: SAS-202611-7B8A)
      */
-    public static function generateExamId(): string
+    public static function generateExamId(?string $tipeUjian = null): string
     {
+        $prefix = match ($tipeUjian) {
+            self::TIPE_TENGAH_SEMESTER => 'STS',
+            self::TIPE_AKHIR_SEMESTER => 'SAS',
+            default => 'SH', // Ulangan Harian
+        };
+
         do {
-            $code = 'EXAM-' . date('Ym') . '-' . strtoupper(Str::random(4));
+            $code = $prefix . '-' . date('Ym') . '-' . strtoupper(Str::random(4));
         } while (static::where('exam_id', $code)->exists());
 
         return $code;
@@ -445,6 +473,11 @@ class Ujian extends Model
     public function jadwalRuangs(): HasMany
     {
         return $this->hasMany(JadwalRuang::class, 'ujian_id');
+    }
+
+    public function beritaAcaras(): HasMany
+    {
+        return $this->hasMany(BeritaAcara::class, 'ujian_id');
     }
 
     public function ruangUjians(): BelongsToMany

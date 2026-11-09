@@ -124,13 +124,27 @@ class JadwalRuangTable
                     ->url(fn (JadwalRuang $record) => route('pengawas.portal', ['ruang' => $record->ruang_ujian_id]))
                     ->openUrlInNewTab(),
 
-                Action::make('cetakBeritaAcara')
-                    ->label('Berita Acara')
-                    ->icon(Heroicon::OutlinedPrinter)
-                    ->color('gray')
-                    ->url(fn (JadwalRuang $record) => route('hasil-ujian.berita-acara', [
-                        'ujian' => $record->ujian_id,
+                Action::make('daftarHadir')
+                    ->label('Daftar Hadir')
+                    ->icon(Heroicon::OutlinedClipboardDocumentList)
+                    ->color('warning')
+                    ->tooltip('Cetak Daftar Hadir Peserta Ruangan (Sebelum Ujian Dimulai)')
+                    ->url(fn (JadwalRuang $record) => route('daftar-hadir.print', [
                         'ruang_ujian_id' => $record->ruang_ujian_id,
+                        'jadwal_ruang_id' => $record->id,
+                        'ujian_id' => $record->ujian_id,
+                    ]))
+                    ->openUrlInNewTab(),
+
+                Action::make('cetakBeritaAcara')
+                    ->label('Berita Acara (BAP)')
+                    ->icon(Heroicon::OutlinedDocumentCheck)
+                    ->color('success')
+                    ->tooltip('Cetak Berita Acara Pelaksanaan (Setelah Ujian Selesai)')
+                    ->url(fn (JadwalRuang $record) => route('berita-acara.print', [
+                        'ruang_ujian_id' => $record->ruang_ujian_id,
+                        'jadwal_ruang_id' => $record->id,
+                        'ujian_id' => $record->ujian_id,
                     ]))
                     ->openUrlInNewTab(),
 

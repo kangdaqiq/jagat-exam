@@ -74,5 +74,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/hasil-ujians/{ujian}/export-csv', [HasilUjianController::class, 'exportCsv'])->name('hasil-ujian.export-csv');
     Route::get('/hasil-ujians/{ujian}/print', [HasilUjianController::class, 'print'])->name('hasil-ujian.print');
     Route::get('/hasil-ujians/{ujian}/berita-acara', [HasilUjianController::class, 'beritaAcara'])->name('hasil-ujian.berita-acara');
+    Route::get('/cetak/daftar-hadir', [HasilUjianController::class, 'cetakDaftarHadir'])->name('daftar-hadir.print');
+    Route::get('/cetak/berita-acara', [HasilUjianController::class, 'cetakBeritaAcara'])->name('berita-acara.print');
     Route::get('/kartu-peserta/cetak', [HasilUjianController::class, 'cetakKartuPeserta'])->name('kartu-peserta.print');
 });

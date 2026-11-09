@@ -63,6 +63,11 @@ class JadwalRuang extends Model
         return $this->belongsTo(User::class, 'pengawas_pendamping_id');
     }
 
+    public function beritaAcaras(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BeritaAcara::class, 'jadwal_ruang_id');
+    }
+
     // ==========================================
     // METODE TOKEN & STATUS SESI
     // ==========================================

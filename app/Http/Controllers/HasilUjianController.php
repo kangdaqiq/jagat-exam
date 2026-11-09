@@ -96,7 +96,200 @@ class HasilUjianController extends Controller
     }
 
     /**
-     * Cetak Berita Acara & Daftar Hadir Pelaksanaan Ujian CBT (A4).
+     * Cetak Daftar Hadir Peserta Ujian per Ruangan (A4) - Sebelum Ujian Dimulai
+     */
+    public function cetakDaftarHadir(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $ruangId = $request->input('ruang_ujian_id');
+        $ruang = $ruangId ? \App\Models\RuangUjian::with('pengawas')->find($ruangId) : null;
+
+        $ujianId = $request->input('ujian_id');
+        $ujian = $ujianId ? \App\Models\Ujian::with(['mapel', 'guru'])->find($ujianId) : null;
+
+        $jadwalId = $request->input('jadwal_ruang_id');
+        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'pengawas'])->find($jadwalId) : null;
+
+        if ($jadwalRuang) {
+            $ruang = $ruang ?: $jadwalRuang->ruangUjian;
+            $ujian = $ujian ?: $jadwalRuang->ujian;
+        }
+
+        // Ambil siswa di ruangan tersebut (atau seluruh siswa jika ruangan belum difilter)
+        $query = \App\Models\Siswa::query()
+            ->with(['kelas', 'user', 'ruangUjian'])
+            ->where('is_active', true);
+
+        if ($ruang) {
+            $query->where('ruang_ujian_id', $ruang->id);
+        }
+
+        $siswas = $query
+            ->orderBy('kelas_id', 'asc')
+            ->orderBy('nama', 'asc')
+            ->get();
+
+        $tanggalObj = $jadwalRuang?->tanggal ?: ($ujian?->tanggal ?: now());
+        $hariIndonesia = match($tanggalObj->dayOfWeek) {
+            0 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            default => 'Senin',
+        };
+
+        $waktuMulai = $jadwalRuang?->waktu_mulai ? substr($jadwalRuang->waktu_mulai, 0, 5) : ($ujian?->waktu_mulai ? substr($ujian->waktu_mulai, 0, 5) : '07:30');
+        $waktuSelesai = $jadwalRuang?->waktu_selesai ? substr($jadwalRuang->waktu_selesai, 0, 5) : ($ujian?->waktu_selesai ? substr($ujian->waktu_selesai, 0, 5) : '09:30');
+
+        $meta = [
+            'kota' => $request->input('kota', 'KAB. TULANG BAWANG BARAT'),
+            'kode_kota' => $request->input('kode_kota', '13'),
+            'sekolah' => $request->input('sekolah', 'SMKS ASSUNIYAH'),
+            'kode_sekolah' => $request->input('kode_sekolah', '0106'),
+            'id_server' => $request->input('id_server', ($ruang?->kode_ruang ? 'K12130106-' . strtoupper($ruang->kode_ruang) : 'K12130106-AJ9K')),
+            'nama_ruang' => $request->input('nama_ruang', $ruang?->nama_ruang ?: 'RUANG 1'),
+            'sesi' => $request->input('sesi', (string) ($jadwalRuang?->sesi_ke ?: '1')),
+            'hari' => $request->input('hari', $hariIndonesia),
+            'tanggal' => $request->input('tanggal', $tanggalObj->translatedFormat('d F Y')),
+            'pukul' => $request->input('pukul', "{$waktuMulai}-{$waktuSelesai}"),
+            'nama_ujian' => $request->input('nama_ujian', $ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK'),
+            'tahun_pelajaran' => $request->input('tahun_pelajaran', '2026/2027'),
+            'nama_proktor' => $request->input('proktor', $user->name),
+            'nama_pengawas' => $request->input('pengawas', $jadwalRuang?->pengawas?->name ?: ($ruang?->pengawas?->name ?: 'ATHIQ NUR AZIZAH')),
+        ];
+
+        $daftarJadwal = $ruang
+            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
+            : collect();
+
+        return view('print.daftar-hadir-ruang', [
+            'ruang' => $ruang,
+            'ujian' => $ujian,
+            'jadwalRuang' => $jadwalRuang,
+            'siswas' => $siswas,
+            'meta' => $meta,
+            'daftarRuang' => \App\Models\RuangUjian::where('is_active', true)->orderBy('nama_ruang')->get(),
+            'daftarJadwal' => $daftarJadwal,
+        ]);
+    }
+
+    /**
+     * Cetak Berita Acara Pelaksanaan (BAP) Ujian per Ruangan (A4) - Setelah Ujian Selesai
+     */
+    public function cetakBeritaAcara(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $bapId = $request->input('id');
+        $bap = $bapId ? \App\Models\BeritaAcara::find($bapId) : null;
+
+        $ruangId = $request->input('ruang_ujian_id', $bap?->ruang_ujian_id);
+        $ruang = $ruangId ? \App\Models\RuangUjian::with('pengawas')->find($ruangId) : null;
+
+        $ujianId = $request->input('ujian_id', $bap?->ujian_id);
+        $ujian = $ujianId ? \App\Models\Ujian::with(['mapel', 'guru'])->find($ujianId) : null;
+
+        $jadwalId = $request->input('jadwal_ruang_id', $bap?->jadwal_ruang_id);
+        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'pengawas'])->find($jadwalId) : null;
+
+        if ($jadwalRuang) {
+            $ruang = $ruang ?: $jadwalRuang->ruangUjian;
+            $ujian = $ujian ?: $jadwalRuang->ujian;
+        }
+
+        // Ambil siswa untuk ruang ini
+        $query = \App\Models\Siswa::query()
+            ->with(['kelas', 'user', 'ruangUjian'])
+            ->where('is_active', true);
+        if ($ruang) {
+            $query->where('ruang_ujian_id', $ruang->id);
+        }
+        $siswas = $query->get();
+        $totalSiswaRuang = $siswas->count();
+
+        $tanggalObj = $bap?->tanggal ?: ($jadwalRuang?->tanggal ?: ($ujian?->tanggal ?: now()));
+        $hariIndonesia = $bap?->hari ?: match($tanggalObj->dayOfWeek) {
+            0 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            default => 'Senin',
+        };
+
+        $waktuMulai = $bap?->waktu_mulai ?: ($jadwalRuang?->waktu_mulai ? substr($jadwalRuang->waktu_mulai, 0, 5) : ($ujian?->waktu_mulai ? substr($ujian->waktu_mulai, 0, 5) : '07:30'));
+        $waktuSelesai = $bap?->waktu_selesai ?: ($jadwalRuang?->waktu_selesai ? substr($jadwalRuang->waktu_selesai, 0, 5) : ($ujian?->waktu_selesai ? substr($ujian->waktu_selesai, 0, 5) : '09:30'));
+
+        $seharusnya = (int) $request->input('jumlah_peserta_seharusnya', $bap?->jumlah_peserta_seharusnya ?? $totalSiswaRuang);
+        $tidakHadir = (int) $request->input('jumlah_tidak_hadir', $bap?->jumlah_tidak_hadir ?? 0);
+        $hadir = (int) $request->input('jumlah_hadir', $bap?->jumlah_hadir ?? max(0, $seharusnya - $tidakHadir));
+
+        $rawUsernamesTidakHadir = $request->input('usernames_tidak_hadir', $bap?->usernames_tidak_hadir);
+        if (is_array($rawUsernamesTidakHadir)) {
+            $usernamesStr = implode(', ', $rawUsernamesTidakHadir);
+        } elseif (is_string($rawUsernamesTidakHadir)) {
+            $usernamesStr = $rawUsernamesTidakHadir;
+        } else {
+            $usernamesStr = '-';
+        }
+
+        $meta = [
+            'hari' => $request->input('hari', $hariIndonesia),
+            'tanggal' => $tanggalObj,
+            'bulan' => $tanggalObj->translatedFormat('F'),
+            'tahun' => $tanggalObj->format('Y'),
+            'tahun_pelajaran' => $request->input('tahun_pelajaran', $bap?->tahun_pelajaran ?: '2026'),
+            'nama_ujian' => $request->input('nama_ujian', $bap?->nama_ujian ?: ($ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK')),
+            'waktu_mulai' => $waktuMulai,
+            'waktu_selesai' => $waktuSelesai,
+            'username_sekolah' => $request->input('username_sekolah', $bap?->username_sekolah ?: 'K12130106'),
+            'nama_sekolah' => $request->input('nama_sekolah', $bap?->nama_sekolah ?: 'SMKS ASSUNIYAH'),
+            'id_server' => $request->input('id_server', $bap?->id_server ?: ($ruang?->kode_ruang ? 'K12130106-' . strtoupper($ruang->kode_ruang) : 'K12130106-AJ9K')),
+            'nama_ruang' => $request->input('nama_ruang', $bap?->ruang ?: ($ruang?->nama_ruang ?: 'RUANG 1')),
+            'sesi' => $request->input('sesi', $bap?->sesi ?: (string) ($jadwalRuang?->sesi_ke ?: '1')),
+            'jumlah_seharusnya' => $seharusnya,
+            'jumlah_hadir' => $hadir,
+            'jumlah_tidak_hadir' => $tidakHadir,
+            'username_tidak_hadir' => $usernamesStr,
+            'catatan' => $request->input('catatan', $bap?->catatan ?: 'Pelaksanaan ujian berlangsung tertib, aman, dan lancar tanpa kendala.'),
+            'nama_pengawas' => $request->input('nama_pengawas', $bap?->nama_pengawas ?: ($jadwalRuang?->pengawas?->name ?: ($ruang?->pengawas?->name ?: 'ATHIQ NUR AZIZAH'))),
+            'nip_pengawas' => $request->input('nip_pengawas', $bap?->nip_pengawas ?: ($jadwalRuang?->pengawas?->nip ?: ($ruang?->pengawas?->nip ?: '198705122010012004'))),
+            'nama_ketua_ujian' => $request->input('nama_ketua_ujian', $bap?->nama_ketua_ujian ?: 'Ahmad Daqiqi Syahrulloh, S.H.'),
+            'nip_ketua_ujian' => $request->input('nip_ketua_ujian', $bap?->nip_ketua_ujian ?: '198904152014021003'),
+            'nama_kepala_sekolah' => $request->input('nama_kepala_sekolah', $bap?->nama_kepala_sekolah ?: 'Mahsun, M.Pd.'),
+            'nip_kepala_sekolah' => $request->input('nip_kepala_sekolah', $bap?->nip_kepala_sekolah ?: '197508102005011008'),
+        ];
+
+        $daftarJadwal = $ruang
+            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
+            : collect();
+
+        return view('print.berita-acara-ruang', [
+            'bap' => $bap,
+            'ruang' => $ruang,
+            'ujian' => $ujian,
+            'jadwalRuang' => $jadwalRuang,
+            'meta' => $meta,
+            'siswas' => $siswas,
+            'daftarRuang' => \App\Models\RuangUjian::where('is_active', true)->orderBy('nama_ruang')->get(),
+            'daftarJadwal' => $daftarJadwal,
+        ]);
+    }
+
+    /**
+     * Cetak Berita Acara & Daftar Hadir Pelaksanaan Ujian CBT (A4) - Rekap per Ujian
      */
     public function beritaAcara(\App\Models\Ujian $ujian)
     {
