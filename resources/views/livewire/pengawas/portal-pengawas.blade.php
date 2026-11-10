@@ -40,13 +40,6 @@
 
             <div class="flex items-center gap-2 shrink-0">
                 {{-- Pintasan ke Panel Lengkap --}}
-                <a
-                    href="{{ $user?->isAdmin() ? '/admin' : '/guru' }}"
-                    class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition"
-                    style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #ffffff;"
-                >
-                    <span>Panel {{ $user?->isAdmin() ? 'Admin' : 'Guru' }}</span>
-                </a>
 
                 {{-- Tombol Keluar --}}
                 <button
@@ -98,7 +91,7 @@
                         {{ $tabMode === 'ruang' ? 'Pilih Ruang Ujian untuk Diawasi' : 'Pilih Jadwal Soal Ujian' }}
                     </h1>
                     <p class="text-xs text-slate-500 mt-0.5">
-                        {{ $tabMode === 'ruang' ? 'Rilis token akses per ruangan (1 ruang bisa mix beberapa kelas, soal otomatis sesuai tingkatan siswa).' : 'Ketuk salah satu jadwal ujian di bawah untuk memantau berdasarkan mata pelajaran.' }}
+                        {{ $tabMode === 'ruang' ? 'Rilis Token Ruangan.' : 'Ketuk salah satu jadwal ujian di bawah untuk memantau siswa.' }}
                     </p>
                 </div>
 
@@ -227,7 +220,7 @@
 
                                     <div>
                                         <div class="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
-                                            Ruang Ujian Terpadu (Mix Kelas)
+                                            Ruang Ujian
                                         </div>
                                         <h3 class="text-lg font-black text-slate-900 leading-snug mt-0.5" style="font-family: 'Outfit', sans-serif;">
                                             {{ $rg->nama_ruang }}
