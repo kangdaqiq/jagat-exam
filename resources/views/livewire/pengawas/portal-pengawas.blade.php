@@ -234,14 +234,10 @@
                                         </h3>
                                     </div>
 
-                                    <div class="text-xs text-slate-600 space-y-1 pt-1">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <span class="text-slate-400">Komposisi Kelas:</span>
-                                            <span class="font-bold text-slate-800 text-right">{{ $kelasMix->isNotEmpty() ? $kelasMix->join(', ') : 'Belum ada siswa' }}</span>
-                                        </div>
+                                    <div class="text-xs text-slate-600 space-y-1.5 pt-1">
                                         <div class="flex items-center justify-between">
                                             <span class="text-slate-400">Jumlah Peserta:</span>
-                                            <span class="font-bold text-slate-800">{{ $rg->siswas_count }} / {{ $rg->kapasitas }} Siswa</span>
+                                            <span class="font-bold text-slate-800">{{ $rg->siswas_count }} Siswa</span>
                                         </div>
                                         <div class="flex items-center justify-between">
                                             <span class="text-slate-400">Pengawas Ruang:</span>
@@ -460,9 +456,7 @@
                         </h2>
 
                         <div class="flex items-center gap-x-3 gap-y-1 text-xs text-slate-500 flex-wrap font-medium">
-                            <span>Mix Rombel: <strong class="text-slate-800">{{ $kelasInRoom->pluck('nama_kelas')->join(', ') ?: 'Belum ada siswa' }}</strong></span>
-                            <span>&bull;</span>
-                            <span>Kapasitas: <strong class="text-slate-800">{{ $totalSiswa }} / {{ $activeRuang->kapasitas }} Siswa</strong></span>
+                            <span>Peserta: <strong class="text-slate-800">{{ $totalSiswa }} Siswa</strong></span>
                             <span>&bull;</span>
                             <span>Pengawas: <strong class="text-slate-800">{{ $activeRuang->nama_pengawas_tugas }}</strong></span>
                             <span>&bull;</span>
