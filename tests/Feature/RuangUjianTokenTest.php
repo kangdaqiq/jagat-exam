@@ -113,7 +113,73 @@ class RuangUjianTokenTest extends TestCase
         Livewire::test(PortalUjian::class)
             ->set('token_input', $token2)
             ->call('submitToken')
-            ->assertHasErrors('token_input');
+            ->assertHasErrors(['token_input' => 'Kode token tersebut adalah token untuk Ruang 2, sedangkan Anda terdaftar di Ruang 1. Silakan minta kode token kepada Guru Pengawas di Ruang 1.']);
+    }
+
+    public function test_siswa_tanpa_ruang_ditolak_menggunakan_token_ruangan(): void
+    {
+        $guru = User::factory()->create(['role' => 'guru', 'is_active' => true]);
+        [$kelasX] = $this->buatKelasDenganUjian($guru, 'X RPL 1', '10');
+
+        $ruang1 = RuangUjian::create(['nama_ruang' => 'Ruang 1', 'kapasitas' => 36, 'is_active' => true]);
+        $token1 = $ruang1->rilisToken();
+
+        // Siswa terdaftar di kelas X tapi ruang_ujian_id = null (belum ditempatkan di ruang ujian manapun)
+        $userTanpaRuang = User::factory()->create(['role' => 'siswa', 'email' => 'tanparuang@siswa.cbt', 'is_active' => true]);
+        Siswa::create([
+            'user_id' => $userTanpaRuang->id,
+            'kelas_id' => $kelasX->id,
+            'ruang_ujian_id' => null,
+            'nis' => '9999',
+            'nama' => 'Siswa Tanpa Ruang',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($userTanpaRuang);
+        Livewire::test(PortalUjian::class)
+            ->set('token_input', $token1)
+            ->call('submitToken')
+            ->assertHasErrors(['token_input' => 'Kode token tersebut adalah token untuk Ruang 1, sedangkan Anda belum terdaftar di ruangan ujian manapun. Silakan hubungi Proktor / Admin untuk penempatan ruang ujian Anda.']);
+    }
+
+    public function test_rilis_token_ruangan_ditolak_jika_belum_masuk_jadwal(): void
+    {
+        $guru = User::factory()->create(['role' => 'guru', 'is_active' => true]);
+        [$kelasX, $bankX] = $this->buatKelasDenganUjian($guru, 'X RPL 1', '10');
+
+        $ruang = RuangUjian::create(['nama_ruang' => 'Ruang 3', 'kapasitas' => 36, 'is_active' => true]);
+        $this->buatSiswa($kelasX, '3001', $ruang);
+
+        // Buat jadwal ruang yang jam mulainya 3 jam lagi (misal: 19:00 - 21:00)
+        $waktuMulai = now()->addHours(3)->format('H:i:s');
+        $waktuSelesai = now()->addHours(5)->format('H:i:s');
+
+        $ujian = Ujian::whereHas('kelas', fn ($q) => $q->where('kelas.id', $kelasX->id))->first();
+
+        \App\Models\JadwalRuang::create([
+            'ruang_ujian_id' => $ruang->id,
+            'ujian_id' => $ujian->id,
+            'pengawas_id' => $guru->id,
+            'tanggal' => now()->toDateString(),
+            'sesi_ke' => 1,
+            'waktu_mulai' => $waktuMulai,
+            'waktu_selesai' => $waktuSelesai,
+            'status' => 'SCHEDULED',
+        ]);
+
+        $this->assertTrue($ruang->isBelumMasukJadwal());
+        $this->assertFalse($ruang->canReleaseToken());
+
+        // Di portal pengawas, rilisTokenRuang harus ditolak
+        $this->actingAs($guru);
+        Livewire::test(\App\Livewire\Pengawas\PortalPengawas::class)
+            ->call('pilihRuang', $ruang->id)
+            ->call('rilisTokenRuang')
+            ->assertSet('flashType', 'warning')
+            ->assertSee('Waktu pelaksanaan ujian belum dimulai');
+
+        $ruang->refresh();
+        $this->assertNull($ruang->token_ruang);
     }
 }
 

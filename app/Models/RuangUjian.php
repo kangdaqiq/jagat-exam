@@ -88,6 +88,98 @@ class RuangUjian extends Model
     }
 
     /**
+     * Ambil guru pengawas yang bertugas untuk ruangan ini.
+     * Prioritas:
+     * 1. Jadwal Ruang hari ini
+     * 2. Jadwal Ruang terdekat di masa depan
+     * 3. Pengawas default pada ruang_ujians
+     */
+    public function getNamaPengawasTugasAttribute(): string
+    {
+        // 1. Prioritas Jadwal Ruang hari ini
+        $jadwalHariIni = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->whereNotNull('pengawas_id')
+            ->with(['pengawas', 'pengawasPendamping'])
+            ->orderBy('sesi_ke')
+            ->orderBy('waktu_mulai')
+            ->first();
+
+        if ($jadwalHariIni && $jadwalHariIni->pengawas) {
+            $nama = $jadwalHariIni->pengawas->name;
+            if ($jadwalHariIni->pengawasPendamping) {
+                $nama .= ' & ' . $jadwalHariIni->pengawasPendamping->name;
+            }
+            return $nama;
+        }
+
+        // 2. Prioritas Jadwal Ruang terdekat mendatang
+        $jadwalTerdekat = $this->jadwalRuangs()
+            ->whereDate('tanggal', '>=', now()->toDateString())
+            ->whereNotNull('pengawas_id')
+            ->with(['pengawas', 'pengawasPendamping'])
+            ->orderBy('tanggal')
+            ->orderBy('sesi_ke')
+            ->orderBy('waktu_mulai')
+            ->first();
+
+        if ($jadwalTerdekat && $jadwalTerdekat->pengawas) {
+            $nama = $jadwalTerdekat->pengawas->name;
+            if ($jadwalTerdekat->pengawasPendamping) {
+                $nama .= ' & ' . $jadwalTerdekat->pengawasPendamping->name;
+            }
+            return $nama;
+        }
+
+        // 3. Fallback pengawas bawaan ruangan
+        if ($this->pengawas) {
+            return $this->pengawas->name;
+        }
+
+        return 'Belum Ditugaskan';
+    }
+
+    /**
+     * Ambil informasi rentang jam jadwal pelaksanaan sesi hari ini / terdekat untuk ruangan ini.
+     */
+    public function getInfoJadwalWaktuAttribute(): string
+    {
+        // 1. Prioritas Jadwal Ruang hari ini
+        $jadwalHariIni = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->orderBy('sesi_ke')
+            ->orderBy('waktu_mulai')
+            ->get();
+
+        if ($jadwalHariIni->isNotEmpty()) {
+            return $jadwalHariIni->map(fn (JadwalRuang $j) => $j->label_sesi_waktu)->join(', ');
+        }
+
+        // 2. Prioritas Jadwal Ruang terdekat mendatang
+        $jadwalTerdekat = $this->jadwalRuangs()
+            ->whereDate('tanggal', '>', now()->toDateString())
+            ->orderBy('tanggal')
+            ->orderBy('sesi_ke')
+            ->orderBy('waktu_mulai')
+            ->first();
+
+        if ($jadwalTerdekat) {
+            $tgl = $jadwalTerdekat->tanggal ? $jadwalTerdekat->tanggal->format('d M') : '';
+            return "{$tgl} - {$jadwalTerdekat->label_sesi_waktu}";
+        }
+
+        // 3. Fallback Jadwal master ujian kelas
+        $ujian = $this->getActiveUjiansForRoom()->first();
+        if ($ujian && ($ujian->waktu_mulai || $ujian->waktu_selesai)) {
+            $mulai = $ujian->waktu_mulai ? substr((string) $ujian->waktu_mulai, 0, 5) : '00:00';
+            $selesai = $ujian->waktu_selesai ? substr((string) $ujian->waktu_selesai, 0, 5) : 'Selesai';
+            return "{$mulai} - {$selesai} WIB";
+        }
+
+        return 'Sesuai Jam Pelaksanaan';
+    }
+
+    /**
      * Ambil koleksi ujian yang sedang aktif/terjadwal untuk rombel kelas siswa yang ada di ruangan ini.
      */
     public function getActiveUjiansForRoom(): Collection
@@ -113,18 +205,83 @@ class RuangUjian extends Model
     }
 
     /**
-     * Memeriksa apakah masih ada jadwal ujian aktif/belum habis untuk siswa di ruangan ini.
+     * Memeriksa apakah saat ini belum memasuki waktu jadwal ujian untuk ruangan ini.
      */
-    public function canReleaseToken(): bool
+    public function isBelumMasukJadwal(): bool
     {
-        $ujians = $this->getActiveUjiansForRoom();
-        if ($ujians->isEmpty()) {
-            // Jika belum ada ujian yang di-mapping atau ujian fleksibel, tetap izinkan rilis token ruangan
+        // Prioritas 1: Jika ada Jadwal Ruang khusus yang dijadwalkan hari ini
+        $todayJadwals = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->get();
+
+        if ($todayJadwals->isNotEmpty()) {
+            return $todayJadwals->every(fn (JadwalRuang $j) => $j->isBelumMasukJadwal());
+        }
+
+        // Jika ada jadwal ruang di masa depan (belum hari H)
+        $hasFutureJadwals = $this->jadwalRuangs()
+            ->whereDate('tanggal', '>', now()->toDateString())
+            ->exists();
+
+        if ($hasFutureJadwals) {
             return true;
         }
 
-        // Selama minimal ada 1 ujian di ruangan ini yang jadwalnya belum berakhir, token ruang masih bisa dirilis
-        return $ujians->contains(fn (Ujian $u) => !$u->isJadwalBerakhir());
+        // Prioritas 2: Jadwal master ujian kelas
+        $ujians = $this->getActiveUjiansForRoom();
+        if ($ujians->isNotEmpty()) {
+            return $ujians->every(fn (Ujian $u) => $u->isBelumMasukJadwal());
+        }
+
+        return false;
+    }
+
+    /**
+     * Memeriksa info jam/tanggal jadwal ujian terdekat yang akan berlangsung di ruangan ini.
+     */
+    public function getJadwalBerikutnyaAttribute(): ?string
+    {
+        $todayJadwal = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->where('status', '!=', 'COMPLETED')
+            ->orderBy('waktu_mulai')
+            ->first();
+
+        if ($todayJadwal && $todayJadwal->waktu_mulai) {
+            return substr((string) $todayJadwal->waktu_mulai, 0, 5) . ' WIB';
+        }
+
+        $futureJadwal = $this->jadwalRuangs()
+            ->whereDate('tanggal', '>', now()->toDateString())
+            ->orderBy('tanggal')
+            ->orderBy('waktu_mulai')
+            ->first();
+
+        if ($futureJadwal) {
+            $tgl = $futureJadwal->tanggal ? $futureJadwal->tanggal->format('d/m/Y') : '';
+            $jam = $futureJadwal->waktu_mulai ? ' ' . substr((string) $futureJadwal->waktu_mulai, 0, 5) . ' WIB' : '';
+            return "{$tgl}{$jam}";
+        }
+
+        $ujian = $this->getActiveUjiansForRoom()->first();
+        if ($ujian && $ujian->waktu_mulai) {
+            return substr((string) $ujian->waktu_mulai, 0, 5) . ' WIB';
+        }
+
+        return null;
+    }
+
+    /**
+     * Memeriksa apakah masih ada jadwal ujian aktif/belum habis untuk siswa di ruangan ini,
+     * dan sudah memasuki waktu jadwal pelaksanaan.
+     */
+    public function canReleaseToken(): bool
+    {
+        if ($this->isBelumMasukJadwal()) {
+            return false;
+        }
+
+        return ! $this->isSemuaJadwalBerakhir();
     }
 
     /**
@@ -132,6 +289,16 @@ class RuangUjian extends Model
      */
     public function isSemuaJadwalBerakhir(): bool
     {
+        // Prioritas 1: Jika ada Jadwal Ruang khusus hari ini
+        $todayJadwals = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->get();
+
+        if ($todayJadwals->isNotEmpty()) {
+            return $todayJadwals->every(fn (JadwalRuang $j) => $j->isJadwalBerakhir());
+        }
+
+        // Prioritas 2: Jadwal master ujian kelas
         $ujians = $this->getActiveUjiansForRoom();
         if ($ujians->isEmpty()) {
             return false;

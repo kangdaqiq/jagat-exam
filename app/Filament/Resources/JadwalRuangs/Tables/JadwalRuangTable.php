@@ -105,10 +105,38 @@ class JadwalRuangTable
                     ->label(fn (JadwalRuang $record) => $record->token_ruang ? 'Rilis Ulang Token' : 'Rilis Token')
                     ->icon(Heroicon::OutlinedKey)
                     ->color('success')
+                    ->disabled(fn (JadwalRuang $record) => $record->isBelumMasukJadwal() || $record->isJadwalBerakhir())
+                    ->tooltip(function (JadwalRuang $record) {
+                        if ($record->isBelumMasukJadwal()) {
+                            return "Belum masuk jadwal pelaksanaan ({$record->label_sesi_waktu}).";
+                        }
+                        if ($record->isJadwalBerakhir()) {
+                            return "Jadwal sesi ini telah berakhir.";
+                        }
+                        return null;
+                    })
                     ->requiresConfirmation()
                     ->modalHeading(fn (JadwalRuang $record) => "Rilis Token Ruang: {$record->ruangUjian?->nama_ruang} - {$record->label_sesi_waktu}")
                     ->modalDescription('Token 6 karakter baru akan di-generate dan berlaku 10 menit. Status jadwal otomatis diubah menjadi ONGOING.')
                     ->action(function (JadwalRuang $record) {
+                        if ($record->isBelumMasukJadwal()) {
+                            Notification::make()
+                                ->title('Belum Masuk Jadwal')
+                                ->body("Sesi ini belum memasuki jam pelaksanaan ({$record->label_sesi_waktu}).")
+                                ->warning()
+                                ->send();
+                            return;
+                        }
+
+                        if ($record->isJadwalBerakhir()) {
+                            Notification::make()
+                                ->title('Jadwal Telah Berakhir')
+                                ->body("Waktu jadwal sesi ini telah berakhir.")
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
                         $token = $record->rilisToken();
                         Notification::make()
                             ->title("Token Ruangan Berhasil Dirilis: {$token}")

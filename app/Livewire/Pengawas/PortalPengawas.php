@@ -25,6 +25,7 @@ class PortalPengawas extends Component
 
     public string $tabMode = 'ruang'; // 'ruang' | 'ujian'
     public string $scopeUjian = 'saya'; // 'saya' | 'semua'
+    public string $scopeRuang = 'saya'; // 'saya' | 'semua'
     public string $search = '';
     public string $filterStatus = 'all'; // 'all' | 'SEDANG_MENGERJAKAN' | 'BELUM_MULAI' | 'SELESAI' | 'PELANGGARAN'
     public ?int $filterKelas = null;
@@ -45,6 +46,7 @@ class PortalPengawas extends Component
 
         if ($user->isAdmin()) {
             $this->scopeUjian = 'semua';
+            $this->scopeRuang = 'semua';
         }
 
         if ($ujian) {
@@ -99,11 +101,54 @@ class PortalPengawas extends Component
 
     public function getDaftarRuangProperty()
     {
-        return RuangUjian::with(['pengawas', 'siswas.kelas'])
+        $user = Auth::user();
+        $query = RuangUjian::with(['pengawas', 'siswas.kelas', 'jadwalRuangs.pengawas', 'jadwalRuangs.pengawasPendamping'])
             ->withCount('siswas')
-            ->where('is_active', true)
-            ->orderBy('nama_ruang', 'asc')
-            ->get();
+            ->where('is_active', true);
+
+        if ($user && $user->isGuru() && $this->scopeRuang === 'saya') {
+            $hasPenugasan = RuangUjian::where('is_active', true)
+                ->where(function ($q) use ($user) {
+                    $q->where('pengawas_id', $user->id)
+                      ->orWhereHas('jadwalRuangs', function ($jq) use ($user) {
+                          $jq->where('pengawas_id', $user->id)
+                             ->orWhere('pengawas_pendamping_id', $user->id);
+                      });
+                })->exists();
+
+            if ($hasPenugasan) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('pengawas_id', $user->id)
+                      ->orWhereHas('jadwalRuangs', function ($jq) use ($user) {
+                          $jq->where('pengawas_id', $user->id)
+                             ->orWhere('pengawas_pendamping_id', $user->id);
+                      });
+                });
+            }
+        }
+
+        return $query->orderBy('nama_ruang', 'asc')->get();
+    }
+
+    public function getJumlahRuangTugasSayaProperty(): int
+    {
+        $user = Auth::user();
+        if (! $user) return 0;
+
+        return RuangUjian::where('is_active', true)
+            ->where(function ($q) use ($user) {
+                $q->where('pengawas_id', $user->id)
+                  ->orWhereHas('jadwalRuangs', function ($jq) use ($user) {
+                      $jq->where('pengawas_id', $user->id)
+                         ->orWhere('pengawas_pendamping_id', $user->id);
+                  });
+            })
+            ->count();
+    }
+
+    public function getJumlahSemuaRuangProperty(): int
+    {
+        return RuangUjian::where('is_active', true)->count();
     }
 
     public function getActiveRuangProperty(): ?RuangUjian
@@ -241,6 +286,13 @@ class PortalPengawas extends Component
         if ($ruang->siswas()->count() === 0) {
             $this->flashType = 'warning';
             $this->flashMessage = "Ruang {$ruang->nama_ruang} belum memiliki peserta. Silakan atur penempatan siswa di menu Ruang Ujian.";
+            return;
+        }
+
+        if ($ruang->isBelumMasukJadwal()) {
+            $waktu = $ruang->jadwal_berikutnya ? " (Mulai: {$ruang->jadwal_berikutnya})" : '';
+            $this->flashType = 'warning';
+            $this->flashMessage = "Waktu pelaksanaan ujian belum dimulai{$waktu}. Rilis token ruangan belum dibuka.";
             return;
         }
 

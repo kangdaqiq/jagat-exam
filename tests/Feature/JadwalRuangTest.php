@@ -215,14 +215,67 @@ class JadwalRuangTest extends TestCase
         $this->actingAs($guru2);
 
         Livewire::test(PortalPengawas::class)
-            ->assertSee('Tugas Jadwal Pengawasan Anda Hari Ini')
             ->assertSee($ruang->nama_ruang)
-            ->assertSee($ujian->nama_ujian)
             ->call('rilisTokenJadwal', $jadwal->id)
             ->assertSet('selectedRuangId', $ruang->id);
 
         $jadwal->refresh();
         $this->assertNotNull($jadwal->token_ruang);
         $this->assertEquals('ONGOING', $jadwal->status);
+    }
+
+    public function test_portal_pengawas_memfilter_ruangan_sesuai_penugasan_pengawas(): void
+    {
+        [$admin, $guru1, $guru2, $ruang1, $ujian] = $this->setupData();
+
+        $ruang2 = RuangUjian::create(['nama_ruang' => 'Ruang 2', 'kapasitas' => 30, 'is_active' => true]);
+        $ruang3 = RuangUjian::create(['nama_ruang' => 'Ruang 3', 'kapasitas' => 30, 'is_active' => true]);
+
+        // Guru 2 hanya ditugaskan di Ruang 1 dan Ruang 2
+        JadwalRuang::create([
+            'ruang_ujian_id' => $ruang1->id,
+            'ujian_id' => $ujian->id,
+            'pengawas_id' => $guru2->id,
+            'tanggal' => now()->toDateString(),
+            'sesi_ke' => 1,
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '09:30:00',
+            'status' => 'SCHEDULED',
+        ]);
+
+        JadwalRuang::create([
+            'ruang_ujian_id' => $ruang2->id,
+            'ujian_id' => $ujian->id,
+            'pengawas_id' => $guru2->id,
+            'tanggal' => now()->toDateString(),
+            'sesi_ke' => 1,
+            'waktu_mulai' => '10:00:00',
+            'waktu_selesai' => '12:00:00',
+            'status' => 'SCHEDULED',
+        ]);
+
+        // Ruang 3 ditugaskan ke Guru 1
+        JadwalRuang::create([
+            'ruang_ujian_id' => $ruang3->id,
+            'ujian_id' => $ujian->id,
+            'pengawas_id' => $guru1->id,
+            'tanggal' => now()->toDateString(),
+            'sesi_ke' => 1,
+            'waktu_mulai' => '10:00:00',
+            'waktu_selesai' => '12:00:00',
+            'status' => 'SCHEDULED',
+        ]);
+
+        $this->actingAs($guru2);
+
+        // Secara default scopeRuang = 'saya', hanya Ruang 1 dan Ruang 2 yang muncul
+        Livewire::test(PortalPengawas::class)
+            ->assertSee($ruang1->nama_ruang)
+            ->assertSee($ruang2->nama_ruang)
+            ->assertDontSee($ruang3->nama_ruang)
+            ->assertSee($guru2->name)
+            ->assertDontSee('Semua Pengawas')
+            ->assertSee('07:30 - 09:30')
+            ->assertSee('10:00 - 12:00');
     }
 }

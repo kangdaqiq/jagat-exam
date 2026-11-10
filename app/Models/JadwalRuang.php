@@ -175,6 +175,34 @@ class JadwalRuang extends Model
     }
 
     /**
+     * Memeriksa apakah saat ini belum memasuki waktu jadwal pelaksanaan sesi.
+     */
+    public function isBelumMasukJadwal(): bool
+    {
+        if (! $this->tanggal) {
+            return false;
+        }
+
+        $tglStr = $this->tanggal instanceof Carbon ? $this->tanggal->format('Y-m-d') : substr((string) $this->tanggal, 0, 10);
+
+        if ($this->waktu_mulai) {
+            $mulai = Carbon::parse("{$tglStr} {$this->waktu_mulai}");
+            return now()->lessThan($mulai);
+        }
+
+        $tglMulai = Carbon::parse($tglStr)->startOfDay();
+        return now()->lessThan($tglMulai);
+    }
+
+    /**
+     * Memeriksa apakah saat ini sudah masuk jadwal dan belum berakhir (layak rilis token).
+     */
+    public function isSudahMasukJadwal(): bool
+    {
+        return ! $this->isBelumMasukJadwal() && ! $this->isJadwalBerakhir();
+    }
+
+    /**
      * Memeriksa apakah saat ini berada dalam rentang waktu pelaksanaan jadwal ini.
      */
     public function isSedangBerlangsung(): bool

@@ -45,7 +45,9 @@ class RuangUjianTable
 
                 TextColumn::make('pengawas.name')
                     ->label('Pengawas Ruangan')
-                    ->placeholder('Semua Pengawas')
+                    ->state(fn (RuangUjian $record) => $record->nama_pengawas_tugas !== 'Belum Ditugaskan' ? $record->nama_pengawas_tugas : ($record->pengawas?->name ?: 'Belum Ditugaskan'))
+                    ->badge(fn ($state) => $state !== 'Belum Ditugaskan')
+                    ->color(fn ($state) => $state !== 'Belum Ditugaskan' ? 'info' : 'gray')
                     ->searchable(),
 
                 TextColumn::make('siswas_count')
@@ -98,6 +100,17 @@ class RuangUjianTable
                     ->label(fn (RuangUjian $record) => $record->token_ruang ? 'Rilis Token Baru' : 'Rilis Token Ruang')
                     ->icon(Heroicon::OutlinedKey)
                     ->color('success')
+                    ->disabled(fn (RuangUjian $record) => $record->isBelumMasukJadwal() || $record->isSemuaJadwalBerakhir())
+                    ->tooltip(function (RuangUjian $record) {
+                        if ($record->isBelumMasukJadwal()) {
+                            $info = $record->jadwal_berikutnya ? " (Mulai: {$record->jadwal_berikutnya})" : '';
+                            return "Token belum dapat dirilis karena belum masuk waktu jadwal ujian{$info}.";
+                        }
+                        if ($record->isSemuaJadwalBerakhir()) {
+                            return 'Seluruh jadwal ujian untuk ruangan ini telah berakhir.';
+                        }
+                        return null;
+                    })
                     ->requiresConfirmation()
                     ->modalHeading(fn (RuangUjian $record) => "Rilis Token Akses: {$record->nama_ruang}")
                     ->modalDescription('Token 6 karakter ini berlaku selama 10 menit untuk seluruh siswa di ruangan ini. Soal ujian yang terbuka akan otomatis menyesuaikan kelas/tingkat masing-masing siswa.')
@@ -107,6 +120,16 @@ class RuangUjianTable
                             Notification::make()
                                 ->title('Ruang Belum Memiliki Peserta')
                                 ->body("Silakan tempatkan siswa terlebih dahulu ke {$record->nama_ruang} sebelum merilis token.")
+                                ->warning()
+                                ->send();
+                            return;
+                        }
+
+                        if ($record->isBelumMasukJadwal()) {
+                            $info = $record->jadwal_berikutnya ? " (Mulai: {$record->jadwal_berikutnya})" : '';
+                            Notification::make()
+                                ->title('Belum Masuk Jadwal')
+                                ->body("Waktu pelaksanaan ujian belum dimulai{$info}. Rilis token ruangan belum dibuka.")
                                 ->warning()
                                 ->send();
                             return;

@@ -65,11 +65,24 @@ class PortalUjian extends Component
             ->where('is_active', true)
             ->first();
 
+        if (!$ruangToken) {
+            $jadwal = \App\Models\JadwalRuang::where('token_ruang', $token)->with('ruangUjian')->first();
+            if ($jadwal && $jadwal->ruangUjian && $jadwal->ruangUjian->is_active) {
+                $ruangToken = $jadwal->ruangUjian;
+            }
+        }
+
         // 1A. PRIORITAS UTAMA: Token Ruangan Ujian (1 ruang bisa mix beberapa kelas, soal sesuai kelas/tingkat masing-masing siswa)
         if ($ruangToken) {
-            if ($siswa && $siswa->ruang_ujian_id && (int) $siswa->ruang_ujian_id !== (int) $ruangToken->id) {
-                $namaRuangSiswa = $siswa->ruangUjian?->nama_ruang ?: 'ruang lain';
-                $this->addError('token_input', "Kode token tersebut adalah token untuk {$ruangToken->nama_ruang}, sedangkan Anda terdaftar di {$namaRuangSiswa}.");
+            // Validasi Otorisasi Ruang Ujian:
+            // Siswa WAJIB terdaftar di ruangan ini untuk menggunakan token ruangan ini
+            if (!$siswa || empty($siswa->ruang_ujian_id) || (int) $siswa->ruang_ujian_id !== (int) $ruangToken->id) {
+                if ($siswa && !empty($siswa->ruang_ujian_id)) {
+                    $namaRuangSiswa = $siswa->ruangUjian?->nama_ruang ?: 'ruangan lain';
+                    $this->addError('token_input', "Kode token tersebut adalah token untuk {$ruangToken->nama_ruang}, sedangkan Anda terdaftar di {$namaRuangSiswa}. Silakan minta kode token kepada Guru Pengawas di {$namaRuangSiswa}.");
+                } else {
+                    $this->addError('token_input', "Kode token tersebut adalah token untuk {$ruangToken->nama_ruang}, sedangkan Anda belum terdaftar di ruangan ujian manapun. Silakan hubungi Proktor / Admin untuk penempatan ruang ujian Anda.");
+                }
                 return;
             }
 
@@ -129,6 +142,19 @@ class PortalUjian extends Component
 
             if (!$ujian) {
                 $this->addError('token_input', 'Kode token ruangan/ujian salah, sudah diganti, atau sesi belum dibuka oleh Guru Pengawas.');
+                return;
+            }
+
+            // Jika siswa sudah terdaftar di ruang ujian, mereka wajib menggunakan token ruangan
+            if ($siswa && !empty($siswa->ruang_ujian_id)) {
+                $namaRuangSiswa = $siswa->ruangUjian?->nama_ruang ?: 'ruangan Anda';
+                $this->addError('token_input', "Anda terdaftar di {$namaRuangSiswa}. Silakan masukkan kode token ruangan yang dirilis oleh Guru Pengawas di {$namaRuangSiswa}.");
+                return;
+            }
+
+            // Jika ujian ini menggunakan sistem pembagian jadwal ruangan, siswa harus terdaftar di ruangan
+            if ($ujian->jadwalRuangs()->exists()) {
+                $this->addError('token_input', 'Ujian ini menggunakan sistem ruangan. Anda belum terdaftar di ruangan ujian manapun. Silakan hubungi Proktor.');
                 return;
             }
         }
@@ -205,10 +231,27 @@ class PortalUjian extends Component
             $durasiMenit = $ujian->durasi_menit ?: ($bankSoal->durasi_menit ?: 60);
             $waktuSelesai = now()->addMinutes($durasiMenit);
 
-            // Jika ada batas jadwal waktu_selesai pada ujian, sesuaikan agar durasi tidak melewati jadwal ujian
-            if ($ujian->tanggal && $ujian->waktu_selesai) {
-                $tglStr = $ujian->tanggal instanceof \Carbon\Carbon ? $ujian->tanggal->format('Y-m-d') : substr((string)$ujian->tanggal, 0, 10);
-                $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$ujian->waktu_selesai}");
+            // Jika ada batas jadwal waktu_selesai pada ruangan / ujian, sesuaikan agar durasi tidak melewati jadwal
+            $targetTanggal = $ujian->tanggal;
+            $targetWaktuSelesai = $ujian->waktu_selesai;
+
+            // Prioritaskan waktu dari Jadwal Ruang jika siswa berada di ruangan ujian
+            $effectiveRuangId = $ruangToken?->id ?? $siswa?->ruang_ujian_id;
+            if ($effectiveRuangId) {
+                $jr = \App\Models\JadwalRuang::where('ruang_ujian_id', $effectiveRuangId)
+                    ->where('ujian_id', $ujian->id)
+                    ->whereDate('tanggal', now()->toDateString())
+                    ->latest()
+                    ->first();
+                if ($jr && $jr->waktu_selesai) {
+                    $targetTanggal = $jr->tanggal;
+                    $targetWaktuSelesai = $jr->waktu_selesai;
+                }
+            }
+
+            if ($targetTanggal && $targetWaktuSelesai) {
+                $tglStr = $targetTanggal instanceof \Carbon\Carbon ? $targetTanggal->format('Y-m-d') : substr((string)$targetTanggal, 0, 10);
+                $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$targetWaktuSelesai}");
                 if ($jadwalSelesai->isFuture() && $jadwalSelesai->lessThan($waktuSelesai)) {
                     $waktuSelesai = $jadwalSelesai;
                     $durasiMenit = max(1, (int) round(now()->diffInMinutes($jadwalSelesai)));

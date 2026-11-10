@@ -223,11 +223,33 @@ class Ujian extends Model
     }
 
     /**
+     * Memeriksa apakah saat ini belum memasuki waktu jadwal pelaksanaan ujian.
+     */
+    public function isBelumMasukJadwal(): bool
+    {
+        if (! $this->tanggal) {
+            return false;
+        }
+
+        $tglStr = $this->tanggal instanceof \Carbon\Carbon
+            ? $this->tanggal->format('Y-m-d')
+            : substr((string) $this->tanggal, 0, 10);
+
+        if ($this->waktu_mulai) {
+            $mulai = \Carbon\Carbon::parse("{$tglStr} {$this->waktu_mulai}");
+            return now()->lessThan($mulai);
+        }
+
+        $tglMulai = \Carbon\Carbon::parse($tglStr)->startOfDay();
+        return now()->lessThan($tglMulai);
+    }
+
+    /**
      * Memeriksa apakah token masih boleh dirilis / diperbarui oleh pengawas.
      */
     public function canReleaseToken(): bool
     {
-        return ! $this->isJadwalBerakhir();
+        return ! $this->isBelumMasukJadwal() && ! $this->isJadwalBerakhir();
     }
 
     /**
