@@ -201,6 +201,45 @@ class PengawasanUjian extends Page
     }
 
     /**
+     * Reset total ujian siswa: hapus semua jawaban, reset waktu mulai, waktu selesai, dan status kembali ke awal (Belum Mulai).
+     */
+    public function resetUjianSiswaTotal(int $pesertaId): void
+    {
+        $peserta = UjianPeserta::with(['ujianSesi.jawabans', 'siswa.user', 'user'])->find($pesertaId);
+        if (!$peserta) return;
+
+        // Lepas device token
+        $targetUser = $peserta->user ?: $peserta->siswa?->user;
+        if ($targetUser) {
+            $targetUser->resetDeviceLogin();
+        }
+
+        // Hapus atau reset sesi
+        if ($peserta->ujianSesi) {
+            $sesi = $peserta->ujianSesi;
+            // Hapus semua jawaban siswa
+            $sesi->jawabans()->delete();
+            // Hapus sesi pengerjaan agar saat siswa input token kembali, sesi dibuat ulang dari awal
+            $sesi->delete();
+        }
+
+        // Reset status peserta kembali ke BELUM_MULAI dan bersihkan nilai serta riwayat waktu
+        $peserta->update([
+            'status' => 'BELUM_MULAI',
+            'ujian_sesi_id' => null,
+            'nilai' => null,
+            'waktu_mulai' => null,
+            'waktu_selesai' => null,
+        ]);
+
+        Notification::make()
+            ->title('Ujian Siswa Telah Direset Total')
+            ->body("Jawaban dan waktu pengerjaan untuk {$peserta->siswa?->nama} berhasil direset dari nol. Siswa dapat memasukkan token untuk memulai ujian baru.")
+            ->warning()
+            ->send();
+    }
+
+    /**
      * Proktor memberikan tambahan waktu pengerjaan untuk siswa tertentu (+10 menit default)
      */
     public function tambahWaktuSiswa(int $pesertaId, int $menit = 10): void

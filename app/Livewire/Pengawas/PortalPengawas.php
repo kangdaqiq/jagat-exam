@@ -864,6 +864,40 @@ class PortalPengawas extends Component
     }
 
     /**
+     * Reset total ujian siswa: hapus semua jawaban, reset waktu mulai, waktu selesai, dan status kembali ke awal (Belum Mulai).
+     */
+    public function resetUjianSiswaTotal(int $pesertaId): void
+    {
+        $peserta = UjianPeserta::with(['ujianSesi.jawabans', 'siswa.user', 'user'])->find($pesertaId);
+        if (!$peserta) return;
+
+        // Lepas device token
+        $targetUser = $peserta->user ?: $peserta->siswa?->user;
+        if ($targetUser) {
+            $targetUser->resetDeviceLogin();
+        }
+
+        // Hapus atau reset sesi
+        if ($peserta->ujianSesi) {
+            $sesi = $peserta->ujianSesi;
+            $sesi->jawabans()->delete();
+            $sesi->delete();
+        }
+
+        $peserta->update([
+            'status' => 'BELUM_MULAI',
+            'ujian_sesi_id' => null,
+            'nilai' => null,
+            'waktu_mulai' => null,
+            'waktu_selesai' => null,
+        ]);
+
+        $nama = $peserta->siswa?->nama ?: 'Siswa';
+        $this->flashType = 'success';
+        $this->flashMessage = "Ujian untuk {$nama} berhasil di-reset total dari nol. Jawaban & waktu pengerjaan telah dibersihkan.";
+    }
+
+    /**
      * Tambah waktu pengerjaan siswa (+10 menit default)
      */
     public function tambahWaktuSiswa(int $pesertaId, int $menit = 10): void

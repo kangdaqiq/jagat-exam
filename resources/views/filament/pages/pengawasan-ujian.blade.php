@@ -520,11 +520,24 @@
                                         type="button"
                                         wire:click="resetSesiSiswa({{ $peserta->id }})"
                                         wire:confirm="Reset login untuk siswa {{ $peserta->siswa?->nama }}? Siswa dapat login kembali dan melanjutkan ujian tanpa kehilangan jawaban."
-                                        title="Reset Login / Izinkan Masuk Kembali"
+                                        title="Reset Login / Lanjutkan Ujian (Jawaban Aman)"
                                         class="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
                                     >
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                    </button>
+
+                                    {{-- Reset Ujian Total (Hapus Jawaban & Ulang Dari Awal) --}}
+                                    <button
+                                        type="button"
+                                        wire:click="resetUjianSiswaTotal({{ $peserta->id }})"
+                                        wire:confirm="PERINGATAN: Reset Ujian Total akan MENGHAPUS SEMUA JAWABAN dan mengatur ulang waktu mulai/selesai siswa {{ $peserta->siswa?->nama }} dari nol. Apakah Anda yakin?"
+                                        title="Reset Ujian Total (Ulang Dari Nol & Hapus Jawaban)"
+                                        class="p-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition cursor-pointer"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
                                     </button>
 

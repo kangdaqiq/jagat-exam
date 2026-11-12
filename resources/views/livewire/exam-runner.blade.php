@@ -796,16 +796,21 @@
                     </div>
                 </div>
 
-                {{-- Countdown Timer Modern (Presisi Wall-clock & Imun dari Livewire Morph) --}}
+                {{-- Countdown Timer Modern (Presisi Wall-clock & Imun dari Livewire Morph serta Timezone Skew) --}}
                 <div
                     wire:ignore
                     x-data="{
-                        endTimestamp: {{ $sesi && $sesi->waktu_selesai ? $sesi->waktu_selesai->timestamp : (now()->addHour()->timestamp) }},
+                        serverRemaining: {{ $sesi ? $sesi->sisaDetik() : 3600 }},
+                        clientStartMs: 0,
                         remainingSeconds: {{ $sesi ? $sesi->sisaDetik() : 3600 }},
                         submitted: false,
+                        initTime: 0,
 
                         init() {
-                            this.updateTimer();
+                            this.clientStartMs = Date.now();
+                            this.initTime = Date.now();
+                            this.remainingSeconds = this.serverRemaining;
+
                             if (window.__examTimerInterval) {
                                 clearInterval(window.__examTimerInterval);
                             }
@@ -814,18 +819,25 @@
                             }, 1000);
                             window.addEventListener('cbt-update-end-timestamp', (e) => {
                                 if (e.detail && typeof e.detail === 'number') {
-                                    this.endTimestamp = e.detail;
+                                    // Hitung ulang serverRemaining dari timestamp server baru
+                                    const nowUnix = Math.floor(Date.now() / 1000);
+                                    this.serverRemaining = Math.max(0, e.detail - nowUnix);
+                                    this.clientStartMs = Date.now();
                                     this.updateTimer();
                                 }
                             });
                         },
 
                         updateTimer() {
-                            const nowSec = Math.floor(Date.now() / 1000);
-                            this.remainingSeconds = Math.max(0, this.endTimestamp - nowSec);
+                            // Hitung selisih waktu berjalan (elapsed) dari client clock
+                            // Ini membuat timer 100% imun terhadap jam iPhone yang tidak akurat/berbeda zona waktu
+                            const elapsedSec = Math.floor((Date.now() - this.clientStartMs) / 1000);
+                            this.remainingSeconds = Math.max(0, this.serverRemaining - elapsedSec);
                             window.dispatchEvent(new CustomEvent('cbt-timer-state', { detail: this.remainingSeconds }));
 
-                            if (this.remainingSeconds <= 0 && !this.submitted) {
+                            // Guard: Jangan auto-submit di 3 detik pertama load halaman untuk mencegah race condition/glitch
+                            const uptimeMs = Date.now() - this.initTime;
+                            if (this.remainingSeconds <= 0 && !this.submitted && uptimeMs > 3000) {
                                 this.submitted = true;
                                 if (window.__examTimerInterval) {
                                     clearInterval(window.__examTimerInterval);
@@ -1694,7 +1706,12 @@ function examRunner($wire, config) {
             window.addEventListener('beforeunload', () => {
                 window.isLegitNavigation = true;
             });
+            const examPageMountedAt = Date.now();
             document.addEventListener('visibilitychange', () => {
+                // Beri grace period 3 detik setelah halaman dibuka agar transisi redirect PWA di iOS tidak terhitung pelanggaran
+                if (Date.now() - examPageMountedAt < 3000) {
+                    return;
+                }
                 if (document.hidden && !window.isLegitNavigation) {
                     this.violationCount++;
                     this.showViolationModal = true;
