@@ -37,11 +37,11 @@ class ListJadwalRuangs extends ListRecords
                 ->modalDescription('Sistem akan membuat jadwal sesi untuk seluruh Ruang Ujian aktif sekaligus berdasarkan agenda ujian yang dipilih.')
                 ->modalSubmitActionLabel('Buat Jadwal untuk Semua Ruang')
                 ->form([
-                    Select::make('ujian_id')
-                        ->label('Pilih Agenda Ujian')
+                    Select::make('ujian_ids')
+                        ->label('Pilih Agenda Ujian (Bisa Pilih Banyak / Lintas Kelas)')
                         ->options(function () {
                             return Ujian::query()
-                                ->with(['mapel'])
+                                ->with(['mapel', 'kelas'])
                                 ->whereIn('status', ['SCHEDULED', 'ONGOING'])
                                 ->orderByDesc('tanggal')
                                 ->orderByDesc('id')
@@ -49,16 +49,21 @@ class ListJadwalRuangs extends ListRecords
                                 ->mapWithKeys(function (Ujian $u) {
                                     $tgl = $u->tanggal ? $u->tanggal->format('d/m/Y') : 'Tanpa Tanggal';
                                     $mapel = $u->mapel?->nama_mapel ?: 'Umum';
-                                    return [$u->id => "[{$tgl}] {$u->nama_ujian} ({$mapel})"];
+                                    $kelas = $u->kelas->pluck('nama_kelas')->join(', ');
+                                    $kelasText = $kelas ? " - [{$kelas}]" : '';
+                                    return [$u->id => "[{$tgl}] {$u->nama_ujian} ({$mapel}){$kelasText}"];
                                 });
                         })
+                        ->multiple()
                         ->required()
                         ->searchable()
                         ->preload()
                         ->live()
+                        ->helperText('Pilih semua agenda ujian yang berjalan di sesi ini (misal K10, K11, K12 sekaligus).')
                         ->afterStateUpdated(function ($state, $set, $get) {
-                            if ($state) {
-                                $u = Ujian::find($state);
+                            $firstId = is_array($state) ? ($state[0] ?? null) : $state;
+                            if ($firstId) {
+                                $u = Ujian::find($firstId);
                                 if ($u) {
                                     if ($u->tanggal && empty($get('tanggal'))) {
                                         $set('tanggal', $u->tanggal);
@@ -103,9 +108,12 @@ class ListJadwalRuangs extends ListRecords
                         ->required(),
                 ])
                 ->action(function (array $data) {
-                    $ujianId = $data['ujian_id'];
-                    $ujian = Ujian::find($ujianId);
-                    if (! $ujian) return;
+                    $ujianIds = array_values(array_filter((array) ($data['ujian_ids'] ?? [])));
+                    if (empty($ujianIds)) return;
+
+                    $firstUjianId = (int) $ujianIds[0];
+                    $ujians = Ujian::whereIn('id', $ujianIds)->get();
+                    if ($ujians->isEmpty()) return;
 
                     $ruangs = RuangUjian::where('is_active', true)->orderBy('nama_ruang')->get();
                     if ($ruangs->isEmpty()) {
@@ -129,14 +137,14 @@ class ListJadwalRuangs extends ListRecords
                             $pengawasId = $ruang->pengawas_id ?: ($guruCount > 0 ? $gurus[0]->id : null);
                         }
 
-                        JadwalRuang::firstOrCreate(
+                        $jadwal = JadwalRuang::firstOrCreate(
                             [
                                 'ruang_ujian_id' => $ruang->id,
-                                'ujian_id' => $ujian->id,
                                 'tanggal' => $data['tanggal'],
                                 'sesi_ke' => $data['sesi_ke'],
                             ],
                             [
+                                'ujian_id' => $firstUjianId,
                                 'pengawas_id' => $pengawasId,
                                 'waktu_mulai' => $data['waktu_mulai'],
                                 'waktu_selesai' => $data['waktu_selesai'],
@@ -144,12 +152,15 @@ class ListJadwalRuangs extends ListRecords
                             ]
                         );
 
+                        $jadwal->syncOrderedUjians($ujianIds, false);
+
                         $createdCount++;
                     }
 
+                    $namaAgenda = $ujians->pluck('nama_ujian')->join(', ');
                     Notification::make()
                         ->title("Jadwal Berhasil Dibuat untuk {$createdCount} Ruangan")
-                        ->body("Agenda ujian {$ujian->nama_ujian} telah dijadwalkan pada {$data['tanggal']}.")
+                        ->body("Agenda ({$namaAgenda}) telah dijadwalkan pada {$data['tanggal']}.")
                         ->success()
                         ->send();
                 }),

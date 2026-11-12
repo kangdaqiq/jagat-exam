@@ -497,6 +497,17 @@ class Ujian extends Model
         return $this->hasMany(JadwalRuang::class, 'ujian_id');
     }
 
+    public function jadwalRuangsMulti(): BelongsToMany
+    {
+        return $this->belongsToMany(JadwalRuang::class, 'jadwal_ruang_ujian', 'ujian_id', 'jadwal_ruang_id')
+            ->withTimestamps();
+    }
+
+    public function hasJadwalRuang(): bool
+    {
+        return $this->jadwalRuangs()->exists() || $this->jadwalRuangsMulti()->exists();
+    }
+
     public function beritaAcaras(): HasMany
     {
         return $this->hasMany(BeritaAcara::class, 'ujian_id');

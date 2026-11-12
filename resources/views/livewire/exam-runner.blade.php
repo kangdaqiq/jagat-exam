@@ -628,9 +628,10 @@
     @php
         $nilaiAkhir = $sesi && $sesi->skor_total !== null ? round((float) $sesi->skor_total, 2) : 0;
         $hasEssay = $this->soals->contains(fn ($s) => in_array($s->tipe_soal, ['essay', 'isian']));
+        $nextSubtest = $this->nextSubtestInfo;
     @endphp
     <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 1.25rem;">
-        <div style="width: 100%; max-width: 480px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(4,31,69,0.12); border: 1px solid #e2e8f0; padding: 2rem 1.5rem; text-align: center;">
+        <div style="width: 100%; max-width: 520px; background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(4,31,69,0.12); border: 1px solid #e2e8f0; padding: 2rem 1.5rem; text-align: center;">
             <div style="width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center;">
                 <svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="#059669">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
@@ -638,10 +639,10 @@
             </div>
 
             <span style="display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; background: #d1fae5; color: #065f46; margin-bottom: 8px;">
-                Ujian Berhasil Diserahkan
+                {{ $nextSubtest ? 'Subtest Disimpan & Dikoreksi' : 'Ujian Berhasil Diserahkan' }}
             </span>
             <h2 style="font-size: 20px; font-weight: 900; color: #041F45; margin: 0 0 4px;">Terima Kasih, {{ $sesi->nama_peserta }}!</h2>
-            <p style="font-size: 12px; color: #64748b; margin: 0 0 16px;">Seluruh jawaban Anda telah tersimpan dan dikoreksi otomatis oleh sistem CBT.</p>
+            <p style="font-size: 12px; color: #64748b; margin: 0 0 16px;">Jawaban untuk <strong>{{ $bankSoal->mapel?->nama_mapel ?? $bankSoal->judul }}</strong> telah tersimpan dan dikoreksi otomatis.</p>
 
             {{-- KARTU NILAI AKHIR SISWA --}}
             <div style="padding: 18px 16px; border-radius: 20px; background: linear-gradient(135deg, #041F45 0%, #072d61 55%, #065f46 100%); color: #ffffff; margin-bottom: 16px; box-shadow: 0 10px 24px -6px rgba(4,31,69,0.28);">
@@ -678,9 +679,46 @@
                 </div>
             </div>
 
-            <a href="{{ route('siswa.portal') }}" style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; text-decoration: none; box-shadow: 0 4px 14px rgba(4,31,69,0.25);">
-                Kembali ke Portal Ujian &raquo;
-            </a>
+            @if($nextSubtest)
+                @php $nextUjian = $nextSubtest['ujian']; @endphp
+                {{-- LAMAN KONFIRMASI MULAI SUBTEST BERIKUTNYA (TANPA TOKEN ULANG) --}}
+                <div style="padding: 16px; border-radius: 18px; background: #eff6ff; border: 2px solid #93c5fd; text-align: left; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
+                        <span style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 9px; border-radius: 999px; background: #1d4ed8; color: #ffffff;">
+                            Konfirmasi Subtest {{ $nextSubtest['urutan_ke'] }} / {{ $nextSubtest['total_subtest'] }}
+                        </span>
+                        <span style="font-size: 11px; font-weight: 700; color: #059669;">
+                            Tanpa Token Ulang
+                        </span>
+                    </div>
+                    <h3 style="font-size: 15px; font-weight: 900; color: #041F45; margin: 0 0 4px;">
+                        {{ $nextUjian->nama_ujian }}
+                    </h3>
+                    <div style="font-size: 12px; color: #334155; font-weight: 600; margin-bottom: 10px;">
+                        {{ $nextUjian->mapel?->nama_mapel ?: 'Mata Pelajaran' }} &bull; {{ $nextSubtest['soal_count'] }} Butir Soal &bull; {{ $nextUjian->durasi_menit ?: 60 }} Menit
+                    </div>
+                    <p style="font-size: 11px; color: #475569; margin: 0 0 12px; line-height: 1.5;">
+                        Pastikan Anda sudah siap mengerjakan soal berikutnya. Hitung mundur waktu pengerjaan akan dimulai saat Anda menekan tombol di bawah.
+                    </p>
+                    <button
+                        type="button"
+                        wire:click="mulaiSubtestBerikutnya"
+                        wire:loading.attr="disabled"
+                        style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 13px 20px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; cursor: pointer; box-shadow: 0 6px 18px rgba(4,31,69,0.28);"
+                    >
+                        <span wire:loading.remove wire:target="mulaiSubtestBerikutnya">Konfirmasi &amp; Mulai Kerjakan Subtest {{ $nextSubtest['urutan_ke'] }} &raquo;</span>
+                        <span wire:loading wire:target="mulaiSubtestBerikutnya">Menyiapkan Soal Berikutnya...</span>
+                    </button>
+                </div>
+
+                <a href="{{ route('siswa.portal') }}" style="display: inline-block; font-size: 12px; font-weight: 700; color: #64748b; text-decoration: underline;">
+                    Kembali ke Portal Ujian
+                </a>
+            @else
+                <a href="{{ route('siswa.portal') }}" style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; text-decoration: none; box-shadow: 0 4px 14px rgba(4,31,69,0.25);">
+                    Kembali ke Portal Ujian &raquo;
+                </a>
+            @endif
         </div>
     </div>
 

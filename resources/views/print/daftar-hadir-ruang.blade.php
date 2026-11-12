@@ -235,7 +235,7 @@
                     <option value="">-- Pilih Sesi / Mapel --</option>
                     @foreach($daftarJadwal as $dj)
                         <option value="{{ route('daftar-hadir.print', array_merge(request()->except('jadwal_ruang_id', 'ujian_id'), ['ruang_ujian_id' => $ruang?->id, 'jadwal_ruang_id' => $dj->id, 'ujian_id' => $dj->ujian_id])) }}" {{ ($jadwalRuang?->id === $dj->id) ? 'selected' : '' }}>
-                            Sesi {{ $dj->sesi_ke }} ({{ substr($dj->waktu_mulai, 0, 5) }}-{{ substr($dj->waktu_selesai, 0, 5) }}): {{ $dj->ujian?->nama_ujian }}
+                            {{ $dj->tanggal?->format('d/m/Y') }} &bull; Sesi {{ $dj->sesi_ke }} ({{ substr($dj->waktu_mulai, 0, 5) }}-{{ substr($dj->waktu_selesai, 0, 5) }}): {{ $dj->daftar_nama_ujian }}
                         </option>
                     @endforeach
                 </select>
@@ -244,7 +244,7 @@
                 <select onchange="window.location.href=this.value" style="padding: 6px 10px; border-radius: 6px; font-size: 12px; background: #fff; color: #000; font-weight: 600;">
                     <option value="">-- Ganti Ruangan --</option>
                     @foreach($daftarRuang as $dr)
-                        <option value="{{ route('daftar-hadir.print', array_merge(request()->except('ruang_ujian_id'), ['ruang_ujian_id' => $dr->id])) }}" {{ ($ruang?->id === $dr->id) ? 'selected' : '' }}>
+                        <option value="{{ route('daftar-hadir.print', array_merge(request()->except('ruang_ujian_id', 'jadwal_ruang_id', 'ujian_id', 'id'), ['ruang_ujian_id' => $dr->id])) }}" {{ ($ruang?->id === $dr->id) ? 'selected' : '' }}>
                             {{ $dr->nama_ruang }} ({{ $dr->siswas()->count() }} Siswa)
                         </option>
                     @endforeach

@@ -61,15 +61,21 @@ class PortalUjian extends Component
         $siswa = $user->siswa?->loadMissing(['kelas', 'ruangUjian']);
 
         $ujian = null;
+        $matchedJadwal = null;
         $ruangToken = RuangUjian::where('token_ruang', $token)
             ->where('is_active', true)
             ->first();
 
         if (!$ruangToken) {
-            $jadwal = \App\Models\JadwalRuang::where('token_ruang', $token)->with('ruangUjian')->first();
-            if ($jadwal && $jadwal->ruangUjian && $jadwal->ruangUjian->is_active) {
-                $ruangToken = $jadwal->ruangUjian;
+            $matchedJadwal = \App\Models\JadwalRuang::where('token_ruang', $token)->with('ruangUjian')->first();
+            if ($matchedJadwal && $matchedJadwal->ruangUjian && $matchedJadwal->ruangUjian->is_active) {
+                $ruangToken = $matchedJadwal->ruangUjian;
             }
+        } elseif ($siswa) {
+            $matchedJadwal = \App\Models\JadwalRuang::where('ruang_ujian_id', $ruangToken->id)
+                ->where('token_ruang', $token)
+                ->latest()
+                ->first();
         }
 
         // 1A. PRIORITAS UTAMA: Token Ruangan Ujian (1 ruang bisa mix beberapa kelas, soal sesuai kelas/tingkat masing-masing siswa)
@@ -97,29 +103,36 @@ class PortalUjian extends Component
             }
 
             // Cari jadwal ujian yang sesuai dengan kelas/tingkatan siswa ini
-            $kandidatUjians = Ujian::query()
-                ->whereIn('status', ['ONGOING', 'SCHEDULED'])
-                ->where(function ($q) use ($siswa, $user) {
-                    $q->whereHas('kelas', fn ($kq) => $kq->where('kelas.id', $siswa->kelas_id))
-                      ->orWhereHas('pesertas', fn ($pq) => $pq->where('siswa_id', $siswa->id)->orWhere('user_id', $user->id));
-                })
-                ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 1 ELSE 2 END")
-                ->orderBy('tanggal', 'asc')
-                ->get();
+            // Prioritaskan urutan subtest di JadwalRuang aktif jika tersedia
+            $kandidatUjians = $matchedJadwal
+                ? $matchedJadwal->getSubtestsForSiswa($siswa)
+                : collect();
+
+            if ($kandidatUjians->isEmpty()) {
+                $kandidatUjians = Ujian::query()
+                    ->whereIn('status', ['ONGOING', 'SCHEDULED'])
+                    ->where(function ($q) use ($siswa, $user) {
+                        $q->whereHas('kelas', fn ($kq) => $kq->where('kelas.id', $siswa->kelas_id))
+                          ->orWhereHas('pesertas', fn ($pq) => $pq->where('siswa_id', $siswa->id)->orWhere('user_id', $user->id));
+                    })
+                    ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 1 ELSE 2 END")
+                    ->orderBy('tanggal', 'asc')
+                    ->get();
+            }
 
             if ($this->selected_ujian_id) {
                 $ujian = $kandidatUjians->firstWhere('id', $this->selected_ujian_id);
             }
 
             if (!$ujian) {
-                // Utamakan ujian yang belum diselesaikan oleh siswa ini dan jadwalnya belum berakhir
+                // Utamakan subtest/ujian yang belum diselesaikan oleh siswa ini dan jadwalnya belum berakhir
                 $selesaiUjianIds = UjianPeserta::where('user_id', $user->id)
                     ->where('status', 'SELESAI')
                     ->pluck('ujian_id')
                     ->all();
 
                 $ujian = $kandidatUjians
-                    ->reject(fn (Ujian $u) => in_array($u->id, $selesaiUjianIds) || $u->isJadwalBerakhir())
+                    ->reject(fn (Ujian $u) => in_array($u->id, $selesaiUjianIds) || in_array($u->status, ['COMPLETED', 'CANCELLED'], true) || $u->isJadwalBerakhir())
                     ->first()
                     ?: $kandidatUjians->first();
             }
@@ -153,7 +166,7 @@ class PortalUjian extends Component
             }
 
             // Jika ujian ini menggunakan sistem pembagian jadwal ruangan, siswa harus terdaftar di ruangan
-            if ($ujian->jadwalRuangs()->exists()) {
+            if ($ujian->hasJadwalRuang()) {
                 $this->addError('token_input', 'Ujian ini menggunakan sistem ruangan. Anda belum terdaftar di ruangan ujian manapun. Silakan hubungi Proktor.');
                 return;
             }
@@ -223,104 +236,20 @@ class PortalUjian extends Component
             return;
         }
 
-        // 5. Cari sesi pengerjaan yang sudah ada atau buat sesi baru
-        $sesi = $existingActiveSesi;
-
-        if (!$sesi) {
-            $tokenSesi = Str::random(36);
-            $durasiMenit = $ujian->durasi_menit ?: ($bankSoal->durasi_menit ?: 60);
-            $waktuSelesai = now()->addMinutes($durasiMenit);
-
-            // Jika ada batas jadwal waktu_selesai pada ruangan / ujian, sesuaikan agar durasi tidak melewati jadwal
-            $targetTanggal = $ujian->tanggal;
-            $targetWaktuSelesai = $ujian->waktu_selesai;
-
-            // Prioritaskan waktu dari Jadwal Ruang jika siswa berada di ruangan ujian
-            $effectiveRuangId = $ruangToken?->id ?? $siswa?->ruang_ujian_id;
-            if ($effectiveRuangId) {
-                $jr = \App\Models\JadwalRuang::where('ruang_ujian_id', $effectiveRuangId)
-                    ->where('ujian_id', $ujian->id)
-                    ->whereDate('tanggal', now()->toDateString())
-                    ->latest()
-                    ->first();
-                if ($jr && $jr->waktu_selesai) {
-                    $targetTanggal = $jr->tanggal;
-                    $targetWaktuSelesai = $jr->waktu_selesai;
-                }
-            }
-
-            if ($targetTanggal && $targetWaktuSelesai) {
-                $tglStr = $targetTanggal instanceof \Carbon\Carbon ? $targetTanggal->format('Y-m-d') : substr((string)$targetTanggal, 0, 10);
-                $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$targetWaktuSelesai}");
-                if ($jadwalSelesai->isFuture() && $jadwalSelesai->lessThan($waktuSelesai)) {
-                    $waktuSelesai = $jadwalSelesai;
-                    $durasiMenit = max(1, (int) round(now()->diffInMinutes($jadwalSelesai)));
-                }
-            }
-
-            $sesi = UjianSesi::create([
-                'ujian_id' => $ujian->id,
-                'ruang_ujian_id' => $ruangToken?->id ?? $siswa?->ruang_ujian_id,
-                'bank_soal_id' => $bankSoal->id,
-                'user_id' => $user->id,
-                'token_sesi' => $tokenSesi,
-                'device_token' => session('cbt_device_token'),
-                'nama_peserta' => $siswa ? $siswa->nama : $user->name,
-                'nomor_peserta' => $siswa ? $siswa->nis : ($user->nip ?: 'SISWA-' . $user->id),
-                'waktu_mulai' => now(),
-                'waktu_selesai' => $waktuSelesai,
-                'durasi_menit' => $durasiMenit,
-                'status' => 'mengerjakan',
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-            ]);
-
-            // Siapkan butir soal (acak atau urut sesuai pengaturan ujian / bank soal) dengan Bulk Insert 1 Query
-            $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
-            $acakSoal = $ujian->acak_soal ?? $bankSoal->acak_soal ?? true;
-            $acakOpsi = $ujian->acak_opsi ?? $bankSoal->acak_opsi ?? true;
-
-            if ($acakSoal) {
-                $soals = $soals->shuffle();
-            }
-
-            $now = now();
-            $jawabanRows = [];
-            foreach ($soals->values() as $idx => $s) {
-                $urutanOpsi = null;
-                // Hanya acak opsi untuk tipe pilihan ganda dan pg kompleks (Benar/Salah tidak diacak)
-                if ($acakOpsi && in_array($s->tipe_soal, ['pilihan_ganda', 'pg_kompleks']) && $s->opsiJawabans->isNotEmpty()) {
-                    $urutanOpsi = $s->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
-                }
-
-                $jawabanRows[] = [
-                    'ujian_sesi_id' => $sesi->id,
-                    'soal_id' => $s->id,
-                    'nomor_urut' => $idx + 1,
-                    'urutan_opsi' => $urutanOpsi !== null ? json_encode($urutanOpsi) : null,
-                    'jawaban_pilihan' => null,
-                    'jawaban_teks' => null,
-                    'is_ragu' => false,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            if (!empty($jawabanRows)) {
-                UjianJawaban::insert($jawabanRows);
-            }
-        }
-
-        // 6. Update status peserta menjadi SEDANG_MENGERJAKAN
-        $peserta->update([
-            'status' => 'SEDANG_MENGERJAKAN',
-            'ujian_sesi_id' => $sesi->id,
-            'waktu_mulai' => $peserta->waktu_mulai ?: now(),
-        ]);
+        // 5. Cari sesi pengerjaan yang sudah ada atau buat sesi baru via helper bersama
+        $sesi = UjianSesi::createOrResumeForSiswa(
+            ujian: $ujian,
+            user: $user,
+            siswa: $siswa,
+            peserta: $peserta,
+            ruangUjianId: $ruangToken?->id ?? $siswa?->ruang_ujian_id,
+            jadwalRuangId: $matchedJadwal?->id,
+            deviceToken: session('cbt_device_token')
+        );
 
         session(["ujian_token_{$bankSoal->id}" => $sesi->token_sesi]);
 
-        // 7. Arahkan siswa ke lembar ujian
+        // 6. Arahkan siswa ke lembar ujian
         return redirect()->route('ujian.sesi', ['token_sesi' => $sesi->token_sesi]);
     }
 

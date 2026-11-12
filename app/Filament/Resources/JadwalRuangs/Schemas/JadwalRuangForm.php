@@ -43,28 +43,34 @@ class JadwalRuangForm
                                     return $ruang ? "Kapasitas: {$ruang->siswas_count} / {$ruang->kapasitas} Siswa ({$ruang->daftar_nama_kelas})" : null;
                                 }),
 
-                            Select::make('ujian_id')
-                                ->label('Agenda Jadwal Ujian')
-                                ->options(function () {
-                                    return Ujian::query()
-                                        ->with(['mapel', 'bankSoal'])
+                            Select::make('ujians')
+                                ->label('Agenda Jadwal Ujian (Bisa Pilih Banyak / Lintas Kelas)')
+                                ->relationship(
+                                    name: 'ujians',
+                                    titleAttribute: 'nama_ujian',
+                                    modifyQueryUsing: fn ($query) => $query
+                                        ->with(['mapel', 'kelas'])
                                         ->whereIn('status', ['SCHEDULED', 'ONGOING'])
                                         ->orderByDesc('tanggal')
                                         ->orderByDesc('id')
-                                        ->get()
-                                        ->mapWithKeys(function (Ujian $u) {
-                                            $tgl = $u->tanggal ? $u->tanggal->format('d/m/Y') : 'Tanpa Tanggal';
-                                            $mapel = $u->mapel?->nama_mapel ?: 'Umum';
-                                            return [$u->id => "[{$tgl}] {$u->nama_ujian} ({$mapel})"];
-                                        });
+                                )
+                                ->getOptionLabelFromRecordUsing(function (Ujian $u) {
+                                    $tgl = $u->tanggal ? $u->tanggal->format('d/m/Y') : 'Tanpa Tanggal';
+                                    $mapel = $u->mapel?->nama_mapel ?: 'Umum';
+                                    $kelas = $u->kelas->pluck('nama_kelas')->join(', ');
+                                    $kelasText = $kelas ? " - [{$kelas}]" : '';
+                                    return "[{$tgl}] {$u->nama_ujian} ({$mapel}){$kelasText}";
                                 })
+                                ->multiple()
                                 ->searchable()
                                 ->preload()
                                 ->required()
                                 ->live()
+                                ->helperText('Pilih agenda ujian (lintas kelas maupun subtest berantai, misal Soal 1 & Soal 2). Urutan pilihan menentukan urutan pengerjaan subtest tanpa token ulang.')
                                 ->afterStateUpdated(function ($state, $set, $get) {
-                                    if ($state) {
-                                        $ujian = Ujian::find($state);
+                                    $firstId = is_array($state) ? ($state[0] ?? null) : $state;
+                                    if ($firstId) {
+                                        $ujian = Ujian::find($firstId);
                                         if ($ujian) {
                                             if ($ujian->tanggal && empty($get('tanggal'))) {
                                                 $set('tanggal', $ujian->tanggal);

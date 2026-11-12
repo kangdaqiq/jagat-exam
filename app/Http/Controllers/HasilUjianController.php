@@ -112,26 +112,27 @@ class HasilUjianController extends Controller
         $ujian = $ujianId ? \App\Models\Ujian::with(['mapel', 'guru'])->find($ujianId) : null;
 
         $jadwalId = $request->input('jadwal_ruang_id');
-        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'pengawas'])->find($jadwalId) : null;
+        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'ujians.mapel', 'pengawas'])->find($jadwalId) : null;
 
         if ($jadwalRuang) {
             $ruang = $ruang ?: $jadwalRuang->ruangUjian;
             $ujian = $ujian ?: $jadwalRuang->ujian;
+            $siswas = $jadwalRuang->getSiswasForSession();
+        } else {
+            // Ambil siswa di ruangan tersebut (atau seluruh siswa jika ruangan belum difilter)
+            $query = \App\Models\Siswa::query()
+                ->with(['kelas', 'user', 'ruangUjian'])
+                ->where('is_active', true);
+
+            if ($ruang) {
+                $query->where('ruang_ujian_id', $ruang->id);
+            }
+
+            $siswas = $query
+                ->orderBy('kelas_id', 'asc')
+                ->orderBy('nama', 'asc')
+                ->get();
         }
-
-        // Ambil siswa di ruangan tersebut (atau seluruh siswa jika ruangan belum difilter)
-        $query = \App\Models\Siswa::query()
-            ->with(['kelas', 'user', 'ruangUjian'])
-            ->where('is_active', true);
-
-        if ($ruang) {
-            $query->where('ruang_ujian_id', $ruang->id);
-        }
-
-        $siswas = $query
-            ->orderBy('kelas_id', 'asc')
-            ->orderBy('nama', 'asc')
-            ->get();
 
         $tanggalObj = $jadwalRuang?->tanggal ?: ($ujian?->tanggal ?: now());
         $hariIndonesia = match($tanggalObj->dayOfWeek) {
@@ -159,14 +160,14 @@ class HasilUjianController extends Controller
             'hari' => $request->input('hari', $hariIndonesia),
             'tanggal' => $request->input('tanggal', $tanggalObj->translatedFormat('d F Y')),
             'pukul' => $request->input('pukul', "{$waktuMulai}-{$waktuSelesai}"),
-            'nama_ujian' => $request->input('nama_ujian', $ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK'),
+            'nama_ujian' => $request->input('nama_ujian', $jadwalRuang?->getAllUjians()->isNotEmpty() ? $jadwalRuang->daftar_nama_ujian : ($ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK')),
             'tahun_pelajaran' => $request->input('tahun_pelajaran', '2026/2027'),
             'nama_proktor' => $request->input('proktor', $user->name),
             'nama_pengawas' => $request->input('pengawas', $jadwalRuang?->pengawas?->name ?: ($ruang?->pengawas?->name ?: 'ATHIQ NUR AZIZAH')),
         ];
 
         $daftarJadwal = $ruang
-            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
+            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'ujians.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
             : collect();
 
         return view('print.daftar-hadir-ruang', [
@@ -200,21 +201,26 @@ class HasilUjianController extends Controller
         $ujian = $ujianId ? \App\Models\Ujian::with(['mapel', 'guru'])->find($ujianId) : null;
 
         $jadwalId = $request->input('jadwal_ruang_id', $bap?->jadwal_ruang_id);
-        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'pengawas'])->find($jadwalId) : null;
+        $jadwalRuang = $jadwalId ? \App\Models\JadwalRuang::with(['ruangUjian', 'ujian', 'ujians.mapel', 'pengawas'])->find($jadwalId) : null;
+
+        if (! $bap && $jadwalRuang) {
+            $bap = \App\Models\BeritaAcara::where('jadwal_ruang_id', $jadwalRuang->id)->latest()->first();
+        }
 
         if ($jadwalRuang) {
             $ruang = $ruang ?: $jadwalRuang->ruangUjian;
             $ujian = $ujian ?: $jadwalRuang->ujian;
+            $siswas = $jadwalRuang->getSiswasForSession();
+        } else {
+            // Ambil siswa untuk ruang ini
+            $query = \App\Models\Siswa::query()
+                ->with(['kelas', 'user', 'ruangUjian'])
+                ->where('is_active', true);
+            if ($ruang) {
+                $query->where('ruang_ujian_id', $ruang->id);
+            }
+            $siswas = $query->get();
         }
-
-        // Ambil siswa untuk ruang ini
-        $query = \App\Models\Siswa::query()
-            ->with(['kelas', 'user', 'ruangUjian'])
-            ->where('is_active', true);
-        if ($ruang) {
-            $query->where('ruang_ujian_id', $ruang->id);
-        }
-        $siswas = $query->get();
         $totalSiswaRuang = $siswas->count();
 
         $tanggalObj = $bap?->tanggal ?: ($jadwalRuang?->tanggal ?: ($ujian?->tanggal ?: now()));
@@ -232,14 +238,16 @@ class HasilUjianController extends Controller
         $waktuMulai = $bap?->waktu_mulai ?: ($jadwalRuang?->waktu_mulai ? substr($jadwalRuang->waktu_mulai, 0, 5) : ($ujian?->waktu_mulai ? substr($ujian->waktu_mulai, 0, 5) : '07:30'));
         $waktuSelesai = $bap?->waktu_selesai ?: ($jadwalRuang?->waktu_selesai ? substr($jadwalRuang->waktu_selesai, 0, 5) : ($ujian?->waktu_selesai ? substr($ujian->waktu_selesai, 0, 5) : '09:30'));
 
-        $seharusnya = (int) $request->input('jumlah_peserta_seharusnya', $bap?->jumlah_peserta_seharusnya ?? $totalSiswaRuang);
-        $tidakHadir = (int) $request->input('jumlah_tidak_hadir', $bap?->jumlah_tidak_hadir ?? 0);
-        $hadir = (int) $request->input('jumlah_hadir', $bap?->jumlah_hadir ?? max(0, $seharusnya - $tidakHadir));
+        $sessionStats = (! $bap && $jadwalRuang) ? $jadwalRuang->computeAttendanceStats() : null;
 
-        $rawUsernamesTidakHadir = $request->input('usernames_tidak_hadir', $bap?->usernames_tidak_hadir);
+        $seharusnya = (int) $request->input('jumlah_peserta_seharusnya', $bap?->jumlah_peserta_seharusnya ?? ($sessionStats['seharusnya'] ?? $totalSiswaRuang));
+        $tidakHadir = (int) $request->input('jumlah_tidak_hadir', $bap?->jumlah_tidak_hadir ?? ($sessionStats['tidak_hadir'] ?? 0));
+        $hadir = (int) $request->input('jumlah_hadir', $bap?->jumlah_hadir ?? ($sessionStats['hadir'] ?? max(0, $seharusnya - $tidakHadir)));
+
+        $rawUsernamesTidakHadir = $request->input('usernames_tidak_hadir', $bap?->usernames_tidak_hadir ?? ($sessionStats['usernames_tidak_hadir'] ?? null));
         if (is_array($rawUsernamesTidakHadir)) {
-            $usernamesStr = implode(', ', $rawUsernamesTidakHadir);
-        } elseif (is_string($rawUsernamesTidakHadir)) {
+            $usernamesStr = ! empty($rawUsernamesTidakHadir) ? implode(', ', $rawUsernamesTidakHadir) : '-';
+        } elseif (is_string($rawUsernamesTidakHadir) && trim($rawUsernamesTidakHadir) !== '') {
             $usernamesStr = $rawUsernamesTidakHadir;
         } else {
             $usernamesStr = '-';
@@ -251,7 +259,7 @@ class HasilUjianController extends Controller
             'bulan' => $tanggalObj->translatedFormat('F'),
             'tahun' => $tanggalObj->format('Y'),
             'tahun_pelajaran' => $request->input('tahun_pelajaran', $bap?->tahun_pelajaran ?: '2026'),
-            'nama_ujian' => $request->input('nama_ujian', $bap?->nama_ujian ?: ($ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK')),
+            'nama_ujian' => $request->input('nama_ujian', $bap?->nama_ujian ?: ($jadwalRuang?->getAllUjians()->isNotEmpty() ? $jadwalRuang->daftar_nama_ujian : ($ujian?->nama_ujian ?: 'TES KEMAMPUAN AKADEMIK SMK'))),
             'waktu_mulai' => $waktuMulai,
             'waktu_selesai' => $waktuSelesai,
             'username_sekolah' => $request->input('username_sekolah', $bap?->username_sekolah ?: 'K12130106'),
@@ -273,7 +281,7 @@ class HasilUjianController extends Controller
         ];
 
         $daftarJadwal = $ruang
-            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
+            ? $ruang->jadwalRuangs()->with(['ujian.mapel', 'ujians.mapel', 'pengawas'])->orderBy('tanggal')->orderBy('waktu_mulai')->get()
             : collect();
 
         return view('print.berita-acara-ruang', [

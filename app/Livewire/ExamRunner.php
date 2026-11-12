@@ -3,8 +3,11 @@
 namespace App\Livewire;
 
 use App\Models\BankSoal;
+use App\Models\JadwalRuang;
 use App\Models\Soal;
+use App\Models\Ujian;
 use App\Models\UjianJawaban;
+use App\Models\UjianPeserta;
 use App\Models\UjianSesi;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -578,8 +581,118 @@ class ExamRunner extends Component
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;
 
-        // Beri tahu browser & aplikasi Android ExamGuard untuk melepas kunci Kiosk
-        $this->dispatch('ujian-selesai-resmi');
+        // Lepas kunci Kiosk hanya jika tidak ada subtest lanjutan dalam sesi ruangan ini
+        if (! $this->nextSubtestInfo) {
+            $this->dispatch('ujian-selesai-resmi');
+        }
+    }
+
+    /**
+     * Ambil info subtest berikutnya dalam sesi JadwalRuang yang sama (jika ada),
+     * agar siswa bisa lanjut ke Soal 2 tanpa input token ulang.
+     */
+    public function getNextSubtestInfoProperty(): ?array
+    {
+        if ($this->is_preview || ! $this->sesi || ! $this->sesi->ujian_id) {
+            return null;
+        }
+
+        $user = Auth::user() ?? $this->sesi->user;
+        $siswa = $user?->siswa?->loadMissing(['kelas', 'ruangUjian']);
+        if (! $siswa) {
+            return null;
+        }
+
+        $jadwal = $this->sesi->jadwalRuang;
+        if (! $jadwal && $this->sesi->ruang_ujian_id) {
+            $tanggalRef = ($this->sesi->waktu_mulai ?? now())->toDateString();
+            $jadwal = JadwalRuang::where('ruang_ujian_id', $this->sesi->ruang_ujian_id)
+                ->whereDate('tanggal', $tanggalRef)
+                ->where(function ($q) {
+                    $q->where('ujian_id', $this->sesi->ujian_id)
+                      ->orWhereHas('ujians', fn ($uq) => $uq->where('ujians.id', $this->sesi->ujian_id));
+                })
+                ->latest()
+                ->first();
+        }
+
+        if (! $jadwal) {
+            return null;
+        }
+
+        $nextUjian = $jadwal->getNextSubtestForSiswa((int) $this->sesi->ujian_id, $siswa);
+        if (! $nextUjian) {
+            return null;
+        }
+
+        $subtests = $jadwal->getSubtestsForSiswa($siswa);
+        $nextPos = $subtests->search(fn (Ujian $u) => (int) $u->id === (int) $nextUjian->id);
+
+        return [
+            'jadwal' => $jadwal,
+            'ujian' => $nextUjian->loadMissing(['mapel', 'bankSoal']),
+            'urutan_ke' => $nextPos !== false ? ($nextPos + 1) : 2,
+            'total_subtest' => max(2, $subtests->count()),
+            'soal_count' => $nextUjian->bankSoal?->soals()->count() ?: 0,
+        ];
+    }
+
+    /**
+     * Mulai subtest berikutnya langsung dari laman konfirmasi tanpa memasukkan token ruangan lagi.
+     */
+    public function mulaiSubtestBerikutnya()
+    {
+        $info = $this->nextSubtestInfo;
+        if (! $info) {
+            return redirect()->route('siswa.portal');
+        }
+
+        /** @var JadwalRuang $jadwal */
+        $jadwal = $info['jadwal'];
+        /** @var Ujian $nextUjian */
+        $nextUjian = $info['ujian'];
+
+        $user = Auth::user() ?? $this->sesi->user;
+        $siswa = $user?->siswa?->loadMissing(['kelas', 'ruangUjian']);
+        if (! $user || ! $siswa) {
+            return redirect()->route('siswa.portal');
+        }
+
+        if ($nextUjian->status === 'SCHEDULED' && ! $nextUjian->isJadwalBerakhir()) {
+            $nextUjian->update(['status' => 'ONGOING']);
+        }
+
+        $peserta = UjianPeserta::firstOrCreate(
+            [
+                'ujian_id' => $nextUjian->id,
+                'siswa_id' => $siswa->id,
+            ],
+            [
+                'user_id' => $user->id,
+                'status' => 'BELUM_MULAI',
+            ]
+        );
+
+        $deviceToken = session('cbt_device_token');
+        if ($deviceToken && $user->isSiswa()) {
+            $user->update(['active_session_token' => $deviceToken]);
+        }
+
+        $nextSesi = UjianSesi::createOrResumeForSiswa(
+            ujian: $nextUjian,
+            user: $user,
+            siswa: $siswa,
+            peserta: $peserta,
+            ruangUjianId: $jadwal->ruang_ujian_id,
+            jadwalRuangId: $jadwal->id,
+            deviceToken: $deviceToken
+        );
+
+        if ($nextUjian->bank_soal_id) {
+            session(["ujian_token_{$nextUjian->bank_soal_id}" => $nextSesi->token_sesi]);
+        }
+
+        return redirect()->route('ujian.sesi', ['token_sesi' => $nextSesi->token_sesi]);
     }
 
     /**
@@ -690,7 +803,9 @@ class ExamRunner extends Component
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;
         $this->showViolationModal = false;
-        $this->dispatch('ujian-selesai-resmi');
+        if (! $this->nextSubtestInfo) {
+            $this->dispatch('ujian-selesai-resmi');
+        }
     }
 
     public function render()

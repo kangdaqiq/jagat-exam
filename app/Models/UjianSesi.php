@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class UjianSesi extends Model
 {
@@ -18,6 +19,7 @@ class UjianSesi extends Model
     protected $fillable = [
         'ujian_id',
         'ruang_ujian_id',
+        'jadwal_ruang_id',
         'bank_soal_id',
         'user_id',
         'token_sesi',
@@ -57,6 +59,11 @@ class UjianSesi extends Model
     public function ruangUjian(): BelongsTo
     {
         return $this->belongsTo(RuangUjian::class, 'ruang_ujian_id');
+    }
+
+    public function jadwalRuang(): BelongsTo
+    {
+        return $this->belongsTo(JadwalRuang::class, 'jadwal_ruang_id');
     }
 
     public function bankSoal(): BelongsTo
@@ -311,6 +318,127 @@ class UjianSesi extends Model
 
             return $totalSkor;
         });
+    }
+
+    /**
+     * Buat atau lanjutkan sesi pengerjaan ujian siswa (dipakai PortalUjian & Subtest transition).
+     */
+    public static function createOrResumeForSiswa(
+        Ujian $ujian,
+        User $user,
+        ?Siswa $siswa,
+        UjianPeserta $peserta,
+        ?int $ruangUjianId = null,
+        ?int $jadwalRuangId = null,
+        ?string $deviceToken = null
+    ): self {
+        $existingActiveSesi = static::where('ujian_id', $ujian->id)
+            ->where('user_id', $user->id)
+            ->where('status', 'mengerjakan')
+            ->first();
+
+        if ($existingActiveSesi) {
+            if ($jadwalRuangId && empty($existingActiveSesi->jadwal_ruang_id)) {
+                $existingActiveSesi->update(['jadwal_ruang_id' => $jadwalRuangId]);
+            }
+            return $existingActiveSesi;
+        }
+
+        $bankSoal = $ujian->bankSoal;
+        $tokenSesi = Str::random(36);
+        $durasiMenit = $ujian->durasi_menit ?: ($bankSoal?->durasi_menit ?: 60);
+        $waktuSelesai = now()->addMinutes($durasiMenit);
+
+        $targetTanggal = $ujian->tanggal;
+        $targetWaktuSelesai = $ujian->waktu_selesai;
+
+        $effectiveRuangId = $ruangUjianId ?? $siswa?->ruang_ujian_id;
+        $jr = $jadwalRuangId ? JadwalRuang::find($jadwalRuangId) : null;
+        if (! $jr && $effectiveRuangId) {
+            $jr = JadwalRuang::where('ruang_ujian_id', $effectiveRuangId)
+                ->whereDate('tanggal', now()->toDateString())
+                ->where(function ($q) use ($ujian) {
+                    $q->where('ujian_id', $ujian->id)
+                      ->orWhereHas('ujians', fn ($uq) => $uq->where('ujians.id', $ujian->id));
+                })
+                ->latest()
+                ->first();
+        }
+
+        if ($jr && $jr->waktu_selesai) {
+            $targetTanggal = $jr->tanggal;
+            $targetWaktuSelesai = $jr->waktu_selesai;
+        }
+
+        if ($targetTanggal && $targetWaktuSelesai) {
+            $tglStr = $targetTanggal instanceof \Carbon\Carbon ? $targetTanggal->format('Y-m-d') : substr((string) $targetTanggal, 0, 10);
+            $jadwalSelesai = \Carbon\Carbon::parse("{$tglStr} {$targetWaktuSelesai}");
+            if ($jadwalSelesai->isFuture() && $jadwalSelesai->lessThan($waktuSelesai)) {
+                $waktuSelesai = $jadwalSelesai;
+                $durasiMenit = max(1, (int) round(now()->diffInMinutes($jadwalSelesai)));
+            }
+        }
+
+        $sesi = static::create([
+            'ujian_id' => $ujian->id,
+            'ruang_ujian_id' => $effectiveRuangId,
+            'jadwal_ruang_id' => $jr?->id ?? $jadwalRuangId,
+            'bank_soal_id' => $bankSoal->id,
+            'user_id' => $user->id,
+            'token_sesi' => $tokenSesi,
+            'device_token' => $deviceToken,
+            'nama_peserta' => $siswa ? $siswa->nama : $user->name,
+            'nomor_peserta' => $siswa ? $siswa->nis : ($user->nip ?: 'SISWA-' . $user->id),
+            'waktu_mulai' => now(),
+            'waktu_selesai' => $waktuSelesai,
+            'durasi_menit' => $durasiMenit,
+            'status' => 'mengerjakan',
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+        $acakSoal = $ujian->acak_soal ?? $bankSoal->acak_soal ?? true;
+        $acakOpsi = $ujian->acak_opsi ?? $bankSoal->acak_opsi ?? true;
+
+        if ($acakSoal) {
+            $soals = $soals->shuffle();
+        }
+
+        $now = now();
+        $jawabanRows = [];
+        foreach ($soals->values() as $idx => $s) {
+            $urutanOpsi = null;
+            if ($acakOpsi && in_array($s->tipe_soal, ['pilihan_ganda', 'pg_kompleks']) && $s->opsiJawabans->isNotEmpty()) {
+                $urutanOpsi = $s->opsiJawabans->pluck('id')->shuffle()->values()->toArray();
+            }
+
+            $jawabanRows[] = [
+                'ujian_sesi_id' => $sesi->id,
+                'soal_id' => $s->id,
+                'nomor_urut' => $idx + 1,
+                'urutan_opsi' => $urutanOpsi !== null ? json_encode($urutanOpsi) : null,
+                'jawaban_pilihan' => null,
+                'jawaban_teks' => null,
+                'is_ragu' => false,
+                'is_benar' => null,
+                'skor_didapat' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (! empty($jawabanRows)) {
+            UjianJawaban::insert($jawabanRows);
+        }
+
+        $peserta->update([
+            'status' => 'SEDANG_MENGERJAKAN',
+            'ujian_sesi_id' => $sesi->id,
+            'waktu_mulai' => $peserta->waktu_mulai ?: $now,
+        ]);
+
+        return $sesi;
     }
 }
 
