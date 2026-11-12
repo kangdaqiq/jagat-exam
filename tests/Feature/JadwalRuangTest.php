@@ -748,5 +748,31 @@ class JadwalRuangTest extends TestCase
         $this->assertEquals(1, (int) $reloaded->firstWhere('id', $ujianC->id)->pivot->urutan);
         $this->assertEquals(2, (int) $reloaded->firstWhere('id', $ujianA->id)->pivot->urutan);
         $this->assertEquals(2, (int) $reloaded->firstWhere('id', $ujianB->id)->pivot->urutan);
+
+        $ruang2 = RuangUjian::create(['nama_ruang' => 'Ruang Form 2', 'kode_ruang' => 'R-F2', 'kapasitas' => 25, 'is_active' => true]);
+        $pengawas2 = User::factory()->create(['role' => 'guru', 'name' => 'Guru Cari Khusus', 'nip' => '199001012020011001', 'is_active' => true]);
+
+        Livewire::test(\App\Filament\Resources\JadwalRuangs\Pages\ListJadwalRuangs::class)
+            ->assertOk()
+            ->assertActionVisible('generateOtomatis')
+            ->callAction('generateOtomatis', data: [
+                'daftar_subtest' => [
+                    ['ujian_ids' => [$ujianA->id]],
+                    ['ujian_ids' => [$ujianB->id]],
+                ],
+                'tanggal' => now()->addDay()->toDateString(),
+                'sesi_ke' => '2',
+                'waktu_mulai' => '10:00:00',
+                'waktu_selesai' => '12:00:00',
+                'mode_pengawas' => 'pilih_per_ruang',
+                "pengawas_ruang_{$ruang->id}" => $pengawas->id,
+                "pengawas_ruang_{$ruang2->id}" => $pengawas2->id,
+            ])
+            ->assertHasNoActionErrors();
+
+        $generatedR2 = JadwalRuang::where('ruang_ujian_id', $ruang2->id)->where('sesi_ke', '2')->first();
+        $this->assertNotNull($generatedR2);
+        $this->assertEquals($pengawas2->id, $generatedR2->pengawas_id);
+        $this->assertEquals([$ujianA->id, $ujianB->id], $generatedR2->getAllUjians()->pluck('id')->all());
     }
 }
