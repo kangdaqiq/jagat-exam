@@ -11,7 +11,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.pengawas-pwa')]
-#[Title('Login Pengawas Ujian - Examuna PWA')]
+#[Title('Login Pengawas - Examuna')]
 class PengawasLogin extends Component
 {
     public string $login = '';

@@ -15,7 +15,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts.pengawas-pwa')]
-#[Title('Portal Pengawas Ujian - Examuna PWA')]
+#[Title('Portal Pengawas - Examuna')]
 class PortalPengawas extends Component
 {
     #[Url(as: 'ruang')]

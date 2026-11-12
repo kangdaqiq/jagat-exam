@@ -55,6 +55,21 @@ Route::get('/pengawas/login', PengawasLogin::class)->name('pengawas.login');
 Route::get('/pengawas', PortalPengawas::class)->name('pengawas.portal');
 Route::get('/pengawas/ujian/{ujian}', PortalPengawas::class)->name('pengawas.ujian');
 
+// Fallback asset route untuk icon PWA Pengawas
+Route::get('/images/logo/pwa-pengawas-icon.png', function () {
+    $source = base_path('Ikon Ujian X Biru-Hijau.png');
+    $dest = public_path('images/logo/pwa-pengawas-icon.png');
+    if (file_exists($source) && (!file_exists($dest) || filesize($dest) !== filesize($source))) {
+        @mkdir(dirname($dest), 0777, true);
+        @copy($source, $dest);
+    }
+    $path = file_exists($dest) ? $dest : $source;
+    return response()->file($path, [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+});
+
 // 3. Portal Siswa & Input Token Ujian
 Route::middleware(['auth'])->group(function () {
     Route::get('/portal', PortalUjian::class)->name('siswa.portal');
