@@ -644,4 +644,109 @@ class JadwalRuangTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_form_jadwal_ruang_repeater_tambah_subtest_menyimpan_urutan(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $pengawas = User::factory()->create(['role' => 'guru', 'is_active' => true]);
+        $ruang = RuangUjian::create(['nama_ruang' => 'Ruang Form', 'kapasitas' => 25, 'is_active' => true]);
+        $mapel = \App\Models\Mapel::create(['nama_mapel' => 'Fisika', 'kode_mapel' => 'FIS-10', 'tingkat' => '10']);
+
+        $bank = BankSoal::create([
+            'user_id' => $admin->id,
+            'mapel_id' => $mapel->id,
+            'judul' => 'Bank Form',
+            'kode_bank' => 'BS-FRM',
+            'durasi_menit' => 60,
+            'is_active' => true,
+            'acak_soal' => false,
+            'acak_opsi' => false,
+        ]);
+
+        $ujianA = Ujian::create([
+            'nama_ujian' => 'Subtest A',
+            'mapel_id' => $mapel->id,
+            'bank_soal_id' => $bank->id,
+            'guru_id' => $admin->id,
+            'tanggal' => now()->toDateString(),
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '09:30:00',
+            'durasi_menit' => 60,
+            'status' => 'SCHEDULED',
+        ]);
+        $ujianB = Ujian::create([
+            'nama_ujian' => 'Subtest B',
+            'mapel_id' => $mapel->id,
+            'bank_soal_id' => $bank->id,
+            'guru_id' => $admin->id,
+            'tanggal' => now()->toDateString(),
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '09:30:00',
+            'durasi_menit' => 60,
+            'status' => 'SCHEDULED',
+        ]);
+
+        $ujianC = Ujian::create([
+            'nama_ujian' => 'Subtest C',
+            'mapel_id' => $mapel->id,
+            'bank_soal_id' => $bank->id,
+            'guru_id' => $admin->id,
+            'tanggal' => now()->toDateString(),
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '09:30:00',
+            'durasi_menit' => 60,
+            'status' => 'SCHEDULED',
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(\App\Filament\Resources\JadwalRuangs\Pages\CreateJadwalRuang::class)
+            ->assertSee('Tambah Subtest')
+            ->fillForm([
+                'ruang_ujian_id' => $ruang->id,
+                'daftar_subtest' => [
+                    ['ujian_ids' => [$ujianA->id, $ujianB->id]],
+                    ['ujian_ids' => [$ujianC->id]],
+                ],
+                'pengawas_id' => $pengawas->id,
+                'tanggal' => now()->toDateString(),
+                'sesi_ke' => '1',
+                'waktu_mulai' => '07:30:00',
+                'waktu_selesai' => '09:30:00',
+                'status' => 'SCHEDULED',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $jadwal = JadwalRuang::where('ruang_ujian_id', $ruang->id)->firstOrFail();
+        $ordered = $jadwal->getAllUjians();
+        $this->assertEquals([$ujianA->id, $ujianB->id, $ujianC->id], $ordered->pluck('id')->all());
+        $this->assertEquals(1, (int) $ordered->firstWhere('id', $ujianA->id)->pivot->urutan);
+        $this->assertEquals(1, (int) $ordered->firstWhere('id', $ujianB->id)->pivot->urutan);
+        $this->assertEquals(2, (int) $ordered->firstWhere('id', $ujianC->id)->pivot->urutan);
+
+        // Uji EditJadwalRuang memuat kelompok per tahap & membalik urutan tahap
+        $edit = Livewire::test(\App\Filament\Resources\JadwalRuangs\Pages\EditJadwalRuang::class, ['record' => $jadwal->getKey()]);
+        $this->assertEquals(
+            [
+                ['ujian_ids' => [$ujianA->id, $ujianB->id]],
+                ['ujian_ids' => [$ujianC->id]],
+            ],
+            array_values($edit->get('data.daftar_subtest'))
+        );
+
+        $edit->fillForm([
+                'daftar_subtest' => [
+                    ['ujian_ids' => [$ujianC->id]],
+                    ['ujian_ids' => [$ujianA->id, $ujianB->id]],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $reloaded = $jadwal->fresh()->getAllUjians();
+        $this->assertEquals(1, (int) $reloaded->firstWhere('id', $ujianC->id)->pivot->urutan);
+        $this->assertEquals(2, (int) $reloaded->firstWhere('id', $ujianA->id)->pivot->urutan);
+        $this->assertEquals(2, (int) $reloaded->firstWhere('id', $ujianB->id)->pivot->urutan);
+    }
 }

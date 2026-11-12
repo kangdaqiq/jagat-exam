@@ -258,6 +258,39 @@ class JadwalRuang extends Model
             }
         }
 
+        $this->syncPivotUjianData($syncData, $detaching);
+    }
+
+    /**
+     * Sinkronisasi ujian berdasarkan tahapan subtest: setiap tahap (baris 1, 2, dst)
+     * bisa berisi banyak ujian lintas kelas dengan nilai urutan tahap yang sama.
+     *
+     * @param  array<int, array<int, int|string>>  $stages
+     */
+    public function syncSubtestStages(array $stages, bool $detaching = true): void
+    {
+        $syncData = [];
+        $stageNum = 1;
+
+        foreach ($stages as $stageUjianIds) {
+            $addedInStage = false;
+            foreach ((array) $stageUjianIds as $id) {
+                $intId = (int) $id;
+                if ($intId > 0 && ! isset($syncData[$intId])) {
+                    $syncData[$intId] = ['urutan' => $stageNum];
+                    $addedInStage = true;
+                }
+            }
+            if ($addedInStage) {
+                $stageNum++;
+            }
+        }
+
+        $this->syncPivotUjianData($syncData, $detaching);
+    }
+
+    protected function syncPivotUjianData(array $syncData, bool $detaching = true): void
+    {
         if ($detaching) {
             $this->ujians()->sync($syncData);
         } else {

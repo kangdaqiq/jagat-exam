@@ -44,11 +44,12 @@ class JadwalRuangTable
                             return ['-'];
                         }
 
-                        $multi = $ujians->count() > 1;
+                        $stageCount = $ujians->map(fn (Ujian $u) => (int) ($u->pivot?->urutan ?? 1))->unique()->count();
+                        $hasSubtests = $stageCount > 1;
 
-                        return $ujians->values()->map(function (Ujian $u, int $index) use ($multi) {
+                        return $ujians->values()->map(function (Ujian $u) use ($hasSubtests) {
                             $mapel = $u->mapel?->nama_mapel ?: 'Umum';
-                            $prefix = $multi ? ($index + 1) . '. ' : '';
+                            $prefix = $hasSubtests ? '[Subtest ' . ((int) ($u->pivot?->urutan ?? 1)) . '] ' : '';
                             return "{$prefix}{$u->nama_ujian} ({$mapel})";
                         })->all();
                     })

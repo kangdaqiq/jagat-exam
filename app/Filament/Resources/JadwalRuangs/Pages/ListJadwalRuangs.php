@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\JadwalRuangs\Pages;
 
 use App\Filament\Resources\JadwalRuangs\JadwalRuangResource;
+use App\Filament\Resources\JadwalRuangs\Schemas\JadwalRuangForm;
 use App\Models\JadwalRuang;
 use App\Models\RuangUjian;
 use App\Models\Ujian;
@@ -37,46 +38,7 @@ class ListJadwalRuangs extends ListRecords
                 ->modalDescription('Sistem akan membuat jadwal sesi untuk seluruh Ruang Ujian aktif sekaligus berdasarkan agenda ujian yang dipilih.')
                 ->modalSubmitActionLabel('Buat Jadwal untuk Semua Ruang')
                 ->form([
-                    Select::make('ujian_ids')
-                        ->label('Pilih Agenda Ujian (Bisa Pilih Banyak / Lintas Kelas)')
-                        ->options(function () {
-                            return Ujian::query()
-                                ->with(['mapel', 'kelas'])
-                                ->whereIn('status', ['SCHEDULED', 'ONGOING'])
-                                ->orderByDesc('tanggal')
-                                ->orderByDesc('id')
-                                ->get()
-                                ->mapWithKeys(function (Ujian $u) {
-                                    $tgl = $u->tanggal ? $u->tanggal->format('d/m/Y') : 'Tanpa Tanggal';
-                                    $mapel = $u->mapel?->nama_mapel ?: 'Umum';
-                                    $kelas = $u->kelas->pluck('nama_kelas')->join(', ');
-                                    $kelasText = $kelas ? " - [{$kelas}]" : '';
-                                    return [$u->id => "[{$tgl}] {$u->nama_ujian} ({$mapel}){$kelasText}"];
-                                });
-                        })
-                        ->multiple()
-                        ->required()
-                        ->searchable()
-                        ->preload()
-                        ->live()
-                        ->helperText('Pilih semua agenda ujian yang berjalan di sesi ini (misal K10, K11, K12 sekaligus).')
-                        ->afterStateUpdated(function ($state, $set, $get) {
-                            $firstId = is_array($state) ? ($state[0] ?? null) : $state;
-                            if ($firstId) {
-                                $u = Ujian::find($firstId);
-                                if ($u) {
-                                    if ($u->tanggal && empty($get('tanggal'))) {
-                                        $set('tanggal', $u->tanggal);
-                                    }
-                                    if ($u->waktu_mulai && empty($get('waktu_mulai'))) {
-                                        $set('waktu_mulai', $u->waktu_mulai);
-                                    }
-                                    if ($u->waktu_selesai && empty($get('waktu_selesai'))) {
-                                        $set('waktu_selesai', $u->waktu_selesai);
-                                    }
-                                }
-                            }
-                        }),
+                    JadwalRuangForm::subtestRepeater('daftar_subtest', withScheduleSync: true),
 
                     DatePicker::make('tanggal')
                         ->label('Tanggal Pelaksanaan')
@@ -108,7 +70,8 @@ class ListJadwalRuangs extends ListRecords
                         ->required(),
                 ])
                 ->action(function (array $data) {
-                    $ujianIds = array_values(array_filter((array) ($data['ujian_ids'] ?? [])));
+                    $stages = JadwalRuangForm::extractSubtestStages($data['daftar_subtest'] ?? []);
+                    $ujianIds = JadwalRuangForm::extractOrderedUjianIds($data['daftar_subtest'] ?? []);
                     if (empty($ujianIds)) return;
 
                     $firstUjianId = (int) $ujianIds[0];
@@ -152,7 +115,7 @@ class ListJadwalRuangs extends ListRecords
                             ]
                         );
 
-                        $jadwal->syncOrderedUjians($ujianIds, false);
+                        $jadwal->syncSubtestStages($stages, false);
 
                         $createdCount++;
                     }
