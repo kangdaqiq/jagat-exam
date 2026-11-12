@@ -249,9 +249,12 @@ class PortalPengawas extends Component
                 $subtestsSiswa = $allUjians;
             }
 
-            $siswaPesertas = $pesertasBySiswa->get($siswa->id, collect());
+            $subtestOrder = $subtestsSiswa->pluck('id')->flip();
+            $siswaPesertas = $pesertasBySiswa->get($siswa->id, collect())
+                ->sortBy(fn ($p) => $subtestOrder->get($p->ujian_id, 999))
+                ->values();
             $pesertaAktif = $siswaPesertas->firstWhere('status', 'SEDANG_MENGERJAKAN')
-                ?: $siswaPesertas->firstWhere('status', 'SELESAI')
+                ?: $siswaPesertas->where('status', 'SELESAI')->last()
                 ?: $siswaPesertas->first();
 
             $targetUjian = $pesertaAktif?->ujian ?: $subtestsSiswa->first();

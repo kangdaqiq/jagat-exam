@@ -271,9 +271,6 @@
                                             <h3 class="text-lg font-black text-slate-900 leading-snug mt-0.5" style="font-family: 'Outfit', sans-serif;">
                                                 {{ $ruangModel?->nama_ruang ?: 'Ruang Ujian' }}
                                             </h3>
-                                            <div class="text-xs font-bold text-slate-600 mt-0.5 line-clamp-2">
-                                                {{ $jr->daftar_nama_ujian }}
-                                            </div>
                                         </div>
 
                                         <div class="text-xs text-slate-600 space-y-1.5 pt-1">
@@ -661,9 +658,6 @@
 
                         <h2 class="text-xl sm:text-2xl font-black" style="font-family: 'Outfit', sans-serif; color: #041F45;">
                             {{ $roomObj->nama_ruang }}
-                            @if($isSessionMode)
-                                <span class="text-base font-bold text-emerald-700">&mdash; {{ $activeJadwalRuang->daftar_nama_ujian }}</span>
-                            @endif
                         </h2>
 
                         <div class="flex items-center gap-x-3 gap-y-1 text-xs text-slate-500 flex-wrap font-medium">

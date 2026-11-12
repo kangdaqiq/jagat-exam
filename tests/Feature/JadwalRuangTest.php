@@ -473,6 +473,13 @@ class JadwalRuangTest extends TestCase
         $this->assertEquals(1, \App\Models\UjianPeserta::where('ujian_id', $ujian1->id)->where('siswa_id', $siswa->id)->where('status', 'SELESAI')->count());
         $this->assertEquals(1, \App\Models\UjianPeserta::where('ujian_id', $ujian2->id)->where('siswa_id', $siswa->id)->where('status', 'SEDANG_MENGERJAKAN')->count());
 
+        // Portal Pengawas langsung memperbarui badge Soal & Subtest ke Subtest 2 saat siswa mulai Subtest 2
+        $this->actingAs($pengawas);
+        Livewire::test(PortalPengawas::class)
+            ->call('pilihJadwalRuang', $jadwal->id)
+            ->assertSee('Soal: Bahasa Inggris')
+            ->assertSee('Subtest: 1/2 Selesai');
+
         Carbon::setTestNow();
     }
 
@@ -604,6 +611,11 @@ class JadwalRuangTest extends TestCase
         $sesi2->syncOrderedUjians([$ujian2->id]);
 
         $this->actingAs($pengawas);
+
+        $this->get(route('pengawas.portal', ['sesi_ruang' => $sesi1->id]))
+            ->assertOk()
+            ->assertSee('Ruang Sejarah')
+            ->assertDontSee('Ujian Sesi Pagi');
 
         // Portal Pengawas tetap menampilkan Sesi 1 (riwayat selesai) maupun Sesi 2 (aktif/dijadwalkan)
         $portal = Livewire::test(PortalPengawas::class)
