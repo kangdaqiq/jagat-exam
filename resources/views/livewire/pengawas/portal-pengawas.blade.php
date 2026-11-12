@@ -22,10 +22,7 @@
                         </svg>
                     </button>
                 @else
-                    <div class="flex items-center gap-2 shrink-0">
-                        <img src="{{ asset('images/logo/pwa-pengawas-icon.png') }}" alt="Examuna" class="w-8 h-8 rounded-xl object-cover shrink-0 shadow-sm border border-white/20" />
-                        <img src="{{ asset('images/logo/examuna-logo-white.png') }}" alt="Examuna" class="h-7 w-auto object-contain shrink-0 drop-shadow-sm hidden sm:block" />
-                    </div>
+                    <img src="{{ asset('images/logo/examuna-logo-white.png') }}" alt="Examuna" class="h-9 w-auto object-contain shrink-0 drop-shadow-sm" />
                 @endif
 
                 <div class="min-w-0">

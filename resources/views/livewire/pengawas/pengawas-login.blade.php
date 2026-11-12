@@ -14,22 +14,17 @@
     {{-- Mobile Header Branding --}}
     <div class="lg:hidden relative z-10 px-5 pt-6 pb-3 flex flex-col items-center text-center">
         <div class="w-full max-w-md flex items-center justify-center gap-2 mb-3">
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="text-[10px] font-extrabold tracking-wider uppercase text-white/95">
-                    Examuna PWA
+                    PWA Pengawas Ujian
                 </span>
             </div>
         </div>
 
-        <div class="flex items-center justify-center gap-3">
-            <img src="{{ asset('images/logo/pwa-pengawas-icon.png') }}"
-                 alt="Examuna Icon"
-                 class="h-14 w-14 rounded-2xl object-cover shadow-lg border border-white/20" />
-            <img src="{{ asset('images/logo/examuna-logo-white.png') }}"
-                 alt="Examuna"
-                 class="h-16 w-auto object-contain drop-shadow-[0_6px_16px_rgba(0,0,0,0.28)]" />
-        </div>
+        <img src="{{ asset('images/logo/examuna-logo-white.png') }}"
+             alt="Examuna Pengawas"
+             class="h-18 sm:h-20 w-auto object-contain drop-shadow-[0_6px_16px_rgba(0,0,0,0.28)]" />
         <p class="text-[11px] text-sky-100/90 font-semibold mt-2">
             Portal Mobile Pengawas, Rilis Token &amp; Kontrol Sesi Siswa Real-time
         </p>
@@ -46,9 +41,6 @@
             >
 
                 <div class="relative z-10 my-6 flex flex-col items-center text-center">
-                    <img src="{{ asset('images/logo/pwa-pengawas-icon.png') }}"
-                         alt="Examuna Icon"
-                         class="w-16 h-16 rounded-2xl object-cover mb-3 shadow-xl border border-white/20" />
                     <img src="{{ asset('images/logo/examuna-logo-white.png') }}"
                          alt="Examuna"
                          class="w-full max-w-[200px] h-auto object-contain mx-auto drop-shadow-lg" />
