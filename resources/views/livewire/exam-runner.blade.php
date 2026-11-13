@@ -14,7 +14,9 @@
         tokenSesi: '{{ $sesi ? $sesi->token_sesi : ($bankSoal->kode_bank ?? "preview") }}',
         isPreview: {{ $is_preview ? 'true' : 'false' }},
         initialViolationCount: {{ (int) $violationCount }},
-        initialShowViolationModal: {{ $showViolationModal ? 'true' : 'false' }}
+        initialShowViolationModal: {{ $showViolationModal ? 'true' : 'false' }},
+        totalDurationSeconds: {{ $sesi ? $sesi->totalDetik() : 3600 }},
+        minSubmitSeconds: {{ $sesi ? (int) ceil($sesi->totalDetik() * 0.5) : 1800 }}
     })"
     style="min-height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; color: #1e293b; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;"
 >
@@ -715,9 +717,13 @@
                     Kembali ke Portal Ujian
                 </a>
             @else
-                <a href="{{ route('siswa.portal') }}" style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; text-decoration: none; box-shadow: 0 4px 14px rgba(4,31,69,0.25);">
-                    Kembali ke Portal Ujian &raquo;
-                </a>
+                <button
+                    type="button"
+                    onclick="if (window.AndroidExam && typeof window.AndroidExam.finishExam === 'function') { window.AndroidExam.finishExam(); } else { window.location.href = '{{ route('siswa.portal') }}'; }"
+                    style="display: inline-flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 13px; font-weight: 800; color: #ffffff; background: linear-gradient(135deg, #041F45 0%, #059669 100%); border: none; cursor: pointer; text-decoration: none; box-shadow: 0 4px 14px rgba(4,31,69,0.25);"
+                >
+                    Selesai &amp; Keluar Ujian &raquo;
+                </button>
             @endif
         </div>
     </div>
@@ -1179,7 +1185,7 @@
                                 :class="!canSubmit ? 'is-disabled' : ''"
                                 :title="submitHint"
                             >
-                                <span>Selesai Ujian &#10003;</span>
+                                <span x-text="submitNavText">Selesai Ujian &#10003;</span>
                             </button>
                         @endif
                     </div>
@@ -1260,7 +1266,7 @@
                     :title="submitHint"
                     style="width: 100%;"
                 >
-                    Selesai &amp; Kumpulkan &#10003;
+                    <span x-text="submitButtonText">Selesai &amp; Kumpulkan &#10003;</span>
                 </button>
                 <template x-if="!canSubmit">
                     <p style="margin: 7px 0 0; font-size: 11px; font-weight: 700; color: #dc2626; text-align: center; line-height: 1.4;">
@@ -1352,7 +1358,7 @@
                     :title="submitHint"
                     style="flex: 1.5;"
                 >
-                    Selesai &amp; Kumpulkan &#10003;
+                    <span x-text="submitButtonText">Selesai &amp; Kumpulkan &#10003;</span>
                 </button>
             </div>
         </div>
@@ -1911,25 +1917,67 @@ function examRunner($wire, config) {
             return Math.max(0, this.totalSoals - this.answeredCount);
         },
 
-        // Tombol kumpulkan hanya aktif jika semua soal terjawab DAN waktu pengerjaan sudah habis
+        get submitButtonText() {
+            if (this.canSubmit) {
+                return 'Selesai & Kumpulkan ✓';
+            }
+            if (this.answeredCount >= this.totalSoals && this.sisaCountdownSubmit > 0) {
+                return 'Kumpulkan (' + this.countdownFormatted + ')';
+            }
+            return 'Selesai & Kumpulkan ✓';
+        },
+
+        get submitNavText() {
+            if (this.canSubmit) {
+                return 'Selesai Ujian ✓';
+            }
+            if (this.answeredCount >= this.totalSoals && this.sisaCountdownSubmit > 0) {
+                return 'Selesai (' + this.countdownFormatted + ')';
+            }
+            return 'Selesai Ujian ✓';
+        },
+
+        // Syarat kumpulkan: seluruh butir soal terjawab DAN waktu pengerjaan sudah berjalan > 50% (atau waktu ujian habis)
         waktuHabis: false,
         sisaWaktuDetik: null,
+        totalDurationSeconds: config.totalDurationSeconds || 3600,
+        minSubmitSeconds: config.minSubmitSeconds || 1800,
+
+        get sisaCountdownSubmit() {
+            if (this.waktuHabis || !this.sisaWaktuDetik) {
+                return 0;
+            }
+            // Sisa detik yang harus dilewati sebelum mencapai 50% waktu (misal durasi 60m, min 30m)
+            const sisaWaktuMenujuHabis = this.sisaWaktuDetik;
+            const sisaSebelumBolehKumpul = sisaWaktuMenujuHabis - (this.totalDurationSeconds - this.minSubmitSeconds);
+            return Math.max(0, sisaSebelumBolehKumpul);
+        },
+
+        get countdownFormatted() {
+            const s = this.sisaCountdownSubmit;
+            const m = Math.floor(s / 60);
+            const d = String(s % 60).padStart(2, '0');
+            return m + ':' + d;
+        },
 
         get canSubmit() {
-            return this.answeredCount >= this.totalSoals && this.waktuHabis;
+            if (this.answeredCount < this.totalSoals) {
+                return false;
+            }
+            if (this.waktuHabis) {
+                return true;
+            }
+            return this.sisaCountdownSubmit <= 0;
         },
 
         get submitHint() {
             if (this.belumCount > 0) {
                 return 'Jawab ' + this.belumCount + ' soal lagi untuk mengumpulkan.';
             }
-            if (!this.waktuHabis) {
-                const s = this.sisaWaktuDetik ?? 0;
-                const m = Math.floor(s / 60);
-                const d = String(s % 60).padStart(2, '0');
-                return 'Semua soal terjawab. Lembar jawaban baru bisa dikumpulkan setelah waktu habis (sisa ' + m + ':' + d + ').';
+            if (!this.canSubmit && this.sisaCountdownSubmit > 0) {
+                return 'Semua soal terjawab. Anda dapat mengumpulkan lembar jawaban setelah ' + this.countdownFormatted + '.';
             }
-            return 'Selesai dan kumpulkan lembar jawaban';
+            return 'Semua soal terjawab. Klik untuk mengumpulkan lembar jawaban.';
         },
 
         async submitFinal() {

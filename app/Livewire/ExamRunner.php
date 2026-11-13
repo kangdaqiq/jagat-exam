@@ -580,11 +580,6 @@ class ExamRunner extends Component
 
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;
-
-        // Lepas kunci Kiosk hanya jika tidak ada subtest lanjutan dalam sesi ruangan ini
-        if (! $this->nextSubtestInfo) {
-            $this->dispatch('ujian-selesai-resmi');
-        }
     }
 
     /**
@@ -696,13 +691,13 @@ class ExamRunner extends Component
     }
 
     /**
-     * Pengumpulan manual oleh siswa: hanya diizinkan setelah waktu pengerjaan habis.
+     * Pengumpulan manual oleh siswa: diizinkan jika waktu sudah berjalan > 50% dari total durasi pengerjaan.
      */
     public function submitUjianManual(): void
     {
         if (!$this->sesi || $this->is_submitted) return;
 
-        if ($this->sesi->sisaDetik() > 0) {
+        if (! $this->sesi->sudahMencapaiMinimalSubmit(0.5) && $this->sesi->sisaDetik() > 0) {
             $this->showConfirmSubmitModal = false;
             return;
         }
@@ -803,9 +798,6 @@ class ExamRunner extends Component
         $this->is_submitted = true;
         $this->showConfirmSubmitModal = false;
         $this->showViolationModal = false;
-        if (! $this->nextSubtestInfo) {
-            $this->dispatch('ujian-selesai-resmi');
-        }
     }
 
     public function render()

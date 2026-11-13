@@ -101,6 +101,49 @@ class UjianSesi extends Model
     }
 
     /**
+     * Total durasi ujian dalam detik (berdasarkan durasi_menit atau selisih waktu mulai-selesai).
+     */
+    public function totalDetik(): int
+    {
+        if ($this->durasi_menit && $this->durasi_menit > 0) {
+            return (int) $this->durasi_menit * 60;
+        }
+
+        if ($this->waktu_mulai && $this->waktu_selesai) {
+            return max(60, (int) $this->waktu_mulai->diffInSeconds($this->waktu_selesai));
+        }
+
+        return 3600;
+    }
+
+    /**
+     * Berapa detik lagi siswa harus menunggu sampai mencapai 50% waktu pengerjaan.
+     * Mengembalikan 0 jika sudah berjalan > 50% waktu pengerjaan.
+     */
+    public function sisaDetikMenujuMinimalSubmit(float $thresholdPercent = 0.5): int
+    {
+        if ($this->status === 'selesai') return 0;
+
+        $totalDetik = $this->totalDetik();
+        $targetDetik = (int) ceil($totalDetik * $thresholdPercent);
+
+        // Waktu yang sudah berjalan sejak waktu_mulai
+        $elapsedDetik = $this->waktu_mulai
+            ? max(0, (int) $this->waktu_mulai->diffInSeconds(now()))
+            : max(0, $totalDetik - $this->sisaDetik());
+
+        return max(0, $targetDetik - $elapsedDetik);
+    }
+
+    /**
+     * Apakah waktu pengerjaan siswa sudah berjalan melebihi 50% dari total durasi.
+     */
+    public function sudahMencapaiMinimalSubmit(float $thresholdPercent = 0.5): bool
+    {
+        return $this->sisaDetikMenujuMinimalSubmit($thresholdPercent) <= 0;
+    }
+
+    /**
      * Catat pelanggaran kecurangan siswa (pindah tab / keluar aplikasi) secara persisten ke database
      */
     public function catatPelanggaran(): int

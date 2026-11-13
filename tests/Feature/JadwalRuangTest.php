@@ -448,8 +448,18 @@ class JadwalRuangTest extends TestCase
         $this->assertEquals($jadwal->id, $sesi1->jadwal_ruang_id);
 
         // 2. Siswa menyelesaikan Subtest 1, muncul laman konfirmasi menuju Subtest 2 tanpa input token
-        $runner = Livewire::test(\App\Livewire\ExamRunner::class, ['token_sesi' => $sesi1->token_sesi])
-            ->call('submitUjianFinal')
+        $runner = Livewire::test(\App\Livewire\ExamRunner::class, ['token_sesi' => $sesi1->token_sesi]);
+
+        // Verifikasi batas > 50% durasi: sebelum 50% belum bisa kumpul manual
+        $this->assertFalse($sesi1->fresh()->sudahMencapaiMinimalSubmit(0.5));
+        $runner->call('submitUjianManual')
+            ->assertSet('is_submitted', false);
+
+        // Setelah waktu berjalan > 50% (31 menit dari total 60 menit)
+        Carbon::setTestNow(Carbon::create(2026, 11, 12, 8, 31, 0));
+        $this->assertTrue($sesi1->fresh()->sudahMencapaiMinimalSubmit(0.5));
+
+        $runner->call('submitUjianManual')
             ->assertSet('is_submitted', true)
             ->assertSee('Subtest 2 Bahasa Inggris')
             ->assertSee('Konfirmasi');
