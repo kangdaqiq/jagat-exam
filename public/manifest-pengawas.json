@@ -1,7 +1,7 @@
 {
     "id": "/pengawas",
-    "name": "Examuna Pengawas - Proktor & Monitoring CBT",
-    "short_name": "Pengawas CBT",
+    "name": "Examuna",
+    "short_name": "Examuna",
     "description": "Aplikasi PWA Pengawas Ujian Examuna untuk memantau siswa real-time, merilis token sesi, dan mereset login peserta.",
     "start_url": "/pengawas",
     "scope": "/",
@@ -12,16 +12,22 @@
     "lang": "id-ID",
     "icons": [
         {
-            "src": "/images/logo/examuna-logo.png",
+            "src": "/images/logo/pwa-pengawas-192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/images/logo/examuna-logo.png",
+            "src": "/images/logo/pwa-pengawas-512.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
+        },
+        {
+            "src": "/images/logo/pwa-pengawas-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ]
 }

@@ -41,7 +41,7 @@ class GuruPanelProvider extends PanelProvider
             ->brandName('Portal Guru CBT')
             ->brandLogo(fn () => view('filament.components.brand-logo'))
             ->brandLogoHeight('2.2rem')
-            ->favicon(asset('images/logo/logo-icon.svg'))
+            ->favicon(asset('images/logo/pwa-pengawas-icon.png'))
             ->font('Outfit')
             ->sidebarCollapsibleOnDesktop()
             ->colors([

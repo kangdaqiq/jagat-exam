@@ -1,6 +1,9 @@
-const CACHE_NAME = 'examuna-pengawas-pwa-v2';
+const CACHE_NAME = 'examuna-pengawas-pwa-v3';
 const STATIC_ASSETS = [
     '/manifest-pengawas.json',
+    '/images/logo/pwa-pengawas-icon.png',
+    '/images/logo/pwa-pengawas-192.png',
+    '/images/logo/pwa-pengawas-512.png',
     '/images/logo/examuna-logo.png',
     '/images/logo/examuna-logo-white.png',
     '/images/logo/examuna.png'

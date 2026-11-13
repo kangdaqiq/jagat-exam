@@ -95,11 +95,14 @@ class ExamRunner extends Component
                 $this->loadSessionData();
                 $this->is_submitted = true;
             } elseif ($this->sesi->isSelesai() || ($this->sesi->ujian && $this->sesi->ujian->status === 'COMPLETED')) {
-                // Waktu sesi atau jadwal ujian telah berakhir
-                $this->sesi->koreksiDanSelesaikan();
-                $this->sesi->refresh();
+                // Jangan auto-selesaikan jika sesi baru saja dibuat (grace period 60 detik) untuk mencegah glitch redirect/clock skew
+                $isBaruDibuat = $this->sesi->created_at && $this->sesi->created_at->diffInSeconds(now()) < 60;
+                if (! $isBaruDibuat) {
+                    $this->sesi->koreksiDanSelesaikan();
+                    $this->sesi->refresh();
+                    $this->is_submitted = true;
+                }
                 $this->loadSessionData();
-                $this->is_submitted = true;
             } else {
                 $this->loadSessionData();
             }
@@ -707,6 +710,12 @@ class ExamRunner extends Component
 
     public function autoSubmitOnTimeout(): void
     {
+        // Guard: Jangan auto-submit jika sesi di server masih memiliki sisa waktu > 5 detik
+        // Ini melindungi dari device siswa yang jam lokalnya error/melompat
+        if ($this->sesi && $this->sesi->sisaDetik() > 5) {
+            return;
+        }
+
         $this->submitUjianFinal();
     }
 

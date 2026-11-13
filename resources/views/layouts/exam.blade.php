@@ -9,7 +9,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <title>{{ $title ?? 'Examuna - Digital Examination System | SMK Assuniyah Tumijajar' }}</title>
-    <link rel="icon" type="image/png" href="{{ asset('images/logo/examuna-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/logo/pwa-pengawas-icon.png') }}">
+    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 
     {{-- KaTeX Lokal (Offline-Ready) & Font Non-Blocking --}}
     <link rel="stylesheet" href="{{ asset('vendor/katex/katex.min.css') }}">

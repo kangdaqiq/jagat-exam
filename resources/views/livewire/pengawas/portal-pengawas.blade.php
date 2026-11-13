@@ -1022,15 +1022,27 @@
                         </div>
 
                         @if($peserta && $sesi)
-                            <div class="grid {{ $row->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
+                            <div class="grid {{ $row->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
                                 <button
                                     type="button"
                                     wire:click="resetSesiSiswa({{ $peserta->id }})"
                                     wire:confirm="Reset login & buka kunci sesi untuk {{ $siswaItem->nama }}? Jawaban yang sudah dikerjakan tetap aman."
                                     class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
                                     style="{{ $jmlPelanggaran >= 3 ? 'background-color: #dc2626; color: #ffffff; border: 1px solid #b91c1c;' : 'background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a;' }}"
+                                    title="Reset Login (Jawaban Tetap Tersimpan)"
                                 >
-                                    <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci & Reset' : 'Reset Login' }}</span>
+                                    <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci' : 'Reset Login' }}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    wire:click="resetUjianSiswaTotal({{ $peserta->id }})"
+                                    wire:confirm="PERINGATAN: Reset Ujian Total akan MENGHAPUS SEMUA JAWABAN dan mengulang waktu siswa {{ $siswaItem->nama }} dari nol. Lanjutkan?"
+                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                    style="background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca;"
+                                    title="Reset Ujian Dari Nol (Hapus Jawaban & Waktu)"
+                                >
+                                    <span>Reset Ujian</span>
                                 </button>
 
                                 <button
