@@ -73,6 +73,7 @@ class GuruPanelProvider extends PanelProvider
             ])
             ->pages([
                 Dashboard::class,
+                \App\Filament\Pages\ProgresPembuatanSoal::class,
             ])
             ->widgets([
                 TailadminQuickActionWidget::class,
