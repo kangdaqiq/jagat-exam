@@ -140,67 +140,65 @@
                 </p>
             </div>
 
-            {{-- 5. Guru Belum Buat (Admin Only) --}}
-            @if($isAdmin)
-                <div
-                    wire:click="setTab('guru_belum_buat')"
-                    class="bg-white dark:bg-[#1a2231] border {{ $activeTab === 'guru_belum_buat' ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200 dark:border-gray-800' }} rounded-2xl p-4 shadow-theme-xs cursor-pointer hover:border-indigo-500 transition"
-                >
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Guru Belum Buat</span>
-                        <span class="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                            </svg>
-                        </span>
-                    </div>
-                    <div class="mt-2.5 flex items-baseline gap-2">
-                        <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">{{ $stats['guru_belum_buat'] }}</span>
-                        <span class="text-xs text-indigo-600/70">guru</span>
-                    </div>
-                    <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                        Klik untuk lihat daftar guru
-                    </p>
+            {{-- 5. Mapel Belum Buat Soal --}}
+            <div
+                wire:click="setTab('mapel_belum_buat')"
+                class="bg-white dark:bg-[#1a2231] border {{ $activeTab === 'mapel_belum_buat' ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200 dark:border-gray-800' }} rounded-2xl p-4 shadow-theme-xs cursor-pointer hover:border-indigo-500 transition"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                        {{ $isAdmin ? 'Mapel Belum Dibuat' : 'Mapel Belum Selesai' }}
+                    </span>
+                    <span class="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </span>
                 </div>
-            @endif
+                <div class="mt-2.5 flex items-baseline gap-2">
+                    <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">{{ $stats['mapel_belum_buat'] }}</span>
+                    <span class="text-xs text-indigo-600/70">mapel</span>
+                </div>
+                <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                    {{ $isAdmin ? 'Klik untuk rincian guru & mapel' : 'Mapel diampu belum ada soal' }}
+                </p>
+            </div>
         </div>
 
         {{-- ================================================================= --}}
-        {{-- TABS NAVIGATION (JIKA ADMIN)                                      --}}
+        {{-- TABS NAVIGATION (ADMIN & GURU)                                    --}}
         {{-- ================================================================= --}}
-        @if($isAdmin)
-            <div class="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
-                <button
-                    wire:click="setTab('paket')"
-                    type="button"
-                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition {{ $activeTab === 'paket' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' }}"
-                >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    <span>Matriks Paket Bank Soal</span>
-                    <span class="px-2 py-0.5 rounded-full text-xs {{ $activeTab === 'paket' ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' }}">
-                        {{ $stats['total_paket'] }}
-                    </span>
-                </button>
+        <div class="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
+            <button
+                wire:click="setTab('paket')"
+                type="button"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition {{ $activeTab === 'paket' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' }}"
+            >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span>Matriks Paket Bank Soal</span>
+                <span class="px-2 py-0.5 rounded-full text-xs {{ $activeTab === 'paket' ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' }}">
+                    {{ $stats['total_paket'] }}
+                </span>
+            </button>
 
-                <button
-                    wire:click="setTab('guru_belum_buat')"
-                    type="button"
-                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition {{ $activeTab === 'guru_belum_buat' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' }}"
-                >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    <span>Guru Belum Membuat Soal</span>
-                    @if($stats['guru_belum_buat'] > 0)
-                        <span class="px-2 py-0.5 rounded-full text-xs {{ $activeTab === 'guru_belum_buat' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' }}">
-                            {{ $stats['guru_belum_buat'] }}
-                        </span>
-                    @endif
-                </button>
-            </div>
-        @endif
+            <button
+                wire:click="setTab('mapel_belum_buat')"
+                type="button"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition {{ $activeTab === 'mapel_belum_buat' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' }}"
+            >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <span>{{ $isAdmin ? 'Mapel Belum Dibuat Soalnya' : 'Mapel Saya yang Belum Dibuat' }}</span>
+                @if($stats['mapel_belum_buat'] > 0)
+                    <span class="px-2 py-0.5 rounded-full text-xs {{ $activeTab === 'mapel_belum_buat' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' }}">
+                        {{ $stats['mapel_belum_buat'] }}
+                    </span>
+                @endif
+            </button>
+        </div>
 
         {{-- ================================================================= --}}
         {{-- TAB 1: MATRIKS PAKET BANK SOAL                                    --}}
@@ -555,21 +553,34 @@
         @endif
 
         {{-- ================================================================= --}}
-        {{-- TAB 2: DAFTAR GURU BELUM BUAT SOAL (ADMIN ONLY)                   --}}
+        {{-- TAB 2: DAFTAR MAPEL YANG BELUM DIBUAT SOALNYA                     --}}
         {{-- ================================================================= --}}
-        @if($activeTab === 'guru_belum_buat' && $isAdmin)
+        @if($activeTab === 'mapel_belum_buat')
             <div class="bg-white dark:bg-[#1a2231] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-theme-xs overflow-hidden">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
-                    <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                        Daftar Guru yang Belum Memiliki Paket Bank Soal
-                    </h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Daftar guru aktif yang belum menyusun atau menginput bank soal sama sekali pada sistem CBT.
-                    </p>
+                <div class="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white">
+                            {{ $isAdmin ? 'Daftar Mata Pelajaran yang Belum Memiliki Bank Soal' : 'Mata Pelajaran yang Anda Ampu yang Belum Ada Soal' }}
+                        </h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Rincian spesifik per mata pelajaran yang diampu oleh guru namun paket bank soalnya belum dibuat.
+                        </p>
+                    </div>
+
+                    <button
+                        wire:click="exportCsv"
+                        type="button"
+                        class="self-start md:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 transition shadow-xs"
+                    >
+                        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Unduh Rekap Mapel Kosong (CSV)</span>
+                    </button>
                 </div>
 
                 @php
-                    $guruBelumBuatList = $this->guruBelumBuatList;
+                    $mapelBelumBuatList = $this->mapelBelumBuatList;
                 @endphp
 
                 <div class="overflow-x-auto">
@@ -578,51 +589,66 @@
                             <tr>
                                 <th class="py-3 px-4 w-12 text-center">No</th>
                                 <th class="py-3 px-4">Nama Guru</th>
-                                <th class="py-3 px-4">NIP / Identitas</th>
-                                <th class="py-3 px-4">Mata Pelajaran Diampu</th>
-                                <th class="py-3 px-4">Kelas Diampu</th>
-                                <th class="py-3 px-4 text-center">Status</th>
+                                <th class="py-3 px-4">Mata Pelajaran Belum Ada Soal</th>
+                                <th class="py-3 px-4">Tingkat</th>
+                                <th class="py-3 px-4">Target Rombel / Kelas</th>
+                                <th class="py-3 px-4 text-center">Progres Guru</th>
                                 <th class="py-3 px-4 text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @forelse($guruBelumBuatList as $gIdx => $guru)
+                            @forelse($mapelBelumBuatList as $mIdx => $item)
                                 <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition">
                                     <td class="py-3.5 px-4 text-center text-gray-400 font-medium">
-                                        {{ $gIdx + 1 }}
+                                        {{ $mIdx + 1 }}
                                     </td>
+
+                                    {{-- Guru --}}
                                     <td class="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
                                         <div class="flex items-center gap-2.5">
-                                            <div class="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center justify-center shrink-0">
-                                                {{ strtoupper(substr($guru->name, 0, 1)) }}
+                                            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0">
+                                                {{ strtoupper(substr($item->guru->name, 0, 1)) }}
                                             </div>
                                             <div>
-                                                <p>{{ $guru->name }}</p>
-                                                <p class="text-[10px] text-gray-400 font-normal">{{ $guru->email }}</p>
+                                                <p>{{ $item->guru->name }}</p>
+                                                <p class="text-[10px] text-gray-400 font-normal">
+                                                    {{ $item->guru->nip ? "NIP: {$item->guru->nip}" : $item->guru->email }}
+                                                </p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="py-3.5 px-4 font-mono text-gray-600 dark:text-gray-300">
-                                        {{ $guru->nip ?: '-' }}
-                                    </td>
+
+                                    {{-- Mapel Belum Ada Soal --}}
                                     <td class="py-3.5 px-4">
-                                        @if($guru->mapels && $guru->mapels->isNotEmpty())
-                                            <div class="flex items-center gap-1 flex-wrap">
-                                                @foreach($guru->mapels as $mp)
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                                        {{ $mp->nama_mapel }}
-                                                    </span>
-                                                @endforeach
-                                            </div>
+                                        <div class="flex flex-col gap-0.5">
+                                            <span class="font-bold text-gray-900 dark:text-white text-xs">
+                                                {{ $item->mapel_name }}
+                                            </span>
+                                            @if($item->mapel_kode && $item->mapel_kode !== '-')
+                                                <span class="text-[10px] text-gray-400 font-mono">
+                                                    Kode: {{ $item->mapel_kode }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </td>
+
+                                    {{-- Tingkat --}}
+                                    <td class="py-3.5 px-4">
+                                        @if($item->tingkat)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                                                Kelas {{ $item->tingkat }}
+                                            </span>
                                         @else
-                                            <span class="text-gray-400 italic">Belum diatur</span>
+                                            <span class="text-gray-400">-</span>
                                         @endif
                                     </td>
+
+                                    {{-- Rombel / Kelas --}}
                                     <td class="py-3.5 px-4">
-                                        @if($guru->kelases && $guru->kelases->isNotEmpty())
-                                            <div class="flex items-center gap-1 flex-wrap">
-                                                @foreach($guru->kelases as $kl)
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                        @if($item->kelases && $item->kelases->isNotEmpty())
+                                            <div class="flex items-center gap-1 flex-wrap max-w-[200px]">
+                                                @foreach($item->kelases as $kl)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/50">
                                                         {{ $kl->nama_kelas }}
                                                     </span>
                                                 @endforeach
@@ -631,20 +657,38 @@
                                             <span class="text-gray-400 italic">Belum diatur</span>
                                         @endif
                                     </td>
+
+                                    {{-- Progres Guru --}}
                                     <td class="py-3.5 px-4 text-center">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                                            0 Paket Soal
-                                        </span>
+                                        <div class="inline-flex flex-col items-center gap-1">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold {{ $item->mapel_sudah_dibuat > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' }}">
+                                                {{ $item->keterangan }}
+                                            </span>
+                                        </div>
                                     </td>
+
+                                    {{-- Aksi --}}
                                     <td class="py-3.5 px-4 text-right">
+                                        @php
+                                            $createUrl = \App\Filament\Resources\BankSoals\BankSoalResource::getUrl('create');
+                                            $params = [];
+                                            if ($item->mapel) {
+                                                $params['mapel_id'] = $item->mapel->id;
+                                            }
+                                            if ($item->tingkat) {
+                                                $params['tingkat'] = $item->tingkat;
+                                            }
+                                            $finalUrl = !empty($params) ? $createUrl . '?' . http_build_query($params) : $createUrl;
+                                        @endphp
                                         <a
-                                            href="{{ \App\Filament\Resources\BankSoals\BankSoalResource::getUrl('create') }}"
-                                            class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition shadow-xs"
+                                            href="{{ $finalUrl }}"
+                                            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition shadow-xs"
+                                            title="Buat bank soal langsung untuk mata pelajaran ini"
                                         >
                                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                                             </svg>
-                                            <span>Buat Paket</span>
+                                            <span>Buat Soal</span>
                                         </a>
                                     </td>
                                 </tr>
@@ -655,8 +699,8 @@
                                             <svg class="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
-                                            <p class="font-bold text-sm text-gray-800 dark:text-white">Luar biasa! Seluruh guru telah membuat bank soal.</p>
-                                            <p class="text-xs text-gray-500">Tidak ada guru pengampu yang tertinggal.</p>
+                                            <p class="font-bold text-sm text-gray-800 dark:text-white">Luar biasa! Seluruh mata pelajaran yang diampu telah dibuatkan bank soal.</p>
+                                            <p class="text-xs text-gray-500">Tidak ada mapel yang tertinggal atau kosong.</p>
                                         </div>
                                     </td>
                                 </tr>

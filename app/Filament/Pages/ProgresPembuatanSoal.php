@@ -114,15 +114,8 @@ class ProgresPembuatanSoal extends Page
             }
         }
 
-        // Hitung guru yang belum membuat bank soal sama sekali
-        $guruBelumBuatCount = 0;
-        if ($user && $user->isAdmin()) {
-            $guruIdsWithBank = BankSoal::distinct()->pluck('user_id')->filter()->toArray();
-            $guruBelumBuatCount = User::where('role', 'guru')
-                ->where('is_active', true)
-                ->whereNotIn('id', $guruIdsWithBank)
-                ->count();
-        }
+        // Hitung total mapel yang belum dibuat soalnya (spesifik per mapel yang diampu)
+        $mapelBelumBuatCount = $this->mapelBelumBuatList->count();
 
         return [
             'total_paket' => $totalPaket,
@@ -130,7 +123,7 @@ class ProgresPembuatanSoal extends Page
             'siap_uji' => $siapUji,
             'perlu_review' => $perluReview,
             'kosong' => $kosong,
-            'guru_belum_buat' => $guruBelumBuatCount,
+            'mapel_belum_buat' => $mapelBelumBuatCount,
         ];
     }
 
@@ -275,18 +268,95 @@ class ProgresPembuatanSoal extends Page
     }
 
     /**
-     * Dapatkan daftar guru yang belum membuat bank soal
+     * Dapatkan daftar spesifik guru & mata pelajaran yang belum memiliki bank soal.
+     * Jika guru mengampu banyak mapel (misal: 3 mapel) dan baru membuat 1,
+     * maka 2 mapel sisanya akan otomatis terdaftar di sini.
      */
-    public function getGuruBelumBuatListProperty(): Collection
+    public function getMapelBelumBuatListProperty(): Collection
     {
-        $guruIdsWithBank = BankSoal::distinct()->pluck('user_id')->filter()->toArray();
-
-        return User::where('role', 'guru')
+        $user = Auth::user();
+        $query = User::where('role', 'guru')
             ->where('is_active', true)
-            ->whereNotIn('id', $guruIdsWithBank)
-            ->with(['mapels', 'kelases'])
-            ->orderBy('name', 'asc')
-            ->get();
+            ->with(['mapels', 'kelases', 'guruPengampus.mapel', 'guruPengampus.kelas']);
+
+        if ($user && $user->isGuru()) {
+            $query->where('id', $user->id);
+        }
+
+        $gurus = $query->orderBy('name', 'asc')->get();
+        $list = collect();
+
+        foreach ($gurus as $guru) {
+            // Kumpulkan seluruh mapel yang diampu oleh guru ini
+            $pengampuMapels = $guru->guruPengampus->pluck('mapel')->filter()->unique('id');
+            $directMapels = $guru->mapels;
+            $allMapels = $pengampuMapels->merge($directMapels)->unique('id')->values();
+
+            // Bank soal yang sudah dibuat oleh guru ini
+            $existingBankMapelIds = BankSoal::where('user_id', $guru->id)->pluck('mapel_id')->filter()->toArray();
+
+            // Kasus: Guru belum ditugaskan mapel sama sekali di data master
+            if ($allMapels->isEmpty()) {
+                if (empty($existingBankMapelIds)) {
+                    $list->push((object) [
+                        'guru' => $guru,
+                        'mapel' => null,
+                        'mapel_name' => 'Belum Ditugaskan Mapel',
+                        'mapel_kode' => '-',
+                        'tingkat' => null,
+                        'kelases' => $guru->kelases,
+                        'total_mapel_diampu' => 0,
+                        'mapel_sudah_dibuat' => 0,
+                        'mapel_belum_dibuat' => 1,
+                        'keterangan' => 'Belum ada mapel diampu di sistem',
+                    ]);
+                }
+                continue;
+            }
+
+            $totalDiampu = $allMapels->count();
+            $sudahDibuatCount = 0;
+            $belumDibuatMapels = collect();
+
+            foreach ($allMapels as $mapel) {
+                if (in_array($mapel->id, $existingBankMapelIds)) {
+                    $sudahDibuatCount++;
+                } else {
+                    $belumDibuatMapels->push($mapel);
+                }
+            }
+
+            foreach ($belumDibuatMapels as $mapel) {
+                // Rombel kelas pengampu untuk mapel ini
+                $kelasesForMapel = $guru->guruPengampus
+                    ->where('mapel_id', $mapel->id)
+                    ->pluck('kelas')
+                    ->filter()
+                    ->unique('id')
+                    ->values();
+
+                if ($kelasesForMapel->isEmpty()) {
+                    $kelasesForMapel = $guru->kelases;
+                }
+
+                $tingkat = $mapel->tingkat ?: ($kelasesForMapel->pluck('tingkat')->filter()->unique()->join(', ') ?: null);
+
+                $list->push((object) [
+                    'guru' => $guru,
+                    'mapel' => $mapel,
+                    'mapel_name' => $mapel->nama_mapel,
+                    'mapel_kode' => $mapel->kode_mapel ?: '-',
+                    'tingkat' => $tingkat,
+                    'kelases' => $kelasesForMapel,
+                    'total_mapel_diampu' => $totalDiampu,
+                    'mapel_sudah_dibuat' => $sudahDibuatCount,
+                    'mapel_belum_dibuat' => $belumDibuatMapels->count(),
+                    'keterangan' => "{$sudahDibuatCount} dari {$totalDiampu} mapel telah dibuat",
+                ]);
+            }
+        }
+
+        return $list;
     }
 
     /**
@@ -366,6 +436,44 @@ class ProgresPembuatanSoal extends Page
      */
     public function exportCsv()
     {
+        if ($this->activeTab === 'mapel_belum_buat') {
+            $items = $this->mapelBelumBuatList;
+            $filename = "rekap_mapel_belum_ada_soal_" . now()->format('Ymd_His') . ".csv";
+
+            return response()->streamDownload(function () use ($items) {
+                $handle = fopen('php://output', 'w');
+                fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+                fputcsv($handle, [
+                    'No',
+                    'Nama Guru',
+                    'NIP',
+                    'Mata Pelajaran Belum Ada Soal',
+                    'Kode Mapel',
+                    'Tingkat',
+                    'Target Rombel / Kelas',
+                    'Status Progres Guru',
+                ]);
+
+                foreach ($items as $index => $item) {
+                    fputcsv($handle, [
+                        $index + 1,
+                        $item->guru?->name ?? '-',
+                        $item->guru?->nip ?: '-',
+                        $item->mapel_name,
+                        $item->mapel_kode,
+                        $item->tingkat ?: 'Semua',
+                        $item->kelases->pluck('nama_kelas')->join(', ') ?: '-',
+                        $item->keterangan,
+                    ]);
+                }
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ]);
+        }
+
         $items = $this->evaluatedBankSoals;
         $filename = "rekap_progres_pembuatan_soal_" . now()->format('Ymd_His') . ".csv";
 

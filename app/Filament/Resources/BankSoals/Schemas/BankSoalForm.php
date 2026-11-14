@@ -84,6 +84,7 @@ class BankSoalForm
                             Select::make('mapel_id')
                                 ->label('Mata Pelajaran')
                                 ->options($mapelOptions)
+                                ->default(fn () => request()->query('mapel_id'))
                                 ->required()
                                 ->searchable()
                                 ->preload(),
@@ -96,7 +97,7 @@ class BankSoalForm
                                     '11' => 'Kelas XI (11)',
                                     '12' => 'Kelas XII (12)',
                                 ])
-                                ->default('Semua')
+                                ->default(fn () => request()->query('tingkat', 'Semua'))
                                 ->live()
                                 ->afterStateUpdated(function ($state, $set, $get) {
                                     if (!empty($state) && $state !== 'Semua') {

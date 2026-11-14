@@ -178,4 +178,38 @@ class ProgresPembuatanSoalTest extends TestCase
             ->call('exportCsv')
             ->assertFileDownloaded();
     }
+
+    public function test_guru_mengampu_banyak_mapel_muncul_mapel_yang_belum_dibuat(): void
+    {
+        $guru = User::factory()->create(['role' => 'guru', 'name' => 'Bpk. Hendra', 'is_active' => true]);
+        $mapelMatematika = Mapel::create(['nama_mapel' => 'Matematika', 'kode_mapel' => 'MTK-10']);
+        $mapelFisika = Mapel::create(['nama_mapel' => 'Fisika', 'kode_mapel' => 'FIS-10']);
+        $mapelKimia = Mapel::create(['nama_mapel' => 'Kimia', 'kode_mapel' => 'KIM-10']);
+
+        // Guru mengampu 3 mapel
+        $guru->mapels()->attach([$mapelMatematika->id, $mapelFisika->id, $mapelKimia->id]);
+
+        // Guru baru membuat 1 bank soal untuk Matematika
+        BankSoal::create([
+            'user_id' => $guru->id,
+            'mapel_id' => $mapelMatematika->id,
+            'judul' => 'Ulangan Matematika Bab 1',
+            'kode_bank' => 'SOAL-202611-MTK',
+            'tingkat' => '10',
+            'total_bobot' => 100.0,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($guru);
+
+        // Akses halaman progres sebagai guru
+        $component = Livewire::test(ProgresPembuatanSoal::class);
+
+        // Fisika dan Kimia harus terdeteksi di tab mapel_belum_buat
+        $component->call('setTab', 'mapel_belum_buat')
+            ->assertSee('Fisika')
+            ->assertSee('Kimia')
+            ->assertDontSee('Matematika') // karena matematika sudah dibuat
+            ->assertSee('1 dari 3 mapel telah dibuat');
+    }
 }
