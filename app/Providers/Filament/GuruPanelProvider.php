@@ -67,8 +67,6 @@ class GuruPanelProvider extends PanelProvider
             ->resources([
                 BankSoalResource::class,
                 UjianResource::class,
-                RuangUjianResource::class,
-                JadwalRuangResource::class,
                 HasilUjianResource::class,
             ])
             ->pages([

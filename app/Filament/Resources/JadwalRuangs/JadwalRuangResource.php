@@ -45,10 +45,14 @@ class JadwalRuangResource extends Resource
         return JadwalRuangTable::configure($table);
     }
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->isAdmin() ?? false;
+    }
+
     public static function canViewAny(): bool
     {
-        $user = auth()->user();
-        return $user ? ($user->isAdmin() || $user->isGuru()) : false;
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     public static function canCreate(): bool

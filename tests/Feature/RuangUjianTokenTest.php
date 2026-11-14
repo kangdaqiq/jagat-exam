@@ -183,5 +183,27 @@ class RuangUjianTokenTest extends TestCase
         $ruang->refresh();
         $this->assertNull($ruang->token_ruang);
     }
+
+    public function test_guru_tidak_dapat_mengakses_menu_ruang_ujian_dan_jadwal_ruang(): void
+    {
+        $guru = User::factory()->create(['role' => 'guru', 'is_active' => true]);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        // Guru ditolak dari akses resource Ruang Ujian & Jadwal Ruang
+        $this->actingAs($guru);
+        $this->assertFalse(\App\Filament\Resources\RuangUjians\RuangUjianResource::canAccess());
+        $this->assertFalse(\App\Filament\Resources\JadwalRuangs\JadwalRuangResource::canAccess());
+        $this->get('/admin/ruang-ujians')->assertForbidden();
+        $this->get('/admin/jadwal-ruangs')->assertForbidden();
+        $this->get('/guru/ruang-ujians')->assertNotFound();
+        $this->get('/guru/jadwal-ruangs')->assertNotFound();
+
+        // Admin tetap memiliki hak akses penuh
+        $this->actingAs($admin);
+        $this->assertTrue(\App\Filament\Resources\RuangUjians\RuangUjianResource::canAccess());
+        $this->assertTrue(\App\Filament\Resources\JadwalRuangs\JadwalRuangResource::canAccess());
+        $this->get('/admin/ruang-ujians')->assertOk();
+        $this->get('/admin/jadwal-ruangs')->assertOk();
+    }
 }
 
