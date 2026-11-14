@@ -4,6 +4,7 @@ namespace App\Filament\Resources\BankSoals\Pages;
 
 use App\Filament\Resources\BankSoals\BankSoalResource;
 use App\Models\BankSoal;
+use App\Models\Kelas;
 use App\Models\Mapel;
 use App\Models\Soal;
 use App\Services\AiQuestionService;
@@ -1011,8 +1012,20 @@ class EditBankSoal extends Page
 
                         Select::make('mapel_id')
                             ->label('Mata Pelajaran')
-                            ->options(Mapel::pluck('nama_mapel', 'id'))
-                            ->required(),
+                            ->options(function () {
+                                $user = auth()->user();
+                                $query = Mapel::query();
+                                if ($user && $user->isGuru()) {
+                                    $guruMapelIds = $user->mapels()->pluck('mapels.id')->toArray();
+                                    if (!empty($guruMapelIds)) {
+                                        $query->whereIn('id', $guruMapelIds);
+                                    }
+                                }
+                                return $query->pluck('nama_mapel', 'id');
+                            })
+                            ->required()
+                            ->searchable()
+                            ->preload(),
 
                         Select::make('tingkat')
                             ->label('Tingkat')
@@ -1021,12 +1034,55 @@ class EditBankSoal extends Page
                                 '10' => 'Kelas X (10)',
                                 '11' => 'Kelas XI (11)',
                                 '12' => 'Kelas XII (12)',
-                            ]),
+                            ])
+                            ->live()
+                            ->afterStateUpdated(function ($state, $set, $get) {
+                                if (!empty($state) && $state !== 'Semua') {
+                                    $current = (array) ($get('kelases') ?? []);
+                                    if (!empty($current)) {
+                                        $validIds = Kelas::where('tingkat', $state)
+                                            ->pluck('id')
+                                            ->map(fn ($id) => (string) $id)
+                                            ->toArray();
+                                        $set('kelases', array_values(array_intersect(
+                                            array_map('strval', $current),
+                                            $validIds
+                                        )));
+                                    }
+                                }
+                            }),
 
                         TextInput::make('total_bobot')
                             ->label('Target Bobot')
                             ->numeric()
                             ->suffix('poin'),
+
+                        Select::make('kelases')
+                            ->label('Target Rombel')
+                            ->placeholder('Pilih satu atau beberapa rombel / kelas sasaran...')
+                            ->helperText('Rombongan belajar sasaran yang berhak menggunakan paket bank soal ini.')
+                            ->options(function ($get) {
+                                $tingkat = $get('tingkat');
+                                $user = auth()->user();
+                                $query = Kelas::query();
+
+                                if ($user && $user->isGuru()) {
+                                    $guruKelasIds = $user->kelases()->pluck('kelas.id')->toArray();
+                                    if (!empty($guruKelasIds)) {
+                                        $query->whereIn('id', $guruKelasIds);
+                                    }
+                                }
+
+                                if (!empty($tingkat) && $tingkat !== 'Semua') {
+                                    $query->where('tingkat', $tingkat);
+                                }
+
+                                return $query->orderBy('tingkat')->orderBy('nama_kelas')->pluck('nama_kelas', 'id');
+                            })
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->columnSpan(3),
                     ]),
 
                     Grid::make(2)->schema([
@@ -1050,14 +1106,21 @@ class EditBankSoal extends Page
                     'kode_bank' => $this->record->kode_bank,
                     'mapel_id' => $this->record->mapel_id,
                     'tingkat' => $this->record->tingkat,
+                    'kelases' => $this->record->kelases()->pluck('kelas.id')->map(fn ($id) => (string) $id)->toArray(),
                     'total_bobot' => $this->record->total_bobot,
                     'deskripsi' => $this->record->deskripsi,
                     'acak_soal' => $this->record->acak_soal ?? true,
                     'acak_opsi' => $this->record->acak_opsi ?? true,
                 ])
                 ->action(function (array $data): void {
+                    $kelases = $data['kelases'] ?? [];
+                    unset($data['kelases']);
+
                     $this->record->update($data);
-                    Notification::make()->title('Informasi paket berhasil diperbarui')->success()->send();
+                    $this->record->kelases()->sync($kelases);
+                    $this->record->loadMissing(['mapel', 'kelases']);
+
+                    Notification::make()->title('Informasi paket & target rombel berhasil diperbarui')->success()->send();
                 }),
 
             Action::make('kembali')

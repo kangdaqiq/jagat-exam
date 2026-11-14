@@ -116,7 +116,7 @@ class BankSoalForm
                                 ->native(false),
 
                             Select::make('kelases')
-                                ->label('Kelas Sasaran')
+                                ->label('Target Rombel')
                                 ->relationship('kelases', 'nama_kelas')
                                 ->options($kelasOptions)
                                 ->multiple()

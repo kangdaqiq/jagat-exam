@@ -34,6 +34,13 @@
                                 Kelas {{ $record->tingkat }}
                             </span>
                         @endif
+                        @if($record->kelases && $record->kelases->isNotEmpty())
+                            @foreach($record->kelases as $kelas)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" title="Target Rombel">
+                                    {{ $kelas->nama_kelas }}
+                                </span>
+                            @endforeach
+                        @endif
                     </div>
                     <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p class="text-xs text-gray-500 dark:text-gray-400">

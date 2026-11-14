@@ -151,8 +151,10 @@ class RuangUjianTokenTest extends TestCase
         $this->buatSiswa($kelasX, '3001', $ruang);
 
         // Buat jadwal ruang yang jam mulainya 3 jam lagi (misal: 19:00 - 21:00)
-        $waktuMulai = now()->addHours(3)->format('H:i:s');
-        $waktuSelesai = now()->addHours(5)->format('H:i:s');
+        $futureMulai = now()->addHours(3);
+        $futureSelesai = $futureMulai->copy()->addHours(2);
+        $waktuMulai = $futureMulai->format('H:i:s');
+        $waktuSelesai = $futureSelesai->format('H:i:s');
 
         $ujian = Ujian::whereHas('kelas', fn ($q) => $q->where('kelas.id', $kelasX->id))->first();
 
@@ -160,7 +162,7 @@ class RuangUjianTokenTest extends TestCase
             'ruang_ujian_id' => $ruang->id,
             'ujian_id' => $ujian->id,
             'pengawas_id' => $guru->id,
-            'tanggal' => now()->toDateString(),
+            'tanggal' => $futureMulai->toDateString(),
             'sesi_ke' => 1,
             'waktu_mulai' => $waktuMulai,
             'waktu_selesai' => $waktuSelesai,
