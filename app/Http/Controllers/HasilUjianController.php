@@ -2,12 +2,36 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankSoal;
 use App\Models\HasilUjian;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class HasilUjianController extends Controller
 {
+    /**
+     * Pratinjau 1 halaman penuh seluruh butir soal & kunci jawaban (Bold + Merah)
+     * untuk Guru / Admin guna mengecek hasil final pembuatan soal.
+     */
+    public function previewGuru(BankSoal $bankSoal)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        if ($user->isGuru() && (int) $bankSoal->user_id !== (int) $user->id) {
+            abort(403, 'Akses ditolak: Anda hanya dapat mempratinjau Bank Soal milik Anda sendiri.');
+        }
+
+        $bankSoal->loadMissing(['mapel', 'user', 'kelases']);
+        $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+
+        return view('print.preview-soal-guru', [
+            'bankSoal' => $bankSoal,
+            'soals' => $soals,
+        ]);
+    }
     /**
      * Download file CSV rekap nilai yang kompatibel langsung dengan Microsoft Excel.
      */

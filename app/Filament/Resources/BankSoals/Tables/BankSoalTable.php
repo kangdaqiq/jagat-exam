@@ -78,6 +78,12 @@ class BankSoalTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+                Action::make('previewGuru')
+                    ->label('Preview Guru')
+                    ->icon(Heroicon::OutlinedDocumentText)
+                    ->color('danger')
+                    ->url(fn (BankSoal $record): string => route('bank-soal.preview-guru', ['bankSoal' => $record->id]))
+                    ->openUrlInNewTab(),
                 EditAction::make()
                     ->label('Kelola Soal')
                     ->icon(Heroicon::OutlinedPencilSquare),

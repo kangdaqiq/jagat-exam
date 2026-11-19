@@ -84,8 +84,9 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/exam/{bankSoal}', ExamRunner::class)->name('exam.run');
 Route::get('/ujian/{bankSoal}', ExamRunner::class)->name('ujian.run');
 
-// 5b. Rute Rekap Hasil Ujian, Berita Acara, Daftar Hadir, & Kartu Peserta
+// 5b. Rute Rekap Hasil Ujian, Berita Acara, Daftar Hadir, Kartu Peserta, & Preview Full Soal Guru
 Route::middleware(['auth'])->group(function () {
+    Route::get('/bank-soal/{bankSoal}/preview-guru', [HasilUjianController::class, 'previewGuru'])->name('bank-soal.preview-guru');
     Route::get('/hasil-ujians/{ujian}/export-csv', [HasilUjianController::class, 'exportCsv'])->name('hasil-ujian.export-csv');
     Route::get('/hasil-ujians/{ujian}/print', [HasilUjianController::class, 'print'])->name('hasil-ujian.print');
     Route::get('/hasil-ujians/{ujian}/berita-acara', [HasilUjianController::class, 'beritaAcara'])->name('hasil-ujian.berita-acara');

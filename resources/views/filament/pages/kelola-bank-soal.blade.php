@@ -59,7 +59,19 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                <a
+                    href="{{ route('bank-soal.preview-guru', ['bankSoal' => $record->id]) }}"
+                    target="_blank"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition shadow-sm"
+                    title="Buka pratinjau 1 halaman penuh seluruh soal & kunci jawaban (Bold Merah) untuk mengecek hasil final"
+                >
+                    <svg width="15" height="15" class="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Preview Guru (Full) ↗</span>
+                </a>
+
                 <a
                     href="{{ route('exam.run', ['bankSoal' => $record->id, 'preview' => 1]) }}"
                     target="_blank"

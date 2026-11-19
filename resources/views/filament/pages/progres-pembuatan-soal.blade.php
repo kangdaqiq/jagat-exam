@@ -504,8 +504,20 @@
                                                 </button>
                                             @endif
 
-                                            {{-- Preview Siswa --}}
+                                            {{-- Preview Full Soal Guru & Preview Siswa --}}
                                             @if($item->total_soal > 0)
+                                                <a
+                                                    href="{{ route('bank-soal.preview-guru', ['bankSoal' => $item->id]) }}"
+                                                    target="_blank"
+                                                    class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition shadow-xs"
+                                                    title="Preview 1 Halaman Full Soal Guru (Jawaban Benar Bold Merah)"
+                                                >
+                                                    <svg class="w-3.5 h-3.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                    <span>Preview Guru</span>
+                                                </a>
+
                                                 <a
                                                     href="{{ route('exam.run', ['bankSoal' => $item->id, 'preview' => 1]) }}"
                                                     target="_blank"
