@@ -84,9 +84,13 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/exam/{bankSoal}', ExamRunner::class)->name('exam.run');
 Route::get('/ujian/{bankSoal}', ExamRunner::class)->name('ujian.run');
 
-// 5b. Rute Rekap Hasil Ujian, Berita Acara, Daftar Hadir, Kartu Peserta, & Preview Full Soal Guru
+// 5a. Rute Preview Full Soal Guru (Tanpa Login, Menggunakan Kode Password SOALGURU)
+Route::match(['get', 'post'], '/preview-guru', [HasilUjianController::class, 'previewGuruIndex'])->name('bank-soal.preview-guru.index');
+Route::match(['get', 'post'], '/bank-soal/{bankSoal}/preview-guru', [HasilUjianController::class, 'previewGuru'])->name('bank-soal.preview-guru');
+Route::post('/bank-soal/{bankSoal}/preview-guru/update-kunci', [HasilUjianController::class, 'updateKunciPreviewGuru'])->name('bank-soal.preview-guru.update-kunci');
+
+// 5b. Rute Rekap Hasil Ujian, Berita Acara, Daftar Hadir, & Kartu Peserta
 Route::middleware(['auth'])->group(function () {
-    Route::get('/bank-soal/{bankSoal}/preview-guru', [HasilUjianController::class, 'previewGuru'])->name('bank-soal.preview-guru');
     Route::get('/hasil-ujians/{ujian}/export-csv', [HasilUjianController::class, 'exportCsv'])->name('hasil-ujian.export-csv');
     Route::get('/hasil-ujians/{ujian}/print', [HasilUjianController::class, 'print'])->name('hasil-ujian.print');
     Route::get('/hasil-ujians/{ujian}/berita-acara', [HasilUjianController::class, 'beritaAcara'])->name('hasil-ujian.berita-acara');

@@ -10,27 +10,230 @@ use Illuminate\Support\Str;
 class HasilUjianController extends Controller
 {
     /**
-     * Pratinjau 1 halaman penuh seluruh butir soal & kunci jawaban (Bold + Merah)
-     * untuk Guru / Admin guna mengecek hasil final pembuatan soal.
+     * Konstanta kode akses / password untuk membuka Preview Soal Guru tanpa login.
      */
-    public function previewGuru(BankSoal $bankSoal)
+    private const PREVIEW_GURU_PASSWORD = 'SOALGURU';
+
+    /**
+     * Halaman daftar paket soal untuk Preview Guru tanpa login (dilindungi password SOALGURU).
+     */
+    public function previewGuruIndex(Request $request)
     {
-        $user = auth()->user();
-        if (!$user || (!$user->isAdmin() && !$user->isGuru())) {
-            abort(403, 'Akses tidak diizinkan.');
+        if ($request->boolean('lock')) {
+            $request->session()->forget('preview_guru_unlocked');
+            return redirect()->route('bank-soal.preview-guru.index');
         }
 
-        if ($user->isGuru() && (int) $bankSoal->user_id !== (int) $user->id) {
-            abort(403, 'Akses ditolak: Anda hanya dapat mempratinjau Bank Soal milik Anda sendiri.');
+        $errorMessage = null;
+        if ($request->isMethod('post') || $request->filled('password')) {
+            $inputPassword = strtoupper(trim((string) $request->input('password', '')));
+            if ($inputPassword === self::PREVIEW_GURU_PASSWORD) {
+                $request->session()->put('preview_guru_unlocked', true);
+                return redirect()->route('bank-soal.preview-guru.index');
+            }
+            $errorMessage = 'Kode password salah. Silakan masukkan kode password yang benar.';
         }
 
-        $bankSoal->loadMissing(['mapel', 'user', 'kelases']);
-        $soals = $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get();
+        $isUnlocked = (bool) $request->session()->get('preview_guru_unlocked', false);
+
+        $bankSoals = collect();
+        if ($isUnlocked) {
+            $bankSoals = BankSoal::with(['mapel', 'user', 'kelases'])
+                ->withCount('soals')
+                ->orderBy('created_at', 'desc')
+                ->get();
+        }
 
         return view('print.preview-soal-guru', [
+            'mode' => 'index',
+            'isUnlocked' => $isUnlocked,
+            'errorMessage' => $errorMessage,
+            'bankSoals' => $bankSoals,
+            'bankSoal' => null,
+            'soals' => collect(),
+        ]);
+    }
+
+    /**
+     * Pratinjau 1 halaman penuh seluruh butir soal & kunci jawaban (Bold + Merah)
+     * yang dapat diakses tanpa login menggunakan kode password SOALGURU.
+     */
+    public function previewGuru(Request $request, BankSoal $bankSoal)
+    {
+        if ($request->boolean('lock')) {
+            $request->session()->forget('preview_guru_unlocked');
+            return redirect()->route('bank-soal.preview-guru', ['bankSoal' => $bankSoal->id]);
+        }
+
+        $errorMessage = null;
+        if ($request->isMethod('post') || $request->filled('password')) {
+            $inputPassword = strtoupper(trim((string) $request->input('password', '')));
+            if ($inputPassword === self::PREVIEW_GURU_PASSWORD) {
+                $request->session()->put('preview_guru_unlocked', true);
+                return redirect()->route('bank-soal.preview-guru', ['bankSoal' => $bankSoal->id]);
+            }
+            $errorMessage = 'Kode password salah. Silakan masukkan kode password yang benar.';
+        }
+
+        $isUnlocked = (bool) $request->session()->get('preview_guru_unlocked', false);
+
+        $bankSoal->loadMissing(['mapel', 'user', 'kelases']);
+        $soals = $isUnlocked
+            ? $bankSoal->soals()->with('opsiJawabans')->orderBy('nomor_urut', 'asc')->get()
+            : collect();
+
+        return view('print.preview-soal-guru', [
+            'mode' => 'detail',
+            'isUnlocked' => $isUnlocked,
+            'errorMessage' => $errorMessage,
             'bankSoal' => $bankSoal,
             'soals' => $soals,
+            'bankSoals' => collect(),
         ]);
+    }
+
+    /**
+     * Endpoint AJAX untuk mengubah / mengedit jawaban yang benar langsung dari halaman Preview Soal Guru.
+     */
+    public function updateKunciPreviewGuru(Request $request, BankSoal $bankSoal)
+    {
+        $isUnlocked = (bool) $request->session()->get('preview_guru_unlocked', false);
+        $user = auth()->user();
+        $isAuthGuruOrAdmin = $user && ($user->isAdmin() || $user->isGuru());
+
+        if (!$isUnlocked && !$isAuthGuruOrAdmin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sesi akses preview guru telah terkunci. Silakan masukkan kembali password SOALGURU.',
+            ], 403);
+        }
+
+        $soalId = (int) $request->input('soal_id');
+        $soal = $bankSoal->soals()->with('opsiJawabans')->find($soalId);
+
+        if (!$soal) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Butir soal tidak ditemukan.',
+            ], 404);
+        }
+
+        $nomor = $soal->nomor_urut;
+
+        // 1. Pilihan Ganda & Benar/Salah (Single Choice)
+        if (in_array($soal->tipe_soal, ['pilihan_ganda', 'benar_salah'])) {
+            $opsiId = (int) $request->input('opsi_id');
+            $targetOpsi = $soal->opsiJawabans->firstWhere('id', $opsiId);
+
+            if (!$targetOpsi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilihan jawaban tidak ditemukan.',
+                ], 404);
+            }
+
+            $soal->opsiJawabans()->update(['is_jawaban_benar' => false]);
+            $targetOpsi->update(['is_jawaban_benar' => true]);
+
+            return response()->json([
+                'success' => true,
+                'tipe_soal' => $soal->tipe_soal,
+                'soal_id' => $soal->id,
+                'active_opsi_ids' => [$targetOpsi->id],
+                'has_key' => true,
+                'message' => "Kunci jawaban Soal No. {$nomor} berhasil diubah ke pilihan {$targetOpsi->label}.",
+            ]);
+        }
+
+        // 2. Pilihan Ganda Kompleks (Multi Choice Toggle)
+        if ($soal->tipe_soal === 'pg_kompleks') {
+            $opsiId = (int) $request->input('opsi_id');
+            $targetOpsi = $soal->opsiJawabans->firstWhere('id', $opsiId);
+
+            if (!$targetOpsi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilihan jawaban tidak ditemukan.',
+                ], 404);
+            }
+
+            $newState = !$targetOpsi->is_jawaban_benar;
+            $targetOpsi->update(['is_jawaban_benar' => $newState]);
+
+            $activeIds = $soal->opsiJawabans()->where('is_jawaban_benar', true)->pluck('id')->values()->toArray();
+            $activeLabels = $soal->opsiJawabans()->where('is_jawaban_benar', true)->pluck('label')->implode(', ');
+
+            return response()->json([
+                'success' => true,
+                'tipe_soal' => $soal->tipe_soal,
+                'soal_id' => $soal->id,
+                'active_opsi_ids' => $activeIds,
+                'has_key' => !empty($activeIds),
+                'message' => !empty($activeLabels)
+                    ? "Kunci Soal No. {$nomor} diperbarui menjadi: {$activeLabels}"
+                    : "Kunci Soal No. {$nomor} dikosongkan.",
+            ]);
+        }
+
+        // 3. Menjodohkan
+        if ($soal->tipe_soal === 'menjodohkan') {
+            $pairs = (array) $request->input('pairs', []);
+            $hasAny = false;
+            foreach ($soal->opsiJawabans as $opsi) {
+                if (array_key_exists($opsi->id, $pairs)) {
+                    $val = trim((string) $pairs[$opsi->id]);
+                    $opsi->update(['pasangan_matching' => $val]);
+                    if ($val !== '') {
+                        $hasAny = true;
+                    }
+                } elseif (filled($opsi->pasangan_matching)) {
+                    $hasAny = true;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'tipe_soal' => $soal->tipe_soal,
+                'soal_id' => $soal->id,
+                'has_key' => $hasAny,
+                'message' => "Kunci pasangan menjodohkan Soal No. {$nomor} berhasil disimpan.",
+            ]);
+        }
+
+        // 4. Isian Singkat
+        if ($soal->tipe_soal === 'isian') {
+            $kunci = trim((string) $request->input('kunci_isian', ''));
+            $soal->update(['kunci_isian' => $kunci]);
+
+            return response()->json([
+                'success' => true,
+                'tipe_soal' => $soal->tipe_soal,
+                'soal_id' => $soal->id,
+                'kunci_isian' => $kunci,
+                'has_key' => $kunci !== '',
+                'message' => "Kunci jawaban isian Soal No. {$nomor} berhasil disimpan.",
+            ]);
+        }
+
+        // 5. Essay / Uraian
+        if ($soal->tipe_soal === 'essay') {
+            $rubrik = trim((string) $request->input('rubrik_essay', ''));
+            $soal->update(['rubrik_essay' => $rubrik]);
+
+            return response()->json([
+                'success' => true,
+                'tipe_soal' => $soal->tipe_soal,
+                'soal_id' => $soal->id,
+                'rubrik_essay' => $rubrik,
+                'has_key' => $rubrik !== '',
+                'message' => "Kunci / rubrik essay Soal No. {$nomor} berhasil disimpan.",
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Tipe soal tidak dikenali.',
+        ], 422);
     }
     /**
      * Download file CSV rekap nilai yang kompatibel langsung dengan Microsoft Excel.
