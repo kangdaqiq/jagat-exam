@@ -78,6 +78,15 @@ class BankSoalTable
                     ->icon(Heroicon::OutlinedUser)
                     ->toggleable(isToggledHiddenByDefault: false),
 
+                TextColumn::make('link_preview')
+                    ->label('Link Preview')
+                    ->getStateUsing(fn (BankSoal $record): string => route('bank-soal.preview-guru', ['bankSoal' => $record->id]))
+                    ->icon(Heroicon::OutlinedLink)
+                    ->color('danger')
+                    ->copyable()
+                    ->copyMessage('Link preview disalin')
+                    ->toggleable(isToggledHiddenByDefault: false),
+
                 IconColumn::make('is_active')
                     ->label('Aktif')
                     ->boolean()

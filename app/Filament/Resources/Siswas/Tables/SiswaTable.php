@@ -32,13 +32,15 @@ class SiswaTable
                     ->sortable()
                     ->weight('bold')
                     ->copyable()
-                    ->copyMessage('NIS disalin'),
+                    ->copyMessage('NIS disalin')
+                    ->toggleable(),
 
                 TextColumn::make('nama')
                     ->label('Nama Siswa')
                     ->searchable()
                     ->sortable()
-                    ->weight('semibold'),
+                    ->weight('semibold')
+                    ->toggleable(),
 
                 TextColumn::make('kelas.nama_kelas')
                     ->label('Kelas / Rombel')
@@ -46,7 +48,8 @@ class SiswaTable
                     ->color('info')
                     ->placeholder('-')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('ruangUjian.nama_ruang')
                     ->label('Ruang Ujian')
@@ -54,7 +57,8 @@ class SiswaTable
                     ->color('primary')
                     ->placeholder('Belum Diatur')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('user.email')
                     ->label('Akun Login CBT')
@@ -71,7 +75,8 @@ class SiswaTable
                     ->color('warning')
                     ->fontFamily('mono')
                     ->copyable()
-                    ->copyMessage('Password CBT disalin'),
+                    ->copyMessage('Password CBT disalin')
+                    ->toggleable(),
 
                 TextColumn::make('no_wa')
                     ->label('No. WhatsApp')
@@ -84,7 +89,8 @@ class SiswaTable
                     ->badge()
                     ->color('gray')
                     ->placeholder('CBT Pusat')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('sync_id')
                     ->label('ID Absensi')
@@ -95,7 +101,8 @@ class SiswaTable
                 IconColumn::make('is_active')
                     ->label('Aktif')
                     ->boolean()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('Disinkronkan')

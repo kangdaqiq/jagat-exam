@@ -21,18 +21,21 @@ class UsersTable
                     ->label('Nama Lengkap')
                     ->searchable()
                     ->sortable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->toggleable(),
 
                 TextColumn::make('nip')
                     ->label('NIP / ID Guru')
                     ->placeholder('-')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('email')
                     ->label('Email')
                     ->searchable()
                     ->copyable()
-                    ->copyMessage('Alamat email disalin'),
+                    ->copyMessage('Alamat email disalin')
+                    ->toggleable(),
 
                 TextColumn::make('role')
                     ->label('Peran')
@@ -47,33 +50,38 @@ class UsersTable
                         'guru' => 'Guru',
                         default => ucfirst($state),
                     })
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('phone')
                     ->label('No. WhatsApp')
                     ->placeholder('-')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('school_name')
                     ->label('Sekolah')
                     ->badge()
                     ->color('info')
                     ->placeholder('CBT Pusat')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('mapels_count')
                     ->counts('mapels')
                     ->label('Mapel Diampu')
                     ->badge()
                     ->color('primary')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('kelases_count')
                     ->counts('kelases')
                     ->label('Kelas Diajar')
                     ->badge()
                     ->color('warning')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('sync_id')
                     ->label('ID Absensi')
@@ -84,7 +92,8 @@ class UsersTable
                 IconColumn::make('is_active')
                     ->label('Aktif')
                     ->boolean()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('Terdaftar Pada')
