@@ -176,9 +176,12 @@ class AiQuestionService
     public static function getAvailableGeminiModels(): array
     {
         return [
-            'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Sangat Cepat & Paling Stabil - Rekomendasi Utama)',
+            'gemini-3.8-flash' => '🔥 Gemini 3.8 Flash (Terbaru, Super Cepat & Stabil - Rekomendasi Utama)',
+            'gemini-3.7-flash' => '⚡ Gemini 3.7 Flash (Cepat & Responsif)',
+            'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Stabil & Andal)',
             'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash (Cepat & Andal)',
             'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)',
+            'gemini-2.5-flash' => '✨ Gemini 2.5 Flash (Alternatif Stabil)',
             'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS)',
             'gemini-3.1-pro-preview' => '🔬 Gemini 3.1 Pro Preview (Alternatif Pro Terbaru)',
             'gemini-flash-latest' => '🔄 Gemini Flash Latest (Versi Terbaru Otomatis)',
@@ -419,18 +422,22 @@ class AiQuestionService
         $keys = $this->getGeminiApiKeys($apiKey);
 
         return $this->withKeyFailover($keys, function (string $activeKey) use ($chunks, $defaultBobot, $separateAnswerKeys, $params) {
-            $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
+            $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.8-flash');
             if ($primaryModel === 'gemini-2.5-pro') {
-                $primaryModel = 'gemini-3.6-flash';
+                $primaryModel = 'gemini-3.8-flash';
             }
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
             $systemPrompt = $this->buildParseSystemPrompt();
 
             $candidateModels = array_values(array_unique([
                 $primaryModel,
-                'gemini-2.5-flash',
+                'gemini-3.8-flash',
+                'gemini-3.7-flash',
                 'gemini-3.6-flash',
                 'gemini-3.5-flash',
+                'gemini-2.5-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-2.5-flash-lite',
                 'gemini-flash-latest',
             ]));
 
@@ -463,53 +470,72 @@ class AiQuestionService
 
             $lastError = null;
             $startedAt = microtime(true);
+            $completedChunks = [];
 
             foreach ($candidateModels as $model) {
-                if ((microtime(true) - $startedAt) > 60) {
+                if ((microtime(true) - $startedAt) > 65) {
+                    break;
+                }
+
+                // Hanya kirim chunk yang belum berhasil (hemat waktu & tahan lonjakan "high demand")
+                $pendingPayloads = [];
+                foreach ($chunkPayloads as $cIdx => $payload) {
+                    if (!isset($completedChunks[$cIdx])) {
+                        $pendingPayloads[$cIdx] = $payload;
+                    }
+                }
+
+                if (empty($pendingPayloads)) {
                     break;
                 }
 
                 $url = "{$baseUrl}/models/{$model}:generateContent?key={$activeKey}";
 
-                $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($chunkPayloads, $url) {
-                    foreach ($chunkPayloads as $cIdx => $payload) {
-                        $pool->as("chunk_{$cIdx}")->timeout(50)->post($url, $payload);
+                $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($pendingPayloads, $url) {
+                    foreach ($pendingPayloads as $cIdx => $payload) {
+                        $pool->as("chunk_{$cIdx}")->timeout(45)->post($url, $payload);
                     }
                 });
 
-                $allSucceeded = true;
-                $mergedResults = [];
-
-                foreach ($chunkPayloads as $cIdx => $_) {
+                foreach ($pendingPayloads as $cIdx => $_) {
                     $resp = $responses["chunk_{$cIdx}"] ?? null;
                     if (!$resp || ($resp instanceof \Throwable) || !$resp->successful()) {
-                        $allSucceeded = false;
                         if ($resp instanceof \Throwable) {
                             $lastError = $resp->getMessage();
                         } elseif ($resp) {
                             $lastError = $resp->json('error.message') ?? $resp->body();
                         }
-                        break;
+                        continue;
                     }
 
                     $rawJson = $resp->json('candidates.0.content.parts.0.text');
                     if (empty($rawJson)) {
-                        $allSucceeded = false;
                         $lastError = 'Respons teks dari Gemini kosong.';
-                        break;
+                        continue;
                     }
 
-                    $parsedChunk = $this->parseJsonResponse($rawJson, $params);
-                    foreach ($parsedChunk as $item) {
-                        $mergedResults[] = $item;
+                    try {
+                        $parsedChunk = $this->parseJsonResponse($rawJson, $params);
+                        if (!empty($parsedChunk)) {
+                            $completedChunks[$cIdx] = $parsedChunk;
+                        }
+                    } catch (\Throwable $parseErr) {
+                        $lastError = $parseErr->getMessage();
                     }
                 }
 
-                if ($allSucceeded && !empty($mergedResults)) {
+                if (count($completedChunks) === count($chunkPayloads)) {
+                    ksort($completedChunks);
+                    $mergedResults = [];
+                    foreach ($completedChunks as $chunkItems) {
+                        foreach ($chunkItems as $item) {
+                            $mergedResults[] = $item;
+                        }
+                    }
                     return $mergedResults;
                 }
 
-                Log::warning("Gemini parallel pool pada model {$model} gagal: {$lastError}. Mencoba model berikutnya...");
+                Log::warning("Gemini parallel pool pada model {$model} baru menyelesaikan " . count($completedChunks) . "/" . count($chunkPayloads) . " chunk (Error: {$lastError}). Melanjutkan sisa chunk pada model berikutnya...");
             }
 
             throw new Exception("Google Gemini API Error: " . ($lastError ?? 'Gagal memproses teks soal dengan AI.'));
@@ -1318,15 +1344,18 @@ PROMPT;
         $prompt .= "4. Kembalikan teks pembahasan langsung tanpa format JSON.";
 
         if ($provider === 'gemini') {
-            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.6-flash');
+            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.8-flash');
             if ($primaryModel === 'gemini-2.5-pro') {
-                $primaryModel = 'gemini-3.6-flash';
+                $primaryModel = 'gemini-3.8-flash';
             }
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
             $candidateModels = array_values(array_unique([
                 $primaryModel,
+                'gemini-3.8-flash',
+                'gemini-3.7-flash',
                 'gemini-3.6-flash',
                 'gemini-3.5-flash',
+                'gemini-2.5-flash',
                 'gemini-3.5-flash-lite',
                 'gemini-flash-latest',
             ]));
@@ -1399,17 +1428,21 @@ PROMPT;
 
     protected function callGeminiSingleKey(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
     {
-        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
+        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.8-flash');
         if ($primaryModel === 'gemini-2.5-pro') {
-            $primaryModel = 'gemini-3.6-flash';
+            $primaryModel = 'gemini-3.8-flash';
         }
         $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
 
         $candidateModels = array_values(array_unique([
             $primaryModel,
+            'gemini-3.8-flash',
+            'gemini-3.7-flash',
             'gemini-3.6-flash',
             'gemini-3.5-flash',
+            'gemini-2.5-flash',
             'gemini-3.5-flash-lite',
+            'gemini-2.5-flash-lite',
             'gemini-flash-latest',
         ]));
 
