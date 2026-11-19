@@ -176,16 +176,56 @@ class AiQuestionService
     public static function getAvailableGeminiModels(): array
     {
         return [
-            'gemini-3.8-flash' => '🔥 Gemini 3.8 Flash (Terbaru, Super Cepat & Stabil - Rekomendasi Utama)',
-            'gemini-3.7-flash' => '⚡ Gemini 3.7 Flash (Cepat & Responsif)',
-            'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Stabil & Andal)',
-            'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash (Cepat & Andal)',
-            'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)',
-            'gemini-2.5-flash' => '✨ Gemini 2.5 Flash (Alternatif Stabil)',
-            'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Penalaran Mendalam / Soal HOTS)',
-            'gemini-3.1-pro-preview' => '🔬 Gemini 3.1 Pro Preview (Alternatif Pro Terbaru)',
-            'gemini-flash-latest' => '🔄 Gemini Flash Latest (Versi Terbaru Otomatis)',
+            'gemini-3.1-flash-lite' => '⚡ Gemini 3.1 Flash-Lite (Tercepat ~1.5 Detik & Bebas Antrean - Rekomendasi Utama)',
+            'gemini-3-flash-preview' => '🚀 Gemini 3.0 Flash (Sangat Cepat ~4 Detik & Akurasi Tinggi)',
+            'gemini-3.5-flash-lite' => '🌱 Gemini 3.5 Flash-Lite (Stabil ~5 Detik & Bebas Antrean)',
+            'gemini-flash-lite-latest' => '🔄 Gemini Flash-Lite Latest (Versi Stabil Otomatis)',
+            'gemini-3.8-flash' => '🔥 Gemini 3.8 Flash (Otomatis Failover jika Sibuk)',
+            'gemini-3.7-flash' => '⚡ Gemini 3.7 Flash (Otomatis Failover jika Sibuk)',
+            'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Otomatis Failover jika Sibuk)',
+            'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash',
         ];
+    }
+
+    /**
+     * Daftar urutan model failover tercepat yang terbukti stabil (200 OK, 1.4s - 5.7s)
+     * dan otomatis melewati model yang sedang mengalami lonjakan trafik (503 High Demand) dalam 5 menit terakhir.
+     */
+    protected function buildOrderedCandidateModels(?string $primaryModel): array
+    {
+        $primary = $primaryModel ?: config('ai.gemini.model', 'gemini-3.1-flash-lite');
+        if (in_array($primary, ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'], true)) {
+            $primary = 'gemini-3.1-flash-lite';
+        }
+
+        $all = array_values(array_unique([
+            $primary,
+            'gemini-3.1-flash-lite',
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash-lite',
+            'gemini-flash-lite-latest',
+            'gemini-3.6-flash',
+            'gemini-3.8-flash',
+            'gemini-3.7-flash',
+        ]));
+
+        // Pisahkan model yang sehat vs model yang baru saja terkena 503 High Demand / Timeout
+        $healthy = [];
+        $busy = [];
+        foreach ($all as $m) {
+            if (Cache::has("gemini_model_busy:{$m}")) {
+                $busy[] = $m;
+            } else {
+                $healthy[] = $m;
+            }
+        }
+
+        return array_merge($healthy, $busy);
+    }
+
+    protected function markModelBusy(string $model): void
+    {
+        Cache::put("gemini_model_busy:{$model}", true, now()->addMinutes(5));
     }
 
     /**
@@ -422,24 +462,11 @@ class AiQuestionService
         $keys = $this->getGeminiApiKeys($apiKey);
 
         return $this->withKeyFailover($keys, function (string $activeKey) use ($chunks, $defaultBobot, $separateAnswerKeys, $params) {
-            $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.8-flash');
-            if ($primaryModel === 'gemini-2.5-pro') {
-                $primaryModel = 'gemini-3.8-flash';
-            }
+            $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.1-flash-lite');
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
             $systemPrompt = $this->buildParseSystemPrompt();
 
-            $candidateModels = array_values(array_unique([
-                $primaryModel,
-                'gemini-3.8-flash',
-                'gemini-3.7-flash',
-                'gemini-3.6-flash',
-                'gemini-3.5-flash',
-                'gemini-2.5-flash',
-                'gemini-3.5-flash-lite',
-                'gemini-2.5-flash-lite',
-                'gemini-flash-latest',
-            ]));
+            $candidateModels = $this->buildOrderedCandidateModels($primaryModel);
 
             // Siapkan payload per chunk
             $chunkPayloads = [];
@@ -500,6 +527,7 @@ class AiQuestionService
                 foreach ($pendingPayloads as $cIdx => $_) {
                     $resp = $responses["chunk_{$cIdx}"] ?? null;
                     if (!$resp || ($resp instanceof \Throwable) || !$resp->successful()) {
+                        $this->markModelBusy($model);
                         if ($resp instanceof \Throwable) {
                             $lastError = $resp->getMessage();
                         } elseif ($resp) {
@@ -1344,21 +1372,9 @@ PROMPT;
         $prompt .= "4. Kembalikan teks pembahasan langsung tanpa format JSON.";
 
         if ($provider === 'gemini') {
-            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.8-flash');
-            if ($primaryModel === 'gemini-2.5-pro') {
-                $primaryModel = 'gemini-3.8-flash';
-            }
+            $primaryModel = $model ?: config('ai.gemini.model', 'gemini-3.1-flash-lite');
             $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
-            $candidateModels = array_values(array_unique([
-                $primaryModel,
-                'gemini-3.8-flash',
-                'gemini-3.7-flash',
-                'gemini-3.6-flash',
-                'gemini-3.5-flash',
-                'gemini-2.5-flash',
-                'gemini-3.5-flash-lite',
-                'gemini-flash-latest',
-            ]));
+            $candidateModels = $this->buildOrderedCandidateModels($primaryModel);
             $primaryError = null;
             $lastError = null;
 
@@ -1366,7 +1382,7 @@ PROMPT;
                 try {
                     $url = "{$baseUrl}/models/{$candidate}:generateContent?key={$key}";
 
-                    $response = Http::timeout(45)->post($url, [
+                    $response = Http::timeout(20)->post($url, [
                         'contents' => [
                             ['role' => 'user', 'parts' => [['text' => $prompt]]]
                         ],
@@ -1382,12 +1398,14 @@ PROMPT;
                         }
                     }
 
+                    $this->markModelBusy($candidate);
                     $err = $response->json('error.message') ?? $response->body();
                     if ($candidate === $primaryModel) {
                         $primaryError = $err;
                     }
                     $lastError = $err;
                 } catch (\Throwable $e) {
+                    $this->markModelBusy($candidate);
                     if ($candidate === $primaryModel) {
                         $primaryError = $e->getMessage();
                     }
@@ -1428,23 +1446,9 @@ PROMPT;
 
     protected function callGeminiSingleKey(string $apiKey, string $systemPrompt, string $userPrompt, array $params): array
     {
-        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.8-flash');
-        if ($primaryModel === 'gemini-2.5-pro') {
-            $primaryModel = 'gemini-3.8-flash';
-        }
+        $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.1-flash-lite');
         $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
-
-        $candidateModels = array_values(array_unique([
-            $primaryModel,
-            'gemini-3.8-flash',
-            'gemini-3.7-flash',
-            'gemini-3.6-flash',
-            'gemini-3.5-flash',
-            'gemini-2.5-flash',
-            'gemini-3.5-flash-lite',
-            'gemini-2.5-flash-lite',
-            'gemini-flash-latest',
-        ]));
+        $candidateModels = $this->buildOrderedCandidateModels($primaryModel);
 
         $payload = [
             'contents' => [
@@ -1472,9 +1476,12 @@ PROMPT;
                 break;
             }
 
+            // Timeout lebih singkat (12s) pada model non-lite yang rentan antre panjang agar cepat failover ke model lite (1.5s)
+            $perModelTimeout = str_contains($model, 'lite') || $model === 'gemini-3-flash-preview' ? 28 : 12;
+
             try {
                 $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
-                $response = Http::timeout(35)->post($url, $payload);
+                $response = Http::timeout($perModelTimeout)->post($url, $payload);
 
                 if ($response->successful()) {
                     $rawText = $response->json('candidates.0.content.parts.0.text');
@@ -1483,6 +1490,7 @@ PROMPT;
                     }
                 }
 
+                $this->markModelBusy($model);
                 $err = $response->json('error.message') ?? $response->body();
                 if ($model === $primaryModel) {
                     $primaryError = $err;
@@ -1490,6 +1498,7 @@ PROMPT;
                 $lastError = $err;
                 Log::warning("Gemini model {$model} respons gagal: {$err}. Mencoba model alternatif...");
             } catch (\Throwable $e) {
+                $this->markModelBusy($model);
                 if ($model === $primaryModel) {
                     $primaryError = $e->getMessage();
                 }

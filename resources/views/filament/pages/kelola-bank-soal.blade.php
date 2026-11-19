@@ -1802,14 +1802,14 @@
                             wire:model="ai_model"
                             class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
                         >
-                            <option value="gemini-3.8-flash">🔥 Gemini 3.8 Flash (Terbaru, Super Cepat &amp; Stabil - Rekomendasi Utama)</option>
-                            <option value="gemini-3.7-flash">⚡ Gemini 3.7 Flash (Cepat &amp; Responsif)</option>
-                            <option value="gemini-3.6-flash">⚡ Gemini 3.6 Flash (Stabil &amp; Andal)</option>
-                            <option value="gemini-3.5-flash">🚀 Gemini 3.5 Flash (Cepat &amp; Andal)</option>
-                            <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)</option>
-                            <option value="gemini-2.5-flash">✨ Gemini 2.5 Flash (Alternatif Stabil)</option>
-                            <option value="gemini-flash-latest">🔄 Gemini Flash Latest (Versi Terbaru Otomatis)</option>
-                            <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal Kompleks)</option>
+                            <option value="gemini-3.1-flash-lite">⚡ Gemini 3.1 Flash-Lite (Tercepat ~1.5 Detik &amp; Bebas Antrean - Rekomendasi Utama)</option>
+                            <option value="gemini-3-flash-preview">🚀 Gemini 3.0 Flash (Sangat Cepat ~4 Detik &amp; Akurasi Tinggi)</option>
+                            <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Stabil ~5 Detik &amp; Bebas Antrean)</option>
+                            <option value="gemini-flash-lite-latest">🔄 Gemini Flash-Lite Latest (Versi Stabil Otomatis)</option>
+                            <option value="gemini-3.8-flash">🔥 Gemini 3.8 Flash (Otomatis Failover jika Sibuk)</option>
+                            <option value="gemini-3.7-flash">⚡ Gemini 3.7 Flash (Otomatis Failover jika Sibuk)</option>
+                            <option value="gemini-3.6-flash">⚡ Gemini 3.6 Flash (Otomatis Failover jika Sibuk)</option>
+                            <option value="gemini-3.5-flash">🚀 Gemini 3.5 Flash</option>
                         </select>
                     </div>
 
@@ -2178,14 +2178,14 @@
                                     wire:model="ai_model"
                                     class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 font-medium text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-emerald-500"
                                 >
-                                    <option value="gemini-3.8-flash">🔥 Gemini 3.8 Flash (Terbaru, Super Cepat &amp; Stabil - Rekomendasi Utama)</option>
-                                    <option value="gemini-3.7-flash">⚡ Gemini 3.7 Flash (Cepat &amp; Responsif)</option>
-                                    <option value="gemini-3.6-flash">⚡ Gemini 3.6 Flash (Stabil &amp; Andal)</option>
-                                    <option value="gemini-3.5-flash">🚀 Gemini 3.5 Flash (Cepat &amp; Andal)</option>
-                                    <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Hemat Kuota)</option>
-                                    <option value="gemini-2.5-flash">✨ Gemini 2.5 Flash (Alternatif Stabil)</option>
-                                    <option value="gemini-flash-latest">🔄 Gemini Flash Latest (Versi Terbaru Otomatis)</option>
-                                    <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Penalaran Mendalam / Soal Kompleks)</option>
+                                    <option value="gemini-3.1-flash-lite">⚡ Gemini 3.1 Flash-Lite (Tercepat ~1.5 Detik &amp; Bebas Antrean - Rekomendasi Utama)</option>
+                                    <option value="gemini-3-flash-preview">🚀 Gemini 3.0 Flash (Sangat Cepat ~4 Detik &amp; Akurasi Tinggi)</option>
+                                    <option value="gemini-3.5-flash-lite">🌱 Gemini 3.5 Flash-Lite (Stabil ~5 Detik &amp; Bebas Antrean)</option>
+                                    <option value="gemini-flash-lite-latest">🔄 Gemini Flash-Lite Latest (Versi Stabil Otomatis)</option>
+                                    <option value="gemini-3.8-flash">🔥 Gemini 3.8 Flash (Otomatis Failover jika Sibuk)</option>
+                                    <option value="gemini-3.7-flash">⚡ Gemini 3.7 Flash (Otomatis Failover jika Sibuk)</option>
+                                    <option value="gemini-3.6-flash">⚡ Gemini 3.6 Flash (Otomatis Failover jika Sibuk)</option>
+                                    <option value="gemini-3.5-flash">🚀 Gemini 3.5 Flash</option>
                                 </select>
                             </div>
                         </div>
