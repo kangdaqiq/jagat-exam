@@ -145,20 +145,28 @@ class HasilUjianController extends Controller
             ]);
         }
 
-        // 2. Pilihan Ganda Kompleks (Multi Choice Toggle)
+        // 2. Pilihan Ganda Kompleks (Multi Choice)
         if ($soal->tipe_soal === 'pg_kompleks') {
-            $opsiId = (int) $request->input('opsi_id');
-            $targetOpsi = $soal->opsiJawabans->firstWhere('id', $opsiId);
+            if ($request->has('opsi_ids')) {
+                $selectedIds = array_map('intval', (array) $request->input('opsi_ids', []));
+                $soal->opsiJawabans()->update(['is_jawaban_benar' => false]);
+                if (!empty($selectedIds)) {
+                    $soal->opsiJawabans()->whereIn('id', $selectedIds)->update(['is_jawaban_benar' => true]);
+                }
+            } else {
+                $opsiId = (int) $request->input('opsi_id');
+                $targetOpsi = $soal->opsiJawabans->firstWhere('id', $opsiId);
 
-            if (!$targetOpsi) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Pilihan jawaban tidak ditemukan.',
-                ], 404);
+                if (!$targetOpsi) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Pilihan jawaban tidak ditemukan.',
+                    ], 404);
+                }
+
+                $newState = !$targetOpsi->is_jawaban_benar;
+                $targetOpsi->update(['is_jawaban_benar' => $newState]);
             }
-
-            $newState = !$targetOpsi->is_jawaban_benar;
-            $targetOpsi->update(['is_jawaban_benar' => $newState]);
 
             $activeIds = $soal->opsiJawabans()->where('is_jawaban_benar', true)->pluck('id')->values()->toArray();
             $activeLabels = $soal->opsiJawabans()->where('is_jawaban_benar', true)->pluck('label')->implode(', ');
@@ -170,7 +178,7 @@ class HasilUjianController extends Controller
                 'active_opsi_ids' => $activeIds,
                 'has_key' => !empty($activeIds),
                 'message' => !empty($activeLabels)
-                    ? "Kunci Soal No. {$nomor} diperbarui menjadi: {$activeLabels}"
+                    ? "Kunci Soal No. {$nomor} berhasil disimpan: {$activeLabels}"
                     : "Kunci Soal No. {$nomor} dikosongkan.",
             ]);
         }

@@ -1021,7 +1021,7 @@
                         <strong>Petunjuk Pengecekan Final Guru:</strong> Seluruh soal ditampilkan langsung dalam 1 halaman penuh. Jawaban yang benar ditandai dengan <span class="legend-sample">Teks Tebal (Bold) &amp; Berwarna Merah</span>.
                     </div>
                     <div class="no-print" style="margin-top: 4px; font-size: 12px; color: #991b1b;">
-                        &#9998; <strong>Edit Cepat Jawaban Benar:</strong> Klik langsung pada baris pilihan jawaban (A/B/C/D/E) atau tombol <em>Edit Jawaban Benar</em> untuk mengubah kunci jawaban secara langsung tanpa meninggalkan halaman ini.
+                        &#9998; <strong>Cara Mengubah Jawaban Benar:</strong> Klik tombol <strong>"&#9998; Ganti Kunci Jawaban"</strong> di pojok kanan atas soal yang ingin diubah, pilih kunci baru, lalu klik <strong>"Simpan Kunci"</strong> (aman dari salah pencet saat scroll).
                     </div>
                 </div>
                 <div style="font-size: 11.5px; font-weight: 700;">
@@ -1068,6 +1068,14 @@
 
                             <div class="soal-header-right">
                                 <span>Bobot: {{ (float) $soal->bobot_nilai }} Poin</span>
+                                <button
+                                    type="button"
+                                    onclick="toggleInlineEditor({{ $soal->id }})"
+                                    class="btn-edit-inline no-print"
+                                    title="Buka panel untuk mengganti kunci jawaban soal ini"
+                                >
+                                    &#9998; Ganti Kunci Jawaban
+                                </button>
                             </div>
                         </div>
 
@@ -1103,9 +1111,7 @@
                                         <div
                                             id="opsi-item-{{ $opsi->id }}"
                                             data-opsi-id="{{ $opsi->id }}"
-                                            onclick="pilihKunciOpsi({{ $soal->id }}, {{ $opsi->id }}, '{{ $soal->tipe_soal }}')"
-                                            class="opsi-item clickable-opsi {{ $isBenar ? 'is-correct' : '' }}"
-                                            title="Klik untuk menjadikan pilihan {{ $opsi->label }} sebagai jawaban benar"
+                                            class="opsi-item {{ $isBenar ? 'is-correct' : '' }}"
                                         >
                                             <span class="opsi-label">{{ $opsi->label }}.</span>
                                             <div class="opsi-teks {{ $soal->is_rtl ? 'arabic-text' : '' }}">
@@ -1117,11 +1123,51 @@
                                                 {!! $opsi->teks_opsi !!}
                                             </div>
                                             <span class="kunci-tag">&#10003; JAWABAN BENAR</span>
-                                            <span class="set-kunci-btn no-print">
-                                                &#9998; {{ $soal->tipe_soal === 'pg_kompleks' ? 'Toggle Kunci' : 'Jadikan Kunci' }}
-                                            </span>
                                         </div>
                                     @endforeach
+                                </div>
+
+                                {{-- Panel Khusus Ganti Kunci (Hanya muncul saat tombol "Ganti Kunci Jawaban" diklik) --}}
+                                <div id="inline-editor-{{ $soal->id }}" class="inline-editor-area no-print" style="background: #fff1f2; border: 1.5px solid #fda4af; border-radius: 10px; padding: 12px 14px; margin-top: 12px;">
+                                    <div style="font-size: 12px; font-weight: 800; color: #9f1239; margin-bottom: 8px;">
+                                        Pilih Kunci Jawaban Baru untuk Soal No. {{ $nomor }}:
+                                    </div>
+                                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                        @foreach($soal->opsiJawabans as $opsi)
+                                            <label
+                                                style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: 1.5px solid #fda4af; background: #ffffff; cursor: pointer; font-size: 13px; font-weight: 800; color: #0f172a; user-select: none;"
+                                            >
+                                                @if($soal->tipe_soal === 'pg_kompleks')
+                                                    <input
+                                                        type="checkbox"
+                                                        name="kunci_opsi_{{ $soal->id }}[]"
+                                                        value="{{ $opsi->id }}"
+                                                        class="kunci-choice-{{ $soal->id }}"
+                                                        {{ $opsi->is_jawaban_benar ? 'checked' : '' }}
+                                                        style="width: 16px; height: 16px; accent-color: #dc2626; cursor: pointer;"
+                                                    >
+                                                @else
+                                                    <input
+                                                        type="radio"
+                                                        name="kunci_opsi_{{ $soal->id }}"
+                                                        value="{{ $opsi->id }}"
+                                                        class="kunci-choice-{{ $soal->id }}"
+                                                        {{ $opsi->is_jawaban_benar ? 'checked' : '' }}
+                                                        style="width: 16px; height: 16px; accent-color: #dc2626; cursor: pointer;"
+                                                    >
+                                                @endif
+                                                <span>Pilihan {{ $opsi->label }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                        <button type="button" onclick="toggleInlineEditor({{ $soal->id }})" class="btn btn-close" style="padding: 6px 14px;">
+                                            Batal
+                                        </button>
+                                        <button type="button" onclick="simpanGantiKunciOpsi({{ $soal->id }}, '{{ $soal->tipe_soal }}')" class="btn btn-studio" style="padding: 6px 16px; background: #dc2626;">
+                                            &#10003; Simpan Kunci Baru
+                                        </button>
+                                    </div>
                                 </div>
 
                             @elseif($soal->tipe_soal === 'menjodohkan')
@@ -1280,17 +1326,23 @@
                 }
             }
 
-            async function pilihKunciOpsi(soalId, opsiId, tipeSoal) {
+            async function simpanGantiKunciOpsi(soalId, tipeSoal) {
                 const listEl = document.getElementById('opsi-list-' + soalId);
-                const clickedEl = document.getElementById('opsi-item-' + opsiId);
-                if (!listEl || !clickedEl) return;
+                if (!listEl) return;
 
-                // Optimistic UI update (0ms)
+                const checkedInputs = Array.from(document.querySelectorAll('.kunci-choice-' + soalId + ':checked'));
+                const selectedIds = checkedInputs.map(inp => Number(inp.value));
+
+                if (tipeSoal !== 'pg_kompleks' && selectedIds.length === 0) {
+                    showToast('Pilih salah satu opsi jawaban terlebih dahulu.', true);
+                    return;
+                }
+
+                const payload = { soal_id: soalId };
                 if (tipeSoal === 'pg_kompleks') {
-                    clickedEl.classList.toggle('is-correct');
+                    payload.opsi_ids = selectedIds;
                 } else {
-                    listEl.querySelectorAll('.opsi-item').forEach(el => el.classList.remove('is-correct'));
-                    clickedEl.classList.add('is-correct');
+                    payload.opsi_id = selectedIds[0];
                 }
 
                 try {
@@ -1301,10 +1353,7 @@
                             'Accept': 'application/json',
                             'X-CSRF-TOKEN': csrfToken
                         },
-                        body: JSON.stringify({
-                            soal_id: soalId,
-                            opsi_id: opsiId
-                        })
+                        body: JSON.stringify(payload)
                     });
 
                     const data = await res.json();
@@ -1315,6 +1364,7 @@
                             el.classList.toggle('is-correct', activeIds.includes(id));
                         });
                         updateCardKeyStatus(soalId, !!data.has_key);
+                        toggleInlineEditor(soalId);
                         showToast('✓ ' + data.message);
                     } else {
                         showToast(data.message || 'Gagal menyimpan perubahan kunci jawaban.', true);
