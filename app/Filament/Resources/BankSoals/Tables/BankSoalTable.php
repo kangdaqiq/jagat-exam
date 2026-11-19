@@ -22,7 +22,8 @@ class BankSoalTable
                     ->weight('bold')
                     ->grow()
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('kode_bank')
                     ->label('Kode Soal')
@@ -31,7 +32,8 @@ class BankSoalTable
                     ->weight('bold')
                     ->copyable()
                     ->copyMessage('Kode soal disalin')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('mapel.nama_mapel')
                     ->label('Mata Pelajaran')
@@ -39,19 +41,22 @@ class BankSoalTable
                     ->color('primary')
                     ->icon(Heroicon::OutlinedBookOpen)
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('kelases.nama_kelas')
                     ->label('Target Rombel')
                     ->badge()
                     ->color('warning')
-                    ->separator(', '),
+                    ->separator(', ')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('tingkat')
                     ->label('Tingkat')
                     ->badge()
                     ->color('gray')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('soals_count')
                     ->label('Jumlah Butir')
@@ -59,7 +64,8 @@ class BankSoalTable
                     ->badge()
                     ->color('success')
                     ->icon(Heroicon::OutlinedDocumentText)
-                    ->formatStateUsing(fn ($state): string => ($state ?? 0) . ' Soal'),
+                    ->formatStateUsing(fn ($state): string => ($state ?? 0) . ' Soal')
+                    ->toggleable(),
 
                 TextColumn::make('total_bobot')
                     ->label('Target Bobot')
@@ -74,7 +80,8 @@ class BankSoalTable
 
                 IconColumn::make('is_active')
                     ->label('Aktif')
-                    ->boolean(),
+                    ->boolean()
+                    ->toggleable(),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
