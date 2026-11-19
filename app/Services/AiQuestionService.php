@@ -316,6 +316,13 @@ class AiQuestionService
                 $results = $this->reconcileAnswerKeys($results, $separateAnswerKeys);
             }
 
+            // Distribusi otomatis teks bacaan/wacana bersama (misal "Bacaan untuk soal nomor 1-2", "4-6", dst.)
+            // ke setiap nomor soal terkait agar aman saat soal diacak di layar siswa
+            if (!empty($results)) {
+                $sharedInfo = $this->extractSharedPassagesFromRawText($rawText);
+                $results = $this->distributeSharedPassagesToSoals($results, $sharedInfo['passages']);
+            }
+
             $this->lastParseSource = 'ai';
             return $results;
         } catch (\Throwable $e) {
@@ -371,8 +378,8 @@ class AiQuestionService
     {
         $keys = [];
 
-        // 1. Ekstrak dari tabel Markdown (contoh: | 1 | B | 14 | D |)
-        if (preg_match_all('/\|\s*(\d{1,3})\s*\|\s*([A-Ea-e])\s*(?=\||$)/m', $text, $tableMatches, PREG_SET_ORDER)) {
+        // 1. Ekstrak dari tabel Markdown (contoh: | 1 | B | 14 | D | atau | 10 | A* |)
+        if (preg_match_all('/\|\s*(\d{1,3})\s*\|\s*\*?([A-Ea-e])\*?\s*(?=\||$)/m', $text, $tableMatches, PREG_SET_ORDER)) {
             foreach ($tableMatches as $m) {
                 $keys[(int) $m[1]] = strtoupper(trim($m[2]));
             }
@@ -382,7 +389,7 @@ class AiQuestionService
         if (preg_match('/(?:^|\n)[ \t]*(?:#{1,4}[ \t]*)?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*(?:Jawaban)?|Answer\s*Key|KUNCI)[ \t]*(?:[:=-][ \t]*|\r?\n)([\s\S]*)$/i', $text, $secMatch)) {
             $kunciText = $secMatch[1];
 
-            if (preg_match_all('/(?:^|\s|,|;)(\d{1,3})\s*(?:[\.\)\:\=\-]|(?:\s+))\s*([A-Ea-e])(?=\s|,|;|$)/m', $kunciText, $listMatches, PREG_SET_ORDER)) {
+            if (preg_match_all('/(?:^|\s|,|;)(\d{1,3})\s*(?:[\.\)\:\=\-]|(?:\s+))\s*\*?([A-Ea-e])\*?(?=\s|,|;|$)/m', $kunciText, $listMatches, PREG_SET_ORDER)) {
                 foreach ($listMatches as $m) {
                     $num = (int) $m[1];
                     if (!isset($keys[$num])) {
@@ -393,6 +400,304 @@ class AiQuestionService
         }
 
         return $keys;
+    }
+
+    /**
+     * Ekstrak blok wacana / teks bacaan bersama yang digunakan untuk beberapa nomor soal sekaligus
+     * (misal: "### Bacaan untuk soal nomor 1–2", "Teks untuk soal nomor 4 - 6", "Wacana soal no. 7 s.d. 9").
+     *
+     * Mengembalikan:
+     * - 'passages': [nomor_soal => ['html' => string, 'plain' => string]]
+     * - 'cleaned_text': teks sumber yang sudah dibersihkan dari blok wacana di sela-sela soal
+     *   agar tidak tertempel ke ekor opsi jawaban soal sebelumnya.
+     */
+    public function extractSharedPassagesFromRawText(string $rawText): array
+    {
+        $text = str_replace(["\r\n", "\r"], "\n", $rawText);
+        $lines = explode("\n", $text);
+
+        $passagesByNumber = [];
+        $cleanedLines = [];
+
+        $isCollectingPassage = false;
+        $currentRange = [];
+        $currentPassageLines = [];
+
+        $headerRegex = '/^(?:[ \t]*#{1,6}[ \t]*|[ \t]*\*{1,2}[ \t]*)?(?:(?:Bacalah|Perhatikan|Cermati)[ \t]+)?(?:teks|bacaan|wacana|kutipan(?:\s+\w+)?|cerita|puisi|dialog|artikel|paragraf)[ \t]+(?:berikut[ \t]+)?(?:ini[ \t]+)?(?:untuk[ \t]+(?:menjawab[ \t]+)?)?(?:soal|pertanyaan)[ \t]*(?:nomor|no\.?)?[ \t]*(\d{1,3})[ \t]*(?:[\-\x{2013}\x{2014}]|s\.?d\.?|s\/d|sampai(?:\s+dengan)?|hingga|dan|,)[ \t]*(\d{1,3})(?:[ \t]*(?:,|\s+dan\s+)[ \t]*(\d{1,3}))?[^\n]*$/iu';
+
+        $flushPassage = function () use (&$isCollectingPassage, &$currentRange, &$currentPassageLines, &$passagesByNumber) {
+            if (!$isCollectingPassage || empty($currentRange)) {
+                $isCollectingPassage = false;
+                $currentRange = [];
+                $currentPassageLines = [];
+                return;
+            }
+
+            $rawPassage = trim(implode("\n", $currentPassageLines));
+            if ($rawPassage !== '') {
+                $html = $this->formatPassageToHtml($rawPassage);
+                $plain = trim(strip_tags($html));
+                foreach ($currentRange as $qNum) {
+                    $passagesByNumber[$qNum] = [
+                        'html' => $html,
+                        'plain' => $plain,
+                        'raw' => $rawPassage,
+                    ];
+                }
+            }
+
+            $isCollectingPassage = false;
+            $currentRange = [];
+            $currentPassageLines = [];
+        };
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            // Cek apakah baris ini adalah header "Bacaan untuk soal nomor X-Y"
+            if (preg_match($headerRegex, $trimmed, $m)) {
+                $flushPassage();
+
+                $startNum = (int) $m[1];
+                $endNum = !empty($m[3]) ? (int) $m[3] : (int) $m[2];
+                if ($startNum > 0 && $endNum >= $startNum && ($endNum - $startNum) <= 25) {
+                    $isCollectingPassage = true;
+                    $currentRange = range($startNum, $endNum);
+                    $currentPassageLines = [];
+                    continue;
+                }
+            }
+
+            if ($isCollectingPassage) {
+                $expectedStart = $currentRange[0] ?? 1;
+                // Berhenti mengumpulkan wacana ketika bertemu awal butir soal (misal "**1.** " atau "4. ")
+                if (preg_match('/^(?:\*{1,2})?(?:Soal\s*(?:No\.?)?\s*)?(\d{1,3})[\.\)](?:\*{1,2})?\s+/i', $trimmed, $qm)) {
+                    $detectedNum = (int) $qm[1];
+                    if ($detectedNum === $expectedStart || in_array($detectedNum, $currentRange, true)) {
+                        $flushPassage();
+                        $cleanedLines[] = $line;
+                        continue;
+                    }
+                }
+
+                // Berhenti juga jika bertemu section baru (misal "## B. KUNCI JAWABAN")
+                if (preg_match('/^#{1,3}\s*(?:[A-Z]\.?\s*)?(?:Kunci\s*Jawaban|Essay|Uraian)/i', $trimmed)) {
+                    $flushPassage();
+                    $cleanedLines[] = $line;
+                    continue;
+                }
+
+                $currentPassageLines[] = $line;
+                continue;
+            }
+
+            $cleanedLines[] = $line;
+        }
+
+        $flushPassage();
+
+        return [
+            'passages' => $passagesByNumber,
+            'cleaned_text' => implode("\n", $cleanedLines),
+        ];
+    }
+
+    /**
+     * Format teks wacana / bacaan bersama menjadi kotak HTML stimulus yang rapi.
+     */
+    protected function formatPassageToHtml(string $rawPassage): string
+    {
+        $paragraphs = preg_split('/\n\s*\n/', trim($rawPassage)) ?: [];
+        $pTags = [];
+
+        foreach ($paragraphs as $p) {
+            $p = trim($p);
+            if ($p === '') continue;
+            $pTags[] = '<p style="margin-bottom: 8px; text-align: justify;">' . $this->convertSimpleMarkdownToHtml($p) . '</p>';
+        }
+
+        $innerHtml = implode("\n", $pTags);
+
+        return '<div class="cbt-wacana-box" style="padding: 12px 14px; margin-bottom: 12px; border-radius: 10px; border: 1px solid #cbd5e1; border-left: 4px solid #3b82f6; background-color: #f8fafc;">'
+            . '<p style="font-size: 12px; font-weight: 700; color: #1e40af; margin-bottom: 6px;">Bacalah teks berikut untuk menjawab soal ini!</p>'
+            . $innerHtml
+            . '</div>';
+    }
+
+    /**
+     * Konversi markdown sederhana (**bold**, *italic*, newline) ke HTML aman.
+     */
+    protected function convertSimpleMarkdownToHtml(string $text): string
+    {
+        $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Bold **teks**
+        $escaped = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $escaped);
+        // Italic *teks*
+        $escaped = preg_replace('/(?<!\*)\*([^\*\n]+?)\*(?!\*)/', '<em>$1</em>', $escaped);
+
+        return nl2br($escaped);
+    }
+
+    /**
+     * Sematkan teks bacaan bersama ke setiap butir soal yang masuk dalam rentang nomor soal,
+     * termasuk mendeteksi soal lanjutan yang merujuk ke bacaan pada soal sebelumnya (misal:
+     * "Perhatikan kembali kutipan cerpen pada soal nomor 30!" atau "dalam cerpen di atas").
+     */
+    public function distributeSharedPassagesToSoals(array $soals, array $passagesByNumber): array
+    {
+        $activePassageByNum = $passagesByNumber;
+
+        foreach ($soals as $idx => &$soal) {
+            $num = $idx + 1;
+            $pertanyaan = (string) ($soal['pertanyaan'] ?? '');
+
+            // 1. Bersihkan kalimat header lama "Bacaan untuk soal nomor X-Y" jika AI terlanjur memasukkannya
+            $pertanyaan = preg_replace(
+                '/(?:<p[^>]*>\s*)?(?:#{1,6}\s*|\*{1,2}\s*)?(?:Bacaan|Teks|Wacana)\s+untuk\s+(?:menjawab\s+)?soal\s*(?:nomor|no\.?)?\s*\d{1,3}\s*(?:[\-\x{2013}\x{2014}]|s\.?d\.?|sampai|hingga|dan)\s*\d{1,3}[^<\n]*(?:<\/p>)?/iu',
+                '',
+                $pertanyaan
+            );
+
+            // 2. Jika nomor soal ini terdaftar pada rentang "Bacaan untuk soal nomor X-Y"
+            if (isset($passagesByNumber[$num])) {
+                $passage = $passagesByNumber[$num];
+                if (!$this->pertanyaanAlreadyContainsPassage($pertanyaan, $passage['raw'] ?? $passage['plain'])) {
+                    $pertanyaan = $passage['html'] . "\n" . trim($pertanyaan);
+                }
+                $activePassageByNum[$num] = $passage;
+                $soal['pertanyaan'] = $pertanyaan;
+                continue;
+            }
+
+            // 3. Cek apakah soal ini memiliki bacaan/kutipan panjang sendiri di dalamnya
+            //    (misal Soal 27: "Bacalah teks berikut ini! [3 paragraf cerpen] Tokoh aku dalam penggalan cerpen...")
+            $embedded = $this->extractEmbeddedPassageFromQuestion($pertanyaan);
+            if ($embedded !== null) {
+                $activePassageByNum[$num] = $embedded;
+                continue;
+            }
+
+            // 4. Cek apakah soal ini merujuk secara eksplisit ke nomor soal lain
+            //    (misal Soal 31: "Perhatikan kembali kutipan cerpen pada soal nomor 30!")
+            if (preg_match('/(?:perhatikan|bacalah|cermati|berdasarkan|lihat)?[^\.!\?\n<]*?\b(?:pada\s+)?soal\s*(?:nomor|no\.?)\s*(\d{1,3})\s*[!\.]?/iu', strip_tags($pertanyaan), $refMatch)) {
+                $refNum = (int) $refMatch[1];
+                if (isset($activePassageByNum[$refNum])) {
+                    $refPassage = $activePassageByNum[$refNum];
+                    // Hapus kalimat rujukan "Perhatikan kembali ... pada soal nomor 30!" karena nomor soal akan diacak
+                    $pertanyaan = preg_replace(
+                        '/(?:<p[^>]*>\s*)?(?:perhatikan|bacalah|cermati|berdasarkan|lihat)?[^\.!\?\n<]*?\b(?:pada\s+)?soal\s*(?:nomor|no\.?)\s*' . $refNum . '\s*[!\.]?(?:\s*<\/p>|\s*<br\s*\/?>)?/iu',
+                        '',
+                        $pertanyaan
+                    );
+                    if (!$this->pertanyaanAlreadyContainsPassage($pertanyaan, $refPassage['raw'] ?? $refPassage['plain'])) {
+                        $pertanyaan = $refPassage['html'] . "\n" . trim($pertanyaan);
+                    }
+                    $activePassageByNum[$num] = $refPassage;
+                    $soal['pertanyaan'] = $pertanyaan;
+                    continue;
+                }
+            }
+
+            // 5. Cek apakah soal ini merupakan soal pendek (tanpa wacana sendiri) yang merujuk ke wacana soal tepat sebelumnya (N-1)
+            //    Contoh:
+            //    - Soal 10: "Pembenaran berupa alasan yang sesuai dengan isi teks tersebut adalah ...." (setelah bacaan 7-9)
+            //    - Soal 28: "Kata sepenuh hati dalam cerpen di atas bermakna ...." (setelah cerpen di Soal 27)
+            //    - Soal 3: Mengutip 1 kalimat dari wacana 1-2 dan menanyakan "menghubungkannya dengan gagasan pada kalimat sebelumnya"
+            $prevNum = $num - 1;
+            if (isset($activePassageByNum[$prevNum])) {
+                $prevPassage = $activePassageByNum[$prevNum];
+                $plainPertanyaan = trim(html_entity_decode(strip_tags($pertanyaan), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $hasOwnIntro = (bool) preg_match('/^(?:bacalah|perhatikan|cermati)\s+(?:teks|wacana|bacaan|paragraf|kutipan\s+cerpen|cerita|iklan|poster|kalimat-kalimat|pernyataan)\s+(?:berikut|di\s+bawah)/iu', $plainPertanyaan);
+
+                $isShortOrphanReference = !$hasOwnIntro
+                    && mb_strlen($plainPertanyaan) < 230
+                    && preg_match('/\b(?:teks\s+tersebut|bacaan\s+tersebut|wacana\s+tersebut|cerpen\s+di\s+atas|cerpen\s+tersebut|teks\s+di\s+atas|cerita\s+di\s+atas|kutipan\s+di\s+atas)\b/iu', $plainPertanyaan);
+
+                $isQuoteFromPrevPassage = false;
+                if (
+                    preg_match('/\b(?:kalimat\s+sebelumnya|paragraf\s+sebelumnya|dalam\s+wacana)\b/iu', $plainPertanyaan)
+                    && preg_match('/"([^"]{25,})"/u', $plainPertanyaan, $qm)
+                ) {
+                    $quotedSnippet = mb_substr(trim($qm[1]), 0, 35);
+                    if ($quotedSnippet !== '' && mb_stripos($prevPassage['raw'] ?? $prevPassage['plain'], $quotedSnippet) !== false) {
+                        $isQuoteFromPrevPassage = true;
+                    }
+                }
+
+                if ($isShortOrphanReference || $isQuoteFromPrevPassage) {
+                    if (!$this->pertanyaanAlreadyContainsPassage($pertanyaan, $prevPassage['raw'] ?? $prevPassage['plain'])) {
+                        $pertanyaan = $prevPassage['html'] . "\n" . trim($pertanyaan);
+                    }
+                    $activePassageByNum[$num] = $prevPassage;
+                    $soal['pertanyaan'] = $pertanyaan;
+                }
+            }
+        }
+        unset($soal);
+
+        return $soals;
+    }
+
+    /**
+     * Cek apakah teks pertanyaan sudah memuat isi wacana tersebut.
+     */
+    protected function pertanyaanAlreadyContainsPassage(string $pertanyaanHtml, string $passagePlain): bool
+    {
+        $cleanQuestion = preg_replace('/\s+/', ' ', trim(strip_tags($pertanyaanHtml)));
+        $cleanPassage = preg_replace('/\s+/', ' ', trim(strip_tags($passagePlain)));
+
+        if (mb_strlen($cleanPassage) < 20) {
+            return false;
+        }
+
+        // Ambil cuplikan 35 karakter dari bagian awal/tengah bacaan
+        $offset = min(20, max(0, (int) floor(mb_strlen($cleanPassage) * 0.15)));
+        $snippet = mb_substr($cleanPassage, $offset, 35);
+
+        return $snippet !== '' && mb_stripos($cleanQuestion, $snippet) !== false;
+    }
+
+    /**
+     * Ekstrak wacana/kutipan cerpen yang tertanam langsung di dalam suatu soal
+     * agar dapat diwariskan jika soal berikutnya menanyakan "pada soal nomor X" atau "dalam cerpen di atas".
+     */
+    protected function extractEmbeddedPassageFromQuestion(string $pertanyaanHtml): ?array
+    {
+        // Ubah tag <p> dan <br> menjadi baris baru untuk mendeteksi paragraf
+        $textWithBreaks = preg_replace('/<\/p>\s*<p[^>]*>/i', "\n\n", $pertanyaanHtml);
+        $textWithBreaks = preg_replace('/<br\s*\/?>/i', "\n", $textWithBreaks);
+        $plain = trim(strip_tags($textWithBreaks));
+
+        $paragraphs = array_values(array_filter(array_map('trim', preg_split('/\n\s*\n/', $plain) ?: [])));
+        if (count($paragraphs) < 2) {
+            return null;
+        }
+
+        // Jika soal menanyakan hubungan dengan "kalimat sebelumnya" atau "paragraf sebelumnya",
+        // berarti kutipan singkat di dalamnya membutuhkan konteks wacana penuh dari soal sebelumnya.
+        if (preg_match('/\b(?:kalimat\s+sebelumnya|paragraf\s+sebelumnya)\b/iu', $plain)) {
+            return null;
+        }
+
+        // Jika paragraf pertama adalah instruksi ("Bacalah teks berikut!"), dan ada minimal 1 paragraf bacaan + 1 kalimat tanya di akhir
+        $startIndex = 0;
+        if (preg_match('/^(?:bacalah|perhatikan|cermati)\s+[^\.!\n]{3,60}[!\.:]?$/iu', $paragraphs[0])) {
+            $startIndex = 1;
+        }
+
+        // Paragraf terakhir biasanya adalah pokok pertanyaan ("Tokoh aku dalam penggalan cerpen di atas adalah ....")
+        $passageParagraphs = array_slice($paragraphs, $startIndex, count($paragraphs) - $startIndex - 1);
+        $combinedPassage = trim(implode("\n\n", $passageParagraphs));
+
+        if (mb_strlen($combinedPassage) < 120) {
+            return null;
+        }
+
+        return [
+            'html' => $this->formatPassageToHtml($combinedPassage),
+            'plain' => $combinedPassage,
+            'raw' => $combinedPassage,
+        ];
     }
 
     /**
@@ -413,13 +718,18 @@ class AiQuestionService
             return [];
         }
 
+        // Ekstrak blok "Bacaan untuk soal nomor X-Y" terlebih dahulu agar tidak menempel ke opsi terakhir soal sebelumnya
+        $sharedInfo = $this->extractSharedPassagesFromRawText($text);
+        $sharedPassages = $sharedInfo['passages'];
+        $text = $sharedInfo['cleaned_text'];
+
         // Bersihkan blok tabel kunci jawaban & catatan kaki di bagian akhir teks agar tidak menempel ke opsi soal terakhir
         $text = preg_replace('/\n[ \t]*(?:#{1,4}[ \t]*|\*{1,2})?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*Jawaban|DAFTAR\s*KUNCI|Tabel\s*Kunci|Pedoman\s*Penilaian|Rubrik\s*Penilaian)(?![ \t]*[:=\-]?[ \t]*\(?[A-Ea-e]\)?[ \t]*(?:\n|$))[\s\S]*$/i', '', $text);
         $text = preg_replace('/\n[ \t]*\|[ \t]*No\.?[ \t]*\|[\s\S]*$/i', '', $text);
         $text = preg_replace('/\n[ \t]*(?:\*{1,2})?Catatan(?:\s+penyusunan)?\s*:[\s\S]*$/i', '', $text);
 
-        // 2. Deteksi apakah teks memiliki bagian-bagian (Sections) seperti "## A. Pilihan Ganda", "## B. Essay", dll
-        $sectionPattern = '/(?=(?:^|\n)\s*#{1,3}\s*(?:[A-Z]\.?\s*)?(?:Pilihan\s*Ganda|PG|Multiple\s*Choice|Essay|Uraian|Isian|Menjodohkan|Kunci\s*Jawaban|Pedoman\s*Penilaian))/i';
+        // 2. Deteksi apakah teks memiliki bagian-bagian (Sections) seperti "## A. Pilihan Ganda", "## A. SOAL PILIHAN GANDA", "## B. Essay", dll
+        $sectionPattern = '/(?=(?:^|\n)\s*#{1,3}\s*(?:[A-Z]\.?\s*)?(?:SOAL\s+)?(?:Pilihan\s*Ganda|PG|Multiple\s*Choice|Essay|Uraian|Isian|Menjodohkan|Kunci\s*Jawaban|Pedoman\s*Penilaian))/i';
         $rawSections = preg_split($sectionPattern, $text, -1, PREG_SPLIT_NO_EMPTY);
 
         $parsedSections = [];
@@ -439,7 +749,7 @@ class AiQuestionService
                 if (
                     preg_match('/^#{1,3}\s*(?:SOAL|PETUNJUK|MATERI|KISI|UJIAN|PENILAIAN)/i', $firstLine)
                     && !preg_match('/Pilihan\s*Ganda|PG|Essay|Uraian/i', $firstLine)
-                    && !preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/m', $sec)
+                    && !preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)](?:\*{1,2})?\s+/m', $sec)
                 ) {
                     continue;
                 }
@@ -463,10 +773,10 @@ class AiQuestionService
                 }
 
                 // Hapus header section dan petunjuk umum sebelum soal nomor 1
-                if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/m', $sec, $m, PREG_OFFSET_CAPTURE)) {
+                if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)](?:\*{1,2})?\s+/m', $sec, $m, PREG_OFFSET_CAPTURE)) {
                     $body = substr($sec, $m[0][1]);
                 } else {
-                    $body = preg_replace('/^#{1,3}[^\n]+\n(?:Petunjuk[^\n]+\n)?/i', '', $sec);
+                    $body = preg_replace('/^#{1,3}[^\n]+\n(?:(?:\*{1,2})?Petunjuk[^\n]+\n)?/i', '', $sec);
                 }
                 $parsedSections[] = [
                     'type' => $type,
@@ -475,7 +785,7 @@ class AiQuestionService
             }
         } else {
             // Tanpa section eksplisit, bersihkan judul dokumen di awal sebelum soal No 1
-            if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)]\s+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
+            if (preg_match('/(?:^|\n)\s*(?:\*{1,2})?1[\.\)](?:\*{1,2})?\s+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
                 $text = substr($text, $m[0][1]);
             }
             $parsedSections[] = [
@@ -640,8 +950,8 @@ class AiQuestionService
                     }
                 }
 
-                if (!str_starts_with($pertanyaanText, '<p>')) {
-                    $pertanyaanText = '<p>' . nl2br(htmlspecialchars($pertanyaanText)) . '</p>';
+                if (!str_starts_with($pertanyaanText, '<p>') && !str_starts_with($pertanyaanText, '<div')) {
+                    $pertanyaanText = '<p>' . $this->convertSimpleMarkdownToHtml($pertanyaanText) . '</p>';
                 }
 
                 $bloom = self::inferBloomTaxonomy($pertanyaanText);
@@ -662,6 +972,11 @@ class AiQuestionService
                     'kunci_otomatis' => $kunciOtomatis,
                 ];
             }
+        }
+
+        // Sematkan wacana / teks bacaan bersama ke setiap nomor soal yang menggunakannya
+        if (!empty($allSoals)) {
+            $allSoals = $this->distributeSharedPassagesToSoals($allSoals, $sharedPassages);
         }
 
         // Jika tidak ada bobot kustom per soal, otomatis distribusikan bobot total 100 poin secara sama rata
@@ -687,7 +1002,11 @@ ATURAN PENGURAIAN (PARSING) WAJIB:
    - Bersihkan label nomor soal di awal teks pertanyaan (contoh: "1.", "Soal 1:", "[1]", "No. 1") agar teks pertanyaan bersih dan siap pakai.
    - Format teks pertanyaan dalam tag HTML dasar (<p>...</p>). Jika ada stimulus (tabel, teks bacaan, paragraf), susun rapi dalam tag HTML.
 
-2. TIPE SOAL & PILIHAN JAWABAN:
+2. WACANA / TEKS BACAAN BERSAMA UNTUK BEBERAPA SOAL (SANGAT KRUSIAL UNTUK CBT ACAK SOAL):
+   - Jika terdapat teks bacaan / wacana / kutipan cerita yang digunakan untuk beberapa nomor soal sekaligus (misalnya "Bacaan untuk soal nomor 1–2", "Bacaan untuk soal nomor 4–6", atau soal berikutnya merujuk pada "kutipan cerpen pada soal nomor 30" / "dalam cerpen di atas"), Anda WAJIB menyalin dan menyematkan teks bacaan tersebut secara LENGKAP ke dalam field 'pertanyaan' pada SETIAP butir soal yang menggunakannya (contoh: bacaan 1–2 wajib ada di Soal 1 DAN di Soal 2; bacaan 4–6 wajib ada di Soal 4, Soal 5, DAN Soal 6).
+   - JANGAN menulis kalimat "Bacaan untuk soal nomor 4–6" atau "pada soal nomor 30" karena urutan soal di layar siswa akan diacak; ganti kalimat pengantarnya menjadi "Bacalah teks berikut untuk menjawab soal ini!".
+
+3. TIPE SOAL & PILIHAN JAWABAN:
    - Tipe soal: "pilihan_ganda", "pg_kompleks", "benar_salah", "menjodohkan", "isian", atau "essay".
    - Jika pilihan ganda: ekstrak huruf label ke 'label' (A, B, C, D, E) dan teks opsi ke 'teks_opsi' (bersihkan huruf label dari teks_opsi).
    - KUNCI JAWABAN (SANGAT KRUSIAL):
