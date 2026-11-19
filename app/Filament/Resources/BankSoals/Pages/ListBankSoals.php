@@ -147,9 +147,10 @@ class ListBankSoals extends ListRecords
 
         $zip->addFromString('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            . '<fonts count="2">'
+            . '<fonts count="3">'
             . '<font><sz val="11"/><color rgb="FF1E293B"/><name val="Calibri"/></font>'
             . '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+            . '<font><u/><sz val="11"/><color rgb="FF2563EB"/><name val="Calibri"/></font>'
             . '</fonts>'
             . '<fills count="3">'
             . '<fill><patternFill patternType="none"/></fill>'
@@ -167,9 +168,10 @@ class ListBankSoals extends ListRecords
             . '</border>'
             . '</borders>'
             . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            . '<cellXfs count="2">'
+            . '<cellXfs count="3">'
             . '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
             . '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+            . '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
             . '</cellXfs>'
             . '</styleSheet>');
 
@@ -193,6 +195,8 @@ class ListBankSoals extends ListRecords
         $colsXml .= '</cols>';
 
         $sheetDataXml = '<sheetData>';
+        $hyperlinks = [];
+        $hyperlinkIndex = 1;
 
         // Baris 1: Header (style s="1")
         $sheetDataXml .= '<row r="1" ht="24" customHeight="1">';
@@ -203,24 +207,55 @@ class ListBankSoals extends ListRecords
         }
         $sheetDataXml .= '</row>';
 
-        // Baris 2..N: Data (style s="0")
+        // Baris 2..N: Data (style s="0" untuk teks biasa, style s="2" + hyperlink aktif untuk URL)
         foreach ($rows as $rIdx => $row) {
             $rowNum = $rIdx + 2;
             $sheetDataXml .= '<row r="' . $rowNum . '">';
             foreach ($row as $cIdx => $val) {
+                $strVal = (string) $val;
                 $cellRef = $this->excelColumnLetter($cIdx) . $rowNum;
-                $escaped = htmlspecialchars((string) $val, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $sheetDataXml .= '<c r="' . $cellRef . '" t="inlineStr" s="0"><is><t>' . $escaped . '</t></is></c>';
+                $escaped = htmlspecialchars($strVal, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $isUrl = str_starts_with($strVal, 'http://') || str_starts_with($strVal, 'https://');
+
+                if ($isUrl) {
+                    $rId = 'rId_link_' . ($hyperlinkIndex++);
+                    $hyperlinks[] = [
+                        'ref' => $cellRef,
+                        'rId' => $rId,
+                        'url' => $escaped,
+                    ];
+                    $sheetDataXml .= '<c r="' . $cellRef . '" t="inlineStr" s="2"><is><t>' . $escaped . '</t></is></c>';
+                } else {
+                    $sheetDataXml .= '<c r="' . $cellRef . '" t="inlineStr" s="0"><is><t>' . $escaped . '</t></is></c>';
+                }
             }
             $sheetDataXml .= '</row>';
         }
 
         $sheetDataXml .= '</sheetData>';
 
+        $hyperlinksXml = '';
+        if (!empty($hyperlinks)) {
+            $hyperlinksXml = '<hyperlinks>';
+            $relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+
+            foreach ($hyperlinks as $hl) {
+                $hyperlinksXml .= '<hyperlink ref="' . $hl['ref'] . '" r:id="' . $hl['rId'] . '"/>';
+                $relsXml .= '<Relationship Id="' . $hl['rId'] . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' . $hl['url'] . '" TargetMode="External"/>';
+            }
+
+            $hyperlinksXml .= '</hyperlinks>';
+            $relsXml .= '</Relationships>';
+
+            $zip->addFromString('xl/worksheets/_rels/sheet1.xml.rels', $relsXml);
+        }
+
         $zip->addFromString('xl/worksheets/sheet1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
             . $colsXml
             . $sheetDataXml
+            . $hyperlinksXml
             . '</worksheet>');
 
         $zip->close();
