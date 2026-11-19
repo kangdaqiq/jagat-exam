@@ -856,47 +856,58 @@ class EditBankSoal extends Page
             // Batch mode: Bersihkan soal dummy bawaan No. 1 jika masih kosong
             $this->cleanupInitialDummySoal();
 
-            // Tambahkan butir-butir baru ke bank soal
+            // Tambahkan butir-butir baru ke bank soal dalam 1 transaksi DB & bulk insert opsi
             $startNomor = ((int) $this->record->soals()->max('nomor_urut')) + 1;
             $firstNewId = null;
+            $now = now();
+            $opsiRows = [];
 
-            foreach ($this->parsed_soals_preview as $item) {
-                $newSoal = $this->record->soals()->create([
-                    'nomor_urut' => $startNomor++,
-                    'tipe_soal' => $item['tipe_soal'],
-                    'bobot_nilai' => (float) ($item['bobot_nilai'] ?? $this->import_default_bobot),
-                    'tingkat_kesulitan' => $item['tingkat_kesulitan'] ?? 'MOTS',
-                    'taksonomi_bloom' => $item['taksonomi_bloom'] ?? 'C3',
-                    'pertanyaan' => $item['pertanyaan'],
-                    'media_type' => 'none',
-                    'kunci_isian' => $item['kunci_isian'] ?? '',
-                    'rubrik_essay' => $item['rubrik_essay'] ?? '',
-                    'pembahasan' => $item['pembahasan'] ?? '',
-                ]);
+            \Illuminate\Support\Facades\DB::transaction(function () use (&$startNomor, &$firstNewId, &$opsiRows, $now) {
+                foreach ($this->parsed_soals_preview as $item) {
+                    $newSoal = $this->record->soals()->create([
+                        'nomor_urut' => $startNomor++,
+                        'tipe_soal' => $item['tipe_soal'],
+                        'bobot_nilai' => (float) ($item['bobot_nilai'] ?? $this->import_default_bobot),
+                        'tingkat_kesulitan' => $item['tingkat_kesulitan'] ?? 'MOTS',
+                        'taksonomi_bloom' => $item['taksonomi_bloom'] ?? 'C3',
+                        'pertanyaan' => $item['pertanyaan'],
+                        'media_type' => 'none',
+                        'kunci_isian' => $item['kunci_isian'] ?? '',
+                        'rubrik_essay' => $item['rubrik_essay'] ?? '',
+                        'pembahasan' => $item['pembahasan'] ?? '',
+                    ]);
 
-                if (!$firstNewId) {
-                    $firstNewId = $newSoal->id;
-                }
+                    if (!$firstNewId) {
+                        $firstNewId = $newSoal->id;
+                    }
 
-                if (!empty($item['opsi_jawabans'])) {
-                    foreach ($item['opsi_jawabans'] as $order => $opt) {
-                        $newSoal->opsiJawabans()->create([
-                            'label' => $opt['label'] ?? chr(65 + $order),
-                            'teks_opsi' => $opt['teks_opsi'] ?? '',
-                            'gambar_opsi' => null,
-                            'is_jawaban_benar' => !empty($opt['is_jawaban_benar']),
-                            'pasangan_matching' => $opt['pasangan_matching'] ?? null,
-                            'nomor_urut' => $order + 1,
-                        ]);
+                    if (!empty($item['opsi_jawabans'])) {
+                        foreach ($item['opsi_jawabans'] as $order => $opt) {
+                            $opsiRows[] = [
+                                'soal_id' => $newSoal->id,
+                                'label' => $opt['label'] ?? chr(65 + $order),
+                                'teks_opsi' => $opt['teks_opsi'] ?? '',
+                                'gambar_opsi' => null,
+                                'is_jawaban_benar' => !empty($opt['is_jawaban_benar']),
+                                'pasangan_matching' => $opt['pasangan_matching'] ?? null,
+                                'nomor_urut' => $order + 1,
+                                'created_at' => $now,
+                                'updated_at' => $now,
+                            ];
+                        }
                     }
                 }
-            }
 
-            if ($this->import_default_bobot == 2.0) {
-                // Otomatis sesuaikan bobot seluruh bank soal ke skala 100 poin (rasio 75:25)
-                $this->record->autoDistributeBobot();
-                $this->record->refresh();
-            }
+                if (!empty($opsiRows)) {
+                    \App\Models\OpsiJawaban::insert($opsiRows);
+                }
+
+                if ($this->import_default_bobot == 2.0) {
+                    // Otomatis sesuaikan bobot seluruh bank soal ke skala 100 poin (rasio 75:25)
+                    $this->record->autoDistributeBobot();
+                    $this->record->refresh();
+                }
+            });
 
             if ($firstNewId) {
                 $this->selectSoal($firstNewId, false);

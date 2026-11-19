@@ -292,48 +292,228 @@ class AiQuestionService
         }
 
         if (empty($apiKey)) {
-            // Jika belum ada API key, gunakan fallback regex parser lokal
-            $localParsed = $this->fallbackLocalParse($rawText, $defaultBobot);
-            if (!empty($localParsed)) {
-                return $localParsed;
-            }
             throw new Exception("API Key {$provider} belum diisi untuk membedah teks dengan AI. Silakan masukkan API Key di formulir atau di file .env ({$this->getEnvKeyName($provider)}).");
         }
 
-        $systemPrompt = $this->buildParseSystemPrompt();
-        $userPrompt = $this->buildParseUserPrompt($rawText, $defaultBobot, $params);
+        // 1. Ekstrak kunci jawaban terpisah di akhir dokumen & wacana bersama ("Bacaan untuk soal nomor X-Y")
+        $separateAnswerKeys = $this->extractSeparateAnswerKeys($rawText);
+        $sharedInfo = $this->extractSharedPassagesFromRawText($rawText);
 
-        try {
+        // Bersihkan tabel kunci jawaban di akhir teks agar token input ke AI lebih ringkas & cepat
+        $textForAi = $this->stripTrailingAnswerKeySection($sharedInfo['cleaned_text']);
+
+        // 2. Pecah teks panjang (misal 50 soal) menjadi beberapa bagian (maks 18 soal per batch)
+        //    dan kirim secara PARALEL (serentak) ke AI agar selesai dalam ~12-20 detik (bebas Cloudflare HTTP 524 Timeout)
+        $chunks = $this->splitRawTextIntoQuestionChunks($textForAi, 18);
+
+        if ($provider === 'gemini' && count($chunks) > 1) {
+            $results = $this->callGeminiParallelChunks($apiKey, $chunks, $defaultBobot, $separateAnswerKeys, $params);
+        } else {
+            $systemPrompt = $this->buildParseSystemPrompt();
+            $userPrompt = $this->buildParseUserPrompt($textForAi, $defaultBobot, $params, $separateAnswerKeys);
+
             if ($provider === 'gemini') {
                 $results = $this->callGemini($apiKey, $systemPrompt, $userPrompt, $params);
             } else {
                 $results = $this->callOpenAI($apiKey, $systemPrompt, $userPrompt, $params);
             }
-
-            // Rekonsiliasi dengan separateAnswerKeys jika ada (safety net)
-            $separateAnswerKeys = $this->extractSeparateAnswerKeys($rawText);
-            if (!empty($separateAnswerKeys) && !empty($results)) {
-                $results = $this->reconcileAnswerKeys($results, $separateAnswerKeys);
-            }
-
-            // Distribusi otomatis teks bacaan/wacana bersama (misal "Bacaan untuk soal nomor 1-2", "4-6", dst.)
-            // ke setiap nomor soal terkait agar aman saat soal diacak di layar siswa
-            if (!empty($results)) {
-                $sharedInfo = $this->extractSharedPassagesFromRawText($rawText);
-                $results = $this->distributeSharedPassagesToSoals($results, $sharedInfo['passages']);
-            }
-
-            $this->lastParseSource = 'ai';
-            return $results;
-        } catch (\Throwable $e) {
-            // Jika AI gagal (misal kuota/timeout), coba fallback regex lokal sebelum melempar exception
-            $localParsed = $this->fallbackLocalParse($rawText, $defaultBobot);
-            if (!empty($localParsed)) {
-                Log::info('Berhasil menggunakan fallback regex parser lokal setelah AI gagal: ' . $e->getMessage());
-                return $localParsed;
-            }
-            throw $e;
         }
+
+        // 3. Rekonsiliasi kunci jawaban terpisah (safety net 100% akurat sesuai tabel kunci)
+        if (!empty($separateAnswerKeys) && !empty($results)) {
+            $results = $this->reconcileAnswerKeys($results, $separateAnswerKeys);
+        }
+
+        // 4. Distribusi otomatis teks bacaan/wacana bersama ("Bacaan untuk soal nomor 1-2", "4-6", dst.)
+        //    ke setiap nomor soal terkait agar aman saat soal diacak di layar siswa
+        if (!empty($results)) {
+            $results = $this->distributeSharedPassagesToSoals($results, $sharedInfo['passages']);
+        }
+
+        // 5. Distribusikan bobot nilai secara proporsional ke total 100 poin
+        if (empty($params['default_bobot']) && empty($params['bobot_nilai'])) {
+            $results = self::distributeBobotByRasio($results, 100.0);
+        }
+
+        $this->lastParseSource = 'ai';
+        return $results;
+    }
+
+    /**
+     * Hapus bagian tabel/daftar kunci jawaban di akhir naskah setelah diekstrak
+     * agar tidak memperlambat pemrosesan token AI.
+     */
+    protected function stripTrailingAnswerKeySection(string $text): string
+    {
+        $cleaned = preg_replace('/\n[ \t]*(?:#{1,4}[ \t]*|\*{1,2})?(?:[A-Z]\.?[ \t]*)?(?:Kunci\s*Jawaban|DAFTAR\s*KUNCI|Tabel\s*Kunci|Pedoman\s*Penilaian|Rubrik\s*Penilaian)(?![ \t]*[:=\-]?[ \t]*\(?[A-Ea-e]\)?[ \t]*(?:\n|$))[\s\S]*$/i', '', $text);
+        $cleaned = preg_replace('/\n[ \t]*\|[ \t]*No\.?[ \t]*\|[\s\S]*$/i', '', $cleaned);
+        return trim($cleaned);
+    }
+
+    /**
+     * Pecah naskah soal panjang menjadi beberapa chunk berdasarkan batas nomor urut soal
+     * (misal 50 soal dipecah menjadi 3 chunk @ ~17 soal) untuk diproses secara paralel oleh AI.
+     *
+     * @return array<int, array{text: string, start_num: int, end_num: int}>
+     */
+    protected function splitRawTextIntoQuestionChunks(string $text, int $maxPerChunk = 18): array
+    {
+        $lines = explode("\n", $text);
+        $questionLineIndices = [];
+        $lastNum = 0;
+
+        foreach ($lines as $idx => $line) {
+            $trimmed = trim($line);
+            if (preg_match('/^(?:\*{1,2})?(?:Soal\s*(?:No\.?)?\s*)?(\d{1,3})[\.\)](?:\*{1,2})?\s+/i', $trimmed, $m)) {
+                $num = (int) $m[1];
+                // Pastikan urutan nomor soal naik bertahap (bukan sub-list 1, 2, 3 di tengah soal nomor besar)
+                if (($lastNum === 0 && $num === 1) || ($num === $lastNum + 1)) {
+                    $questionLineIndices[] = ['line_idx' => $idx, 'num' => $num];
+                    $lastNum = $num;
+                }
+            }
+        }
+
+        if (count($questionLineIndices) <= $maxPerChunk) {
+            return [[
+                'text' => $text,
+                'start_num' => 1,
+                'end_num' => max(1, count($questionLineIndices)),
+            ]];
+        }
+
+        $chunks = [];
+        $totalQuestions = count($questionLineIndices);
+        for ($i = 0; $i < $totalQuestions; $i += $maxPerChunk) {
+            $startLine = ($i === 0) ? 0 : $questionLineIndices[$i]['line_idx'];
+            $nextIndex = $i + $maxPerChunk;
+            $endLine = ($nextIndex < $totalQuestions)
+                ? $questionLineIndices[$nextIndex]['line_idx'] - 1
+                : count($lines) - 1;
+
+            $sliceLines = array_slice($lines, $startLine, $endLine - $startLine + 1);
+            $startNum = $questionLineIndices[$i]['num'];
+            $endNum = $questionLineIndices[min($totalQuestions - 1, $nextIndex - 1)]['num'];
+
+            $chunks[] = [
+                'text' => trim(implode("\n", $sliceLines)),
+                'start_num' => $startNum,
+                'end_num' => $endNum,
+            ];
+        }
+
+        return $chunks;
+    }
+
+    /**
+     * Kirim beberapa chunk soal secara PARALEL (serentak) ke Google Gemini API menggunakan Http::pool()
+     * agar pemrosesan 50 soal selesai dalam ~15 detik dan tidak terkena Cloudflare HTTP 524 Timeout.
+     */
+    protected function callGeminiParallelChunks(
+        string $apiKey,
+        array $chunks,
+        ?float $defaultBobot,
+        array $separateAnswerKeys,
+        array $params
+    ): array {
+        $keys = $this->getGeminiApiKeys($apiKey);
+
+        return $this->withKeyFailover($keys, function (string $activeKey) use ($chunks, $defaultBobot, $separateAnswerKeys, $params) {
+            $primaryModel = $params['model'] ?? config('ai.gemini.model', 'gemini-3.6-flash');
+            if ($primaryModel === 'gemini-2.5-pro') {
+                $primaryModel = 'gemini-3.6-flash';
+            }
+            $baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
+            $systemPrompt = $this->buildParseSystemPrompt();
+
+            $candidateModels = array_values(array_unique([
+                $primaryModel,
+                'gemini-2.5-flash',
+                'gemini-3.6-flash',
+                'gemini-3.5-flash',
+                'gemini-flash-latest',
+            ]));
+
+            // Siapkan payload per chunk
+            $chunkPayloads = [];
+            foreach ($chunks as $cIdx => $chunk) {
+                $chunkKeys = [];
+                for ($n = $chunk['start_num']; $n <= $chunk['end_num']; $n++) {
+                    if (isset($separateAnswerKeys[$n])) {
+                        $chunkKeys[$n] = $separateAnswerKeys[$n];
+                    }
+                }
+                $userPrompt = $this->buildParseUserPrompt($chunk['text'], $defaultBobot, $params, $chunkKeys);
+                $chunkPayloads[$cIdx] = [
+                    'contents' => [
+                        [
+                            'role' => 'user',
+                            'parts' => [
+                                ['text' => $systemPrompt . "\n\n" . $userPrompt],
+                            ],
+                        ],
+                    ],
+                    'generationConfig' => [
+                        'temperature' => 0.2,
+                        'responseMimeType' => 'application/json',
+                        'maxOutputTokens' => 32768,
+                    ],
+                ];
+            }
+
+            $lastError = null;
+            $startedAt = microtime(true);
+
+            foreach ($candidateModels as $model) {
+                if ((microtime(true) - $startedAt) > 60) {
+                    break;
+                }
+
+                $url = "{$baseUrl}/models/{$model}:generateContent?key={$activeKey}";
+
+                $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($chunkPayloads, $url) {
+                    foreach ($chunkPayloads as $cIdx => $payload) {
+                        $pool->as("chunk_{$cIdx}")->timeout(50)->post($url, $payload);
+                    }
+                });
+
+                $allSucceeded = true;
+                $mergedResults = [];
+
+                foreach ($chunkPayloads as $cIdx => $_) {
+                    $resp = $responses["chunk_{$cIdx}"] ?? null;
+                    if (!$resp || ($resp instanceof \Throwable) || !$resp->successful()) {
+                        $allSucceeded = false;
+                        if ($resp instanceof \Throwable) {
+                            $lastError = $resp->getMessage();
+                        } elseif ($resp) {
+                            $lastError = $resp->json('error.message') ?? $resp->body();
+                        }
+                        break;
+                    }
+
+                    $rawJson = $resp->json('candidates.0.content.parts.0.text');
+                    if (empty($rawJson)) {
+                        $allSucceeded = false;
+                        $lastError = 'Respons teks dari Gemini kosong.';
+                        break;
+                    }
+
+                    $parsedChunk = $this->parseJsonResponse($rawJson, $params);
+                    foreach ($parsedChunk as $item) {
+                        $mergedResults[] = $item;
+                    }
+                }
+
+                if ($allSucceeded && !empty($mergedResults)) {
+                    return $mergedResults;
+                }
+
+                Log::warning("Gemini parallel pool pada model {$model} gagal: {$lastError}. Mencoba model berikutnya...");
+            }
+
+            throw new Exception("Google Gemini API Error: " . ($lastError ?? 'Gagal memproses teks soal dengan AI.'));
+        });
     }
 
     /**
@@ -1026,7 +1206,8 @@ ATURAN PENGURAIAN (PARSING) WAJIB:
    - Field 'bobot_nilai': Sesuaikan bobot berdasarkan kesulitan (misal LOTS = 2.0, MOTS = 3.0, HOTS = 4.0 atau kelipatannya).
 
 4. PEMBAHASAN & PENJELASAN:
-   - Jika teks memuat teks pembahasan, penjelasan, atau langkah penyelesaian, simpan ke field 'pembahasan'.
+   - Jika teks sumber mencantumkan pembahasan, simpan ke field 'pembahasan'.
+   - PENTING: Jika teks sumber TIDAK mencantumkan pembahasan, biarkan field `"pembahasan": ""` (string kosong). JANGAN mengarang teks pembahasan baru agar proses ekstraksi soal berjalan sangat cepat dan hemat token!
 
 5. RUMUS MATEMATIKA & EKSAK (LaTeX):
    - Gunakan format KaTeX inline \$rumus\$ atau display \$\$rumus\$\$.
@@ -1054,7 +1235,7 @@ Struktur JSON per butir soal:
       ],
       "kunci_isian": "",
       "rubrik_essay": "",
-      "pembahasan": "Penjelasan solusi dan langkah penyelesaian..."
+      "pembahasan": ""
     }
   ]
 }
@@ -1064,16 +1245,16 @@ PROMPT;
     /**
      * Bangun User Prompt untuk Parsing Teks Mentah
      */
-    protected function buildParseUserPrompt(string $rawText, ?float $defaultBobot, array $params): string
+    protected function buildParseUserPrompt(string $rawText, ?float $defaultBobot, array $params, ?array $preExtractedKeys = null): string
     {
         $bobotLabel = $defaultBobot ?? 2.0;
         $prompt = "Tolong uraikan (parse) teks butir soal hasil copas berikut menjadi format JSON sesuai pedoman.\n";
         $prompt .= "Bobot nilai default per butir: {$bobotLabel}.\n\n";
 
-        $keys = $this->extractSeparateAnswerKeys($rawText);
+        $keys = $preExtractedKeys ?? $this->extractSeparateAnswerKeys($rawText);
         if (!empty($keys)) {
-            $prompt .= "PETUNJUK TAMBAHAN - DAFTAR KUNCI JAWABAN TERPISAH TERDETEKSI DI BAGIAN AKHIR:\n";
-            $prompt .= "Sistem mendeteksi kunci jawaban untuk " . count($keys) . " butir soal:\n";
+            $prompt .= "PETUNJUK TAMBAHAN - DAFTAR KUNCI JAWABAN TERPISAH TERDETEKSI:\n";
+            $prompt .= "Sistem mendeteksi kunci jawaban berikut:\n";
             $keyPairs = [];
             foreach ($keys as $no => $k) {
                 $keyPairs[] = "No.{$no}={$k}";
@@ -1250,11 +1431,17 @@ PROMPT;
 
         $primaryError = null;
         $lastError = null;
+        $startedAt = microtime(true);
 
         foreach ($candidateModels as $model) {
+            // Cegah akumulasi waktu melebihi 55 detik agar tidak terkena Cloudflare HTTP 524 Timeout (~100s)
+            if ((microtime(true) - $startedAt) > 55) {
+                break;
+            }
+
             try {
                 $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
-                $response = Http::timeout(120)->post($url, $payload);
+                $response = Http::timeout(35)->post($url, $payload);
 
                 if ($response->successful()) {
                     $rawText = $response->json('candidates.0.content.parts.0.text');
