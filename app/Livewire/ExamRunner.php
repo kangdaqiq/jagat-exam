@@ -619,15 +619,49 @@ class ExamRunner extends Component
         }
 
         $nextUjian = $jadwal->getNextSubtestForSiswa((int) $this->sesi->ujian_id, $siswa);
+        $targetJadwal = $jadwal;
+
+        // Jika tidak ada subtest lanjutan di jadwal yang sama, periksa apakah ada sesi berikutnya yang "gandeng" (berurutan langsung) hari ini
+        if (! $nextUjian && $jadwal->ruang_ujian_id && $jadwal->tanggal) {
+            $nextJadwal = JadwalRuang::where('ruang_ujian_id', $jadwal->ruang_ujian_id)
+                ->whereDate('tanggal', $jadwal->tanggal)
+                ->where('id', '!=', $jadwal->id)
+                ->where(function ($q) use ($jadwal) {
+                    if ($jadwal->waktu_selesai) {
+                        // Sesi gandeng: waktu mulai sesi berikutnya menyambung langsung (toleransi jeda maksimal 15 menit)
+                        $q->where('waktu_mulai', '>=', $jadwal->waktu_selesai)
+                          ->where('waktu_mulai', '<=', date('H:i:s', strtotime($jadwal->waktu_selesai . ' +15 minutes')));
+                    }
+                })
+                ->orderBy('waktu_mulai')
+                ->first();
+
+            if ($nextJadwal) {
+                $candidates = $nextJadwal->getSubtestsForSiswa($siswa);
+                $selesaiIds = UjianPeserta::where(function ($q) use ($siswa) {
+                    $q->where('siswa_id', $siswa->id);
+                    if ($siswa->user_id) {
+                        $q->orWhere('user_id', $siswa->user_id);
+                    }
+                })->where('status', 'SELESAI')->pluck('ujian_id')->all();
+
+                $candidateUjian = $candidates->reject(fn (Ujian $u) => in_array($u->id, $selesaiIds) || in_array($u->status, ['COMPLETED', 'CANCELLED'], true) || $u->isJadwalBerakhir())->first();
+                if ($candidateUjian) {
+                    $nextUjian = $candidateUjian;
+                    $targetJadwal = $nextJadwal;
+                }
+            }
+        }
+
         if (! $nextUjian) {
             return null;
         }
 
-        $subtests = $jadwal->getSubtestsForSiswa($siswa);
+        $subtests = $targetJadwal->getSubtestsForSiswa($siswa);
         $nextPos = $subtests->search(fn (Ujian $u) => (int) $u->id === (int) $nextUjian->id);
 
         return [
-            'jadwal' => $jadwal,
+            'jadwal' => $targetJadwal,
             'ujian' => $nextUjian->loadMissing(['mapel', 'bankSoal']),
             'urutan_ke' => $nextPos !== false ? ($nextPos + 1) : 2,
             'total_subtest' => max(2, $subtests->count()),

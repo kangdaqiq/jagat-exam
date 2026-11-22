@@ -5,6 +5,7 @@ namespace App\Filament\Resources\JadwalRuangs\Schemas;
 use App\Models\RuangUjian;
 use App\Models\Ujian;
 use App\Models\User;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
@@ -79,10 +80,10 @@ class JadwalRuangForm
     public static function subtestRepeater(string $fieldName = 'daftar_subtest', bool $withScheduleSync = true): Repeater
     {
         return Repeater::make($fieldName)
-            ->label('Daftar Subtest / Tahap Ujian (Baris 1 → Subtest 1, Baris 2 → Subtest 2, dst)')
-            ->helperText('Setiap baris BISA pilih banyak ujian lintas kelas (misal K10, K11, K12 sekaligus untuk tahap pertama). Klik "Tambah Subtest" hanya jika ada soal lanjutan berikutnya di jam yang sama tanpa token ulang.')
+            ->label('Daftar Subtest / Agenda Ujian (Opsional - Mode ANBK Otomatis)')
+            ->helperText('💡 MODE ANBK (Direkomendasikan): Biarkan KOSONG agar sistem otomatis menyajikan soal sesuai rombel/kelas masing-masing siswa yang duduk di ruangan ini pada sesi waktu ini. Tambahkan baris subtest HANYA jika ingin menentukan mapel secara manual/spesifik.')
             ->table([
-                TableColumn::make('Agenda Ujian / Soal per Tahap (Bisa Pilih Banyak / Lintas Kelas)')->markAsRequired(),
+                TableColumn::make('Agenda Ujian / Soal per Tahap (Bisa Pilih Banyak / Lintas Kelas)'),
             ])
             ->schema([
                 Select::make('ujian_ids')
@@ -92,14 +93,13 @@ class JadwalRuangForm
                     ->multiple()
                     ->searchable()
                     ->preload()
-                    ->required()
                     ->live(),
             ])
-            ->minItems(1)
-            ->defaultItems(1)
+            ->minItems(0)
+            ->defaultItems(0)
             ->reorderable()
             ->reorderableWithButtons()
-            ->addActionLabel('Tambah Subtest')
+            ->addActionLabel('Tambah Subtest Manual')
             ->live()
             ->afterStateUpdated(function (?array $state, Set $set, Get $get) use ($withScheduleSync) {
                 if (! $withScheduleSync) {
@@ -133,6 +133,13 @@ class JadwalRuangForm
                     ->description('Pilih ruang ujian fisik lalu susun agenda ujian atau subtest berurutan pada sesi ini.')
                     ->icon(Heroicon::OutlinedBuildingOffice2)
                     ->schema([
+                        Checkbox::make('apply_all_rooms')
+                            ->label('Terapkan Jadwal Sesi Ini ke SEMUA Ruang Ujian Aktif Sekaligus')
+                            ->helperText('💡 Cukup atur jam sesi & tanggal sekali, sistem otomatis membuat jadwal untuk seluruh ruangan aktif.')
+                            ->default(false)
+                            ->live()
+                            ->visibleOn('create'),
+
                         Select::make('ruang_ujian_id')
                             ->label('Ruang Ujian')
                             ->options(fn () => RuangUjian::query()
@@ -141,7 +148,8 @@ class JadwalRuangForm
                                 ->pluck('nama_ruang', 'id'))
                             ->searchable()
                             ->preload()
-                            ->required()
+                            ->required(fn (Get $get) => ! $get('apply_all_rooms'))
+                            ->hidden(fn (Get $get) => (bool) $get('apply_all_rooms'))
                             ->live()
                             ->helperText(function ($get) {
                                 $id = $get('ruang_ujian_id');

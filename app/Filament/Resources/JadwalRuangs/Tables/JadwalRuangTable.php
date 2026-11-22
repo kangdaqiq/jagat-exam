@@ -39,23 +39,27 @@ class JadwalRuangTable
                 TextColumn::make('daftar_agenda')
                     ->label('Agenda Ujian')
                     ->state(function (JadwalRuang $record) {
+                        $isAnbk = $record->isModeAnbk();
                         $ujians = $record->getAllUjians();
+
                         if ($ujians->isEmpty()) {
-                            return ['-'];
+                            return $isAnbk
+                                ? ['[Mode ANBK] Otomatis sesuai kelas siswa']
+                                : ['-'];
                         }
 
                         $stageCount = $ujians->map(fn (Ujian $u) => (int) ($u->pivot?->urutan ?? 1))->unique()->count();
                         $hasSubtests = $stageCount > 1;
 
-                        return $ujians->values()->map(function (Ujian $u) use ($hasSubtests) {
+                        return $ujians->values()->map(function (Ujian $u) use ($hasSubtests, $isAnbk) {
                             $mapel = $u->mapel?->nama_mapel ?: 'Umum';
-                            $prefix = $hasSubtests ? '[Subtest ' . ((int) ($u->pivot?->urutan ?? 1)) . '] ' : '';
+                            $prefix = $isAnbk ? '[ANBK] ' : ($hasSubtests ? '[Subtest ' . ((int) ($u->pivot?->urutan ?? 1)) . '] ' : '');
                             return "{$prefix}{$u->nama_ujian} ({$mapel})";
                         })->all();
                     })
                     ->listWithLineBreaks()
                     ->badge()
-                    ->color('primary')
+                    ->color(fn (JadwalRuang $record) => $record->isModeAnbk() ? 'info' : 'primary')
                     ->searchable(query: function ($query, string $search) {
                         $query->whereHas('ujian', fn ($q) => $q->where('nama_ujian', 'like', "%{$search}%"))
                               ->orWhereHas('ujians', fn ($q) => $q->where('nama_ujian', 'like', "%{$search}%"));

@@ -797,4 +797,206 @@ class JadwalRuangTest extends TestCase
         $this->assertEquals($pengawas2->id, $generatedR2->pengawas_id);
         $this->assertEquals([$ujianA->id, $ujianB->id], $generatedR2->getAllUjians()->pluck('id')->all());
     }
+
+    public function test_mode_anbk_otomatis_deteksi_soal_tanpa_mapping_manual(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin ANBK',
+            'username' => 'admin_anbk',
+            'email' => 'admin_anbk@test.local',
+            'password' => bcrypt('password'),
+            'role' => 'admin',
+        ]);
+        $this->actingAs($admin);
+
+        $kelas10 = Kelas::create(['nama_kelas' => 'X-IPA', 'tingkat' => '10']);
+        $kelas11 = Kelas::create(['nama_kelas' => 'XI-IPA', 'tingkat' => '11']);
+
+        $ruang = RuangUjian::create(['nama_ruang' => 'Ruang ANBK 1', 'kode_ruang' => 'R-ANBK', 'kapasitas' => 30, 'is_active' => true]);
+
+        // Siswa Kelas 10 dan 11 berada di Ruang ANBK 1 yang sama
+        $userSiswa10 = User::factory()->create(['role' => 'siswa']);
+        $siswa10 = \App\Models\Siswa::create([
+            'user_id' => $userSiswa10->id,
+            'nama' => 'Siswa Kelas 10',
+            'nis' => '1001',
+            'kelas_id' => $kelas10->id,
+            'ruang_ujian_id' => $ruang->id,
+            'is_active' => true,
+        ]);
+
+        $userSiswa11 = User::factory()->create(['role' => 'siswa']);
+        $siswa11 = \App\Models\Siswa::create([
+            'user_id' => $userSiswa11->id,
+            'nama' => 'Siswa Kelas 11',
+            'nis' => '1101',
+            'kelas_id' => $kelas11->id,
+            'ruang_ujian_id' => $ruang->id,
+            'is_active' => true,
+        ]);
+
+        $mapel = Mapel::create(['kode_mapel' => 'IND-ANBK', 'nama_mapel' => 'Bahasa Indonesia']);
+        $bank10 = BankSoal::create(['user_id' => $admin->id, 'judul' => 'Bank Soal K10', 'mapel_id' => $mapel->id]);
+        $bank11 = BankSoal::create(['user_id' => $admin->id, 'judul' => 'Bank Soal K11', 'mapel_id' => $mapel->id]);
+
+        $tglHariIni = now()->toDateString();
+
+        $ujian10 = Ujian::create([
+            'exam_id' => 'EXAM-K10',
+            'nama_ujian' => 'Ujian B.Indo Kelas 10',
+            'mapel_id' => $mapel->id,
+            'bank_soal_id' => $bank10->id,
+            'tanggal' => $tglHariIni,
+            'status' => 'SCHEDULED',
+        ]);
+        $ujian10->kelas()->attach($kelas10->id);
+
+        $ujian11 = Ujian::create([
+            'exam_id' => 'EXAM-K11',
+            'nama_ujian' => 'Ujian B.Indo Kelas 11',
+            'mapel_id' => $mapel->id,
+            'bank_soal_id' => $bank11->id,
+            'tanggal' => $tglHariIni,
+            'status' => 'SCHEDULED',
+        ]);
+        $ujian11->kelas()->attach($kelas11->id);
+
+        // Buat JadwalRuang TANPA MAPPING MAPEL (Mode ANBK)
+        $jadwal = JadwalRuang::create([
+            'ruang_ujian_id' => $ruang->id,
+            'ujian_id' => null,
+            'tanggal' => $tglHariIni,
+            'sesi_ke' => '1',
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '09:30:00',
+            'status' => 'SCHEDULED',
+        ]);
+
+        $this->assertTrue($jadwal->isModeAnbk());
+
+        // Verifikasi getAllUjians mendeteksi otomatis ujian K10 dan K11
+        $detectedUjians = $jadwal->getAllUjians();
+        $this->assertCount(2, $detectedUjians);
+        $this->assertTrue($detectedUjians->contains('id', $ujian10->id));
+        $this->assertTrue($detectedUjians->contains('id', $ujian11->id));
+
+        // Siswa 10 otomatis hanya mendapatkan ujian K10
+        $subtests10 = $jadwal->getSubtestsForSiswa($siswa10);
+        $this->assertCount(1, $subtests10);
+        $this->assertEquals($ujian10->id, $subtests10->first()->id);
+
+        // Siswa 11 otomatis hanya mendapatkan ujian K11
+        $subtests11 = $jadwal->getSubtestsForSiswa($siswa11);
+        $this->assertCount(1, $subtests11);
+        $this->assertEquals($ujian11->id, $subtests11->first()->id);
+    }
+
+    public function test_sesi_gandeng_berurutan_lanjut_otomatis_tanpa_token_ulang(): void
+    {
+        Carbon::setTestNow('2026-11-22 08:00:00');
+
+        $admin = User::create([
+            'name' => 'Admin Gandeng',
+            'username' => 'admin_gandeng',
+            'email' => 'admin_gandeng@test.local',
+            'password' => bcrypt('password'),
+            'role' => 'admin',
+        ]);
+        $this->actingAs($admin);
+
+        $kelas = Kelas::create(['nama_kelas' => 'X TBSM', 'tingkat' => '10']);
+        $ruang = RuangUjian::create(['nama_ruang' => 'Ruang 01', 'kode_ruang' => 'R-01', 'kapasitas' => 30, 'is_active' => true]);
+
+        $userSiswa = User::factory()->create(['role' => 'siswa']);
+        $siswa = \App\Models\Siswa::create([
+            'user_id' => $userSiswa->id,
+            'nama' => 'Siswa TBSM',
+            'nis' => '1099',
+            'kelas_id' => $kelas->id,
+            'ruang_ujian_id' => $ruang->id,
+            'is_active' => true,
+        ]);
+
+        $mapelA = Mapel::create(['kode_mapel' => 'PJOK', 'nama_mapel' => 'PJOK']);
+        $bankA = BankSoal::create(['user_id' => $admin->id, 'judul' => 'Bank PJOK', 'mapel_id' => $mapelA->id]);
+        $soalA = \App\Models\Soal::create(['bank_soal_id' => $bankA->id, 'pertanyaan' => 'Soal PJOK', 'tipe_soal' => 'pilihan_ganda']);
+
+        $mapelB = Mapel::create(['kode_mapel' => 'PDO', 'nama_mapel' => 'Pekerjaan Dasar Otomotif']);
+        $bankB = BankSoal::create(['user_id' => $admin->id, 'judul' => 'Bank PDO', 'mapel_id' => $mapelB->id]);
+        $soalB = \App\Models\Soal::create(['bank_soal_id' => $bankB->id, 'pertanyaan' => 'Soal PDO', 'tipe_soal' => 'pilihan_ganda']);
+
+        $tgl = now()->toDateString();
+
+        // Ujian Sesi 1 (07:30 - 08:30)
+        $ujian1 = Ujian::create([
+            'exam_id' => 'EXAM-SESI1',
+            'nama_ujian' => 'PJOK X',
+            'mapel_id' => $mapelA->id,
+            'bank_soal_id' => $bankA->id,
+            'tanggal' => $tgl,
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '08:30:00',
+            'status' => 'ONGOING',
+        ]);
+        $ujian1->kelas()->attach($kelas->id);
+
+        // Ujian Sesi 2 (08:30 - 09:30) - Gandeng!
+        $ujian2 = Ujian::create([
+            'exam_id' => 'EXAM-SESI2',
+            'nama_ujian' => 'Pekerjaan Dasar Otomotif',
+            'mapel_id' => $mapelB->id,
+            'bank_soal_id' => $bankB->id,
+            'tanggal' => $tgl,
+            'waktu_mulai' => '08:30:00',
+            'waktu_selesai' => '09:30:00',
+            'status' => 'SCHEDULED',
+        ]);
+        $ujian2->kelas()->attach($kelas->id);
+
+        // Jadwal Ruang Sesi 1 (07:30 - 08:30)
+        $jadwal1 = JadwalRuang::create([
+            'ruang_ujian_id' => $ruang->id,
+            'tanggal' => $tgl,
+            'sesi_ke' => '1',
+            'waktu_mulai' => '07:30:00',
+            'waktu_selesai' => '08:30:00',
+            'status' => 'ONGOING',
+        ]);
+
+        // Jadwal Ruang Sesi 2 (08:30 - 09:30) - Gandeng!
+        $jadwal2 = JadwalRuang::create([
+            'ruang_ujian_id' => $ruang->id,
+            'tanggal' => $tgl,
+            'sesi_ke' => '2',
+            'waktu_mulai' => '08:30:00',
+            'waktu_selesai' => '09:30:00',
+            'status' => 'SCHEDULED',
+        ]);
+
+        // Siswa sedang mengerjakan Sesi 1
+        $sesi1 = \App\Models\UjianSesi::create([
+            'ujian_id' => $ujian1->id,
+            'bank_soal_id' => $bankA->id,
+            'user_id' => $userSiswa->id,
+            'nama_peserta' => $siswa->nama,
+            'ruang_ujian_id' => $ruang->id,
+            'jadwal_ruang_id' => $jadwal1->id,
+            'token_sesi' => 'TOKEN-SESI-1',
+            'status' => 'mengerjakan',
+            'waktu_mulai' => now(),
+        ]);
+
+        $this->actingAs($userSiswa);
+
+        $runner = Livewire::test(\App\Livewire\ExamRunner::class, [
+            'bankSoal' => $bankA,
+            'token_sesi' => 'TOKEN-SESI-1',
+        ]);
+
+        // Verifikasi ExamRunner mendeteksi Sesi 2 sebagai subtest berikutnya tanpa token!
+        $info = $runner->get('nextSubtestInfo');
+        $this->assertNotNull($info);
+        $this->assertEquals($ujian2->id, $info['ujian']->id);
+        $this->assertEquals($jadwal2->id, $info['jadwal']->id);
+    }
 }

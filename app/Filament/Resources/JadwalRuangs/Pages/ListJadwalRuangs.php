@@ -128,11 +128,8 @@ class ListJadwalRuangs extends ListRecords
                 ->action(function (array $data) {
                     $stages = JadwalRuangForm::extractSubtestStages($data['daftar_subtest'] ?? []);
                     $ujianIds = JadwalRuangForm::extractOrderedUjianIds($data['daftar_subtest'] ?? []);
-                    if (empty($ujianIds)) return;
-
-                    $firstUjianId = (int) $ujianIds[0];
-                    $ujians = Ujian::whereIn('id', $ujianIds)->get();
-                    if ($ujians->isEmpty()) return;
+                    $firstUjianId = ! empty($ujianIds) ? (int) $ujianIds[0] : null;
+                    $ujians = ! empty($ujianIds) ? Ujian::whereIn('id', $ujianIds)->get() : collect();
 
                     $ruangs = RuangUjian::where('is_active', true)->orderBy('nama_ruang')->get();
                     if ($ruangs->isEmpty()) {
@@ -173,15 +170,20 @@ class ListJadwalRuangs extends ListRecords
                             ]
                         );
 
-                        $jadwal->syncSubtestStages($stages, false);
+                        if (! empty($stages)) {
+                            $jadwal->syncSubtestStages($stages, false);
+                        }
 
                         $createdCount++;
                     }
 
-                    $namaAgenda = $ujians->pluck('nama_ujian')->join(', ');
+                    $namaAgenda = $ujians->isNotEmpty()
+                        ? "Agenda (" . $ujians->pluck('nama_ujian')->join(', ') . ")"
+                        : "Mode ANBK (Otomatis deteksi soal sesuai kelas peserta)";
+
                     Notification::make()
                         ->title("Jadwal Berhasil Dibuat untuk {$createdCount} Ruangan")
-                        ->body("Agenda ({$namaAgenda}) telah dijadwalkan pada {$data['tanggal']}.")
+                        ->body("{$namaAgenda} telah dijadwalkan pada {$data['tanggal']}.")
                         ->success()
                         ->send();
                 }),

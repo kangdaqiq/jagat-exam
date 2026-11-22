@@ -79,7 +79,16 @@ class JadwalRuang extends Model
     }
 
     /**
+     * Apakah jadwal ruangan ini menggunakan Mode ANBK (otomatis mendeteksi ujian sesuai kelas peserta tanpa mapping manual).
+     */
+    public function isModeAnbk(): bool
+    {
+        return $this->ujians()->doesntExist() && empty($this->ujian_id);
+    }
+
+    /**
      * Ambil seluruh agenda ujian yang terkait dengan jadwal ruangan ini (terurut sesuai urutan subtest).
+     * Jika tidak di-setting manual (Mode ANBK), sistem otomatis mendeteksi ujian yang aktif untuk kelas peserta di ruangan ini.
      */
     public function getAllUjians(): Collection
     {
@@ -91,7 +100,71 @@ class JadwalRuang extends Model
             $collection->prepend($this->ujian->loadMissing(['mapel', 'kelas', 'bankSoal']));
         }
 
+        // MODE ANBK: Jika tidak ada mapping manual, ambil ujian aktif hari ini / sesi ini untuk kelas peserta di ruangan ini
+        if ($collection->isEmpty()) {
+            $collection = $this->getAutoDetectedUjians();
+        }
+
         return $collection;
+    }
+
+    /**
+     * Deteksi otomatis ujian aktif berdasarkan daftar kelas siswa yang ada di ruangan ini (Konsep ANBK).
+     */
+    public function getAutoDetectedUjians(): Collection
+    {
+        $ruang = $this->ruangUjian ?: RuangUjian::find($this->ruang_ujian_id);
+        if (! $ruang) {
+            return collect();
+        }
+
+        $kelasIds = $ruang->siswas()
+            ->where('is_active', true)
+            ->pluck('kelas_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $query = Ujian::query()
+            ->with(['mapel', 'kelas', 'bankSoal'])
+            ->whereIn('status', ['SCHEDULED', 'ONGOING']);
+
+        if ($this->tanggal) {
+            $query->where(function ($q) {
+                $q->whereDate('tanggal', $this->tanggal)
+                  ->orWhereNull('tanggal');
+            });
+        }
+
+        if (! empty($kelasIds)) {
+            $query->where(function ($q) use ($kelasIds, $ruang) {
+                $q->whereHas('kelas', fn ($kq) => $kq->whereIn('kelas.id', $kelasIds))
+                  ->orWhereHas('pesertas', fn ($pq) => $pq->whereIn('siswa_id', $ruang->siswas()->pluck('id')));
+            });
+        }
+
+        // Jika terdapat beberapa ujian pada hari yang sama, cocokkan dengan rentang jam sesi ruangan ini
+        if ($this->waktu_mulai && $this->waktu_selesai) {
+            $timeMatches = (clone $query)->where(function ($tq) {
+                $tq->where(function ($sub) {
+                    $sub->whereNotNull('waktu_mulai')
+                        ->where(function ($overlap) {
+                            $overlap->where('waktu_mulai', '<', $this->waktu_selesai)
+                                    ->where('waktu_selesai', '>', $this->waktu_mulai)
+                                    ->orWhere('waktu_mulai', $this->waktu_mulai);
+                        });
+                });
+            })->orderBy('waktu_mulai', 'asc')->orderBy('id', 'asc')->get();
+
+            if ($timeMatches->isNotEmpty()) {
+                return $timeMatches;
+            }
+        }
+
+        return $query->orderBy('waktu_mulai', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
     }
 
     /**
@@ -300,6 +373,8 @@ class JadwalRuang extends Model
         $firstId = array_key_first($syncData);
         if ($firstId !== null && (int) $this->ujian_id !== $firstId) {
             $this->updateQuietly(['ujian_id' => $firstId]);
+        } elseif ($firstId === null && $detaching && $this->ujian_id !== null) {
+            $this->updateQuietly(['ujian_id' => null]);
         }
     }
 
@@ -307,7 +382,7 @@ class JadwalRuang extends Model
     {
         $ujians = $this->getAllUjians();
         if ($ujians->isEmpty()) {
-            return '-';
+            return $this->isModeAnbk() ? 'Mode ANBK (Otomatis Lintas Kelas)' : '-';
         }
 
         return $ujians->map(fn (Ujian $u) => $u->nama_ujian)->join(', ');

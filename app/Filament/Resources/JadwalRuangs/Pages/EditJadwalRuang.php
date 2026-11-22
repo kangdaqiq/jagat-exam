@@ -43,9 +43,7 @@ class EditJadwalRuang extends EditRecord
         unset($data['daftar_subtest']);
 
         $firstId = $this->subtestStages[0][0] ?? null;
-        if ($firstId) {
-            $data['ujian_id'] = $firstId;
-        }
+        $data['ujian_id'] = $firstId ?: null;
 
         return $data;
     }
@@ -55,10 +53,8 @@ class EditJadwalRuang extends EditRecord
         if (! empty($this->subtestStages)) {
             $this->record->syncSubtestStages($this->subtestStages, true);
         } else {
-            $firstUjianId = $this->record->ujians()->first()?->id;
-            if ($firstUjianId !== $this->record->ujian_id) {
-                $this->record->updateQuietly(['ujian_id' => $firstUjianId]);
-            }
+            $this->record->ujians()->detach();
+            $this->record->updateQuietly(['ujian_id' => null]);
         }
     }
 
