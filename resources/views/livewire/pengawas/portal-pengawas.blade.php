@@ -221,7 +221,7 @@
                                     $ruangModel = $jr->ruangUjian;
                                     $tokenAktif = $jr->isTokenActive();
                                     $isSesiSelesai = $jr->status === 'COMPLETED';
-                                    $isSesiBerlangsung = $jr->status === 'ONGOING';
+                                    $isSesiBerlangsung = in_array($jr->status, ['ONGOING', 'ACTIVE']);
                                     $jumlahPesertaSesi = $jr->getSiswasForSession()->count();
                                     $namaPengawasSesi = $jr->pengawas?->name ?: ($ruangModel?->pengawas?->name ?: 'Belum Ditugaskan');
                                     if ($jr->pengawas && $jr->pengawasPendamping) {
@@ -240,7 +240,11 @@
                                                     {{ $ruangModel?->kode_ruang ?: 'RUANG' }}
                                                 </span>
                                                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                                    {{ $jr->tanggal?->format('d M Y') }} &bull; Sesi {{ $jr->sesi_ke }}
+                                                    @if(!empty($jr->is_sesi_gandeng))
+                                                        {{ $jr->tanggal?->format('d M Y') }} &bull; {{ $jr->label_sesi_gandeng }}
+                                                    @else
+                                                        {{ $jr->tanggal?->format('d M Y') }} &bull; Sesi {{ $jr->sesi_ke }}
+                                                    @endif
                                                 </span>
                                             </div>
 
@@ -266,7 +270,7 @@
 
                                         <div>
                                             <div class="text-[11px] font-bold text-emerald-700 uppercase tracking-wide truncate">
-                                                {{ $jr->daftar_mapel }}
+                                                {{ !empty($jr->is_sesi_gandeng) && !empty($jr->daftar_mapel_gandeng) ? $jr->daftar_mapel_gandeng : $jr->daftar_mapel }}
                                             </div>
                                             <h3 class="text-lg font-black text-slate-900 leading-snug mt-0.5" style="font-family: 'Outfit', sans-serif;">
                                                 {{ $ruangModel?->nama_ruang ?: 'Ruang Ujian' }}
@@ -285,7 +289,11 @@
                                             <div class="flex items-center justify-between">
                                                 <span class="text-slate-400">Jam Jadwal:</span>
                                                 <span class="font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                                                    {{ $jr->label_sesi_waktu }}
+                                                    @if(!empty($jr->is_sesi_gandeng))
+                                                        {{ $jr->jam_jadwal_gandeng }}
+                                                    @else
+                                                        {{ $jr->label_sesi_waktu }}
+                                                    @endif
                                                 </span>
                                             </div>
                                         </div>
@@ -307,14 +315,38 @@
                                     </div>
 
                                     <div class="space-y-2">
-                                        <button
-                                            type="button"
-                                            wire:click="pilihJadwalRuang({{ $jr->id }})"
-                                            class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
-                                            style="background: {{ $isSesiSelesai ? 'linear-gradient(135deg, #334155 0%, #475569 100%)' : 'linear-gradient(135deg, #041F45 0%, #059669 100%)' }}; color: #ffffff;"
-                                        >
-                                            <span>{{ $isSesiSelesai ? 'Buka Riwayat Sesi & Peserta »' : 'Buka Sesi & Rilis Token »' }}</span>
-                                        </button>
+                                        @if($isSesiSelesai)
+                                            <button
+                                                type="button"
+                                                wire:click="pilihJadwalRuang({{ $jr->id }})"
+                                                class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
+                                                style="background: linear-gradient(135deg, #334155 0%, #475569 100%); color: #ffffff;"
+                                            >
+                                                <span>Buka Riwayat Sesi & Peserta »</span>
+                                            </button>
+                                        @elseif($tokenAktif || $isSesiBerlangsung)
+                                            <button
+                                                type="button"
+                                                wire:click="pilihJadwalRuang({{ $jr->id }})"
+                                                class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
+                                                style="background: linear-gradient(135deg, #041F45 0%, #059669 100%); color: #ffffff;"
+                                            >
+                                                <span>{{ !empty($jr->is_sesi_gandeng) ? 'Buka Sesi Gandeng & Rilis Token »' : 'Buka Sesi & Rilis Token »' }}</span>
+                                            </button>
+                                        @else
+                                            <button
+                                                type="button"
+                                                disabled
+                                                class="w-full py-2.5 px-4 rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 opacity-60 cursor-not-allowed border border-slate-200"
+                                                style="background: #e2e8f0; color: #64748b;"
+                                                title="Sesi ini belum berlangsung."
+                                            >
+                                                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                                </svg>
+                                                <span>Dijadwalkan</span>
+                                            </button>
+                                        @endif
 
                                         <div class="grid grid-cols-2 gap-1.5">
                                             <a
@@ -551,14 +583,29 @@
                                 @endif
                             </div>
 
-                            <button
-                                type="button"
-                                wire:click="pilihUjian({{ $uj->id }})"
-                                class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
-                                style="background: linear-gradient(135deg, #041F45 0%, #059669 100%); color: #ffffff;"
-                            >
-                                <span>Buka Ruang Pengawasan &raquo;</span>
-                            </button>
+                            @if($ongoing || $completed)
+                                <button
+                                    type="button"
+                                    wire:click="pilihUjian({{ $uj->id }})"
+                                    class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 shadow-xs active:scale-[0.99] transition cursor-pointer"
+                                    style="background: linear-gradient(135deg, #041F45 0%, #059669 100%); color: #ffffff;"
+                                >
+                                    <span>Buka Ruang Pengawasan &raquo;</span>
+                                </button>
+                            @else
+                                <button
+                                    type="button"
+                                    disabled
+                                    class="w-full py-2.5 px-4 rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 opacity-60 cursor-not-allowed border border-slate-200"
+                                    style="background: #e2e8f0; color: #64748b;"
+                                    title="Ujian belum berlangsung."
+                                >
+                                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                    </svg>
+                                    <span>Dijadwalkan</span>
+                                </button>
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -629,7 +676,7 @@
                             </span>
                             @if($isSessionMode)
                                 <span class="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                    Sesi {{ $activeJadwalRuang->sesi_ke }}
+                                    {{ !empty($activeJadwalRuang->is_sesi_gandeng) ? $activeJadwalRuang->label_sesi_gandeng : 'Sesi ' . $activeJadwalRuang->sesi_ke }}
                                 </span>
                             @endif
                             @if($tokenActive)
@@ -731,14 +778,16 @@
                                         </button>
                                     @endif
 
-                                    <button
-                                        type="button"
-                                        wire:click="selesaikanSesiRuang"
-                                        wire:confirm="Tandai sesi ini selesai? Data peserta, Daftar Hadir, dan BAP sesi ini tetap tersimpan dan dapat diakses kapanpun."
-                                        class="px-3.5 py-2 rounded-xl text-xs font-extrabold border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer text-center"
-                                    >
-                                        Tandai Sesi Selesai
-                                    </button>
+                                    @if(auth()->user()?->isAdmin())
+                                        <button
+                                            type="button"
+                                            wire:click="selesaikanSesiRuang"
+                                            wire:confirm="Tandai sesi ini selesai? Data peserta, Daftar Hadir, dan BAP sesi ini tetap tersimpan dan dapat diakses kapanpun."
+                                            class="px-3.5 py-2 rounded-xl text-xs font-extrabold border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer text-center"
+                                        >
+                                            Tandai Sesi Selesai
+                                        </button>
+                                    @endif
                                 @endif
                             @else
                                 @if($jadwalRuangHabis)
@@ -1022,7 +1071,10 @@
                         </div>
 
                         @if($peserta && $sesi)
-                            <div class="grid {{ $row->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
+                            @php
+                                $canAdminAct = auth()->user()?->isAdmin();
+                            @endphp
+                            <div class="grid {{ $canAdminAct ? ($row->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4') : 'grid-cols-2' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
                                 <button
                                     type="button"
                                     wire:click="resetSesiSiswa({{ $peserta->id }})"
@@ -1034,26 +1086,28 @@
                                     <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci' : 'Reset Login' }}</span>
                                 </button>
 
-                                <button
-                                    type="button"
-                                    wire:click="resetUjianSiswaTotal({{ $peserta->id }})"
-                                    wire:confirm="PERINGATAN: Reset Ujian Total akan MENGHAPUS SEMUA JAWABAN dan mengulang waktu siswa {{ $siswaItem->nama }} dari nol. Lanjutkan?"
-                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
-                                    style="background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca;"
-                                    title="Reset Ujian Dari Nol (Hapus Jawaban & Waktu)"
-                                >
-                                    <span>Reset Ujian</span>
-                                </button>
+                                @if($canAdminAct)
+                                    <button
+                                        type="button"
+                                        wire:click="resetUjianSiswaTotal({{ $peserta->id }})"
+                                        wire:confirm="PERINGATAN: Reset Ujian Total akan MENGHAPUS SEMUA JAWABAN dan mengulang waktu siswa {{ $siswaItem->nama }} dari nol. Lanjutkan?"
+                                        class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                        style="background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca;"
+                                        title="Reset Ujian Dari Nol (Hapus Jawaban & Waktu)"
+                                    >
+                                        <span>Reset Ujian</span>
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
-                                    wire:confirm="Tambahkan waktu pengerjaan +10 menit untuk {{ $siswaItem->nama }}?"
-                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
-                                    style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
-                                >
-                                    <span>+10m Waktu</span>
-                                </button>
+                                    <button
+                                        type="button"
+                                        wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
+                                        wire:confirm="Tambahkan waktu pengerjaan +10 menit untuk {{ $siswaItem->nama }}?"
+                                        class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                        style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+                                    >
+                                        <span>+10m Waktu</span>
+                                    </button>
+                                @endif
 
                                 <button
                                     type="button"
@@ -1063,7 +1117,7 @@
                                     <span>Jawaban</span>
                                 </button>
 
-                                @if($row->status === 'SEDANG_MENGERJAKAN')
+                                @if($canAdminAct && $row->status === 'SEDANG_MENGERJAKAN')
                                     <button
                                         type="button"
                                         wire:click="paksaSelesaiSiswa({{ $peserta->id }})"
@@ -1429,7 +1483,10 @@
 
                         {{-- Tombol Aksi Cepat Proktor --}}
                         @if($sesi)
-                            <div class="grid {{ $peserta->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
+                            @php
+                                $canAdminAct = auth()->user()?->isAdmin();
+                            @endphp
+                            <div class="grid {{ $canAdminAct ? ($peserta->status === 'SEDANG_MENGERJAKAN' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3') : 'grid-cols-2' }} lg:flex lg:items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
                                 <button
                                     type="button"
                                     wire:click="resetSesiSiswa({{ $peserta->id }})"
@@ -1443,19 +1500,21 @@
                                     <span>{{ $jmlPelanggaran >= 3 ? 'Buka Kunci & Reset' : 'Reset Login' }}</span>
                                 </button>
 
-                                <button
-                                    type="button"
-                                    wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
-                                    wire:confirm="Tambahkan waktu pengerjaan +10 menit untuk {{ $peserta->siswa?->nama }}?"
-                                    class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
-                                    style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
-                                    title="Tambah Waktu +10 Menit"
-                                >
-                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>+10m Waktu</span>
-                                </button>
+                                @if($canAdminAct)
+                                    <button
+                                        type="button"
+                                        wire:click="tambahWaktuSiswa({{ $peserta->id }}, 10)"
+                                        wire:confirm="Tambahkan waktu pengerjaan +10 menit untuk {{ $peserta->siswa?->nama }}?"
+                                        class="inline-flex items-center justify-center gap-1 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+                                        style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+                                        title="Tambah Waktu +10 Menit"
+                                    >
+                                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>+10m Waktu</span>
+                                    </button>
+                                @endif
 
                                 <button
                                     type="button"
@@ -1469,7 +1528,7 @@
                                     <span>Jawaban</span>
                                 </button>
 
-                                @if($peserta->status === 'SEDANG_MENGERJAKAN')
+                                @if($canAdminAct && $peserta->status === 'SEDANG_MENGERJAKAN')
                                     <button
                                         type="button"
                                         wire:click="paksaSelesaiSiswa({{ $peserta->id }})"

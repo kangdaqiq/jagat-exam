@@ -76,6 +76,22 @@ class PortalUjian extends Component
                 ->where('token_ruang', $token)
                 ->latest()
                 ->first();
+
+            // Jika token dirilis langsung dari Ruang Ujian, sinkronkan ke JadwalRuang aktif hari ini
+            if (! $matchedJadwal) {
+                $timeNow = now()->format('H:i:s');
+                $matchedJadwal = \App\Models\JadwalRuang::where('ruang_ujian_id', $ruangToken->id)
+                    ->whereDate('tanggal', now()->toDateString())
+                    ->where(function ($q) use ($timeNow) {
+                        $q->where('waktu_mulai', '<=', $timeNow)
+                          ->where('waktu_selesai', '>=', $timeNow);
+                    })
+                    ->first()
+                    ?: \App\Models\JadwalRuang::where('ruang_ujian_id', $ruangToken->id)
+                        ->whereDate('tanggal', now()->toDateString())
+                        ->orderBy('waktu_mulai')
+                        ->first();
+            }
         }
 
         // 1A. PRIORITAS UTAMA: Token Ruangan Ujian (1 ruang bisa mix beberapa kelas, soal sesuai kelas/tingkat masing-masing siswa)
@@ -314,9 +330,26 @@ class PortalUjian extends Component
             $expSesi->koreksiDanSelesaikan();
         }
 
-        // Cari daftar ujian yang relevan untuk kelas siswa (optimasi eager loading soals_count)
+        // Cari daftar ujian yang relevan untuk kelas siswa HARI INI
         $daftarUjian = collect();
+        $daftarAgenda = collect();
+        $isRoomOngoing = false;
+
         if ($siswa && $siswa->kelas_id) {
+            $today = now()->toDateString();
+
+            // Cek apakah ada sesi di ruangan siswa yang sedang aktif/ONGOING hari ini
+            if ($siswa->ruang_ujian_id) {
+                $isRoomOngoing = \App\Models\JadwalRuang::where('ruang_ujian_id', $siswa->ruang_ujian_id)
+                    ->whereDate('tanggal', $today)
+                    ->where('status', 'ONGOING')
+                    ->exists();
+
+                if (! $isRoomOngoing && $siswa->ruangUjian) {
+                    $isRoomOngoing = $siswa->ruangUjian->isTokenActive();
+                }
+            }
+
             $daftarUjian = Ujian::whereHas('kelas', function ($q) use ($siswa) {
                 $q->where('kelas.id', $siswa->kelas_id);
             })
@@ -325,12 +358,176 @@ class PortalUjian extends Component
                 'guru',
                 'bankSoal' => fn ($q) => $q->withCount('soals'),
             ])
+            ->where(function ($q) use ($today) {
+                $q->whereDate('tanggal', $today)
+                  ->orWhereNull('tanggal');
+            })
             ->whereIn('status', ['SCHEDULED', 'ONGOING', 'COMPLETED'])
+            ->orderBy('waktu_mulai', 'asc')
             ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 1 WHEN status = 'SCHEDULED' THEN 2 ELSE 3 END")
-            ->orderBy('tanggal', 'desc')
-            ->take(6)
             ->get();
+
+            // Ambil jadwal ruangan siswa hari ini untuk mencocokkan nomor sesi resmi
+            $jadwalRuangsToday = $siswa->ruang_ujian_id
+                ? \App\Models\JadwalRuang::where('ruang_ujian_id', $siswa->ruang_ujian_id)
+                    ->whereDate('tanggal', $today)
+                    ->orderBy('waktu_mulai')
+                    ->get()
+                : collect();
+
+            // Pasangkan info sesi dan rentang jam pengerjaan ke setiap ujian
+            $daftarUjian->each(function (Ujian $uj, int $idx) use ($jadwalRuangsToday) {
+                // 1. Jadwal Jam
+                $waktuMulai = $uj->waktu_mulai ? substr((string) $uj->waktu_mulai, 0, 5) : null;
+                $waktuSelesai = $uj->waktu_selesai ? substr((string) $uj->waktu_selesai, 0, 5) : null;
+                $uj->jadwal_jam = ($waktuMulai && $waktuSelesai)
+                    ? "{$waktuMulai} - {$waktuSelesai} WIB"
+                    : ($waktuMulai ? "Mulai {$waktuMulai} WIB" : "Durasi {$uj->durasi_menit} Menit");
+
+                // 2. Nomor Sesi
+                $matchedJr = $jadwalRuangsToday->first(function ($jr) use ($uj) {
+                    if ($jr->waktu_mulai && $uj->waktu_mulai) {
+                        return substr((string) $jr->waktu_mulai, 0, 5) === substr((string) $uj->waktu_mulai, 0, 5);
+                    }
+                    return (int) $jr->ujian_id === (int) $uj->id || $jr->ujians->contains('id', $uj->id);
+                });
+
+                if ($matchedJr && $matchedJr->sesi_ke) {
+                    $uj->nomor_sesi = "Sesi {$matchedJr->sesi_ke}";
+                } elseif (preg_match('/\b(S\d+|Sesi\s*\d+)\b/i', $uj->nama_ujian, $matches)) {
+                    $uj->nomor_sesi = strtoupper(str_replace('sesi', 'Sesi ', $matches[0]));
+                } else {
+                    $uj->nomor_sesi = 'Sesi ' . ($idx + 1);
+                }
+            });
+
+            // =========================================================================
+            // Kelompokkan sesi ujian gandeng (berurutan langsung) menjadi 1 tampilan agenda
+            // =========================================================================
+            $skipIds = [];
+            for ($i = 0; $i < $daftarUjian->count(); $i++) {
+                $uj = $daftarUjian[$i];
+                if (in_array($uj->id, $skipIds)) {
+                    continue;
+                }
+
+                $nextUj = $daftarUjian->get($i + 1);
+                $isGandeng = false;
+
+                if ($nextUj && ! in_array($nextUj->id, $skipIds)) {
+                    $end1 = $uj->waktu_selesai ? strtotime((string) $uj->waktu_selesai) : null;
+                    $start2 = $nextUj->waktu_mulai ? strtotime((string) $nextUj->waktu_mulai) : null;
+
+                    if ($end1 && $start2) {
+                        $diffMinutes = ($start2 - $end1) / 60;
+                        if ($diffMinutes >= 0 && $diffMinutes <= 15) {
+                            $isGandeng = true;
+                        }
+                    }
+
+                    // Cek nomor sesi berurutan (misal Sesi 1 dan Sesi 2)
+                    if (! $isGandeng && isset($uj->nomor_sesi, $nextUj->nomor_sesi)) {
+                        preg_match('/\d+/', $uj->nomor_sesi, $m1);
+                        preg_match('/\d+/', $nextUj->nomor_sesi, $m2);
+                        if (! empty($m1[0]) && ! empty($m2[0]) && ((int) $m2[0] === (int) $m1[0] + 1)) {
+                            if ($end1 && $start2) {
+                                $diffMinutes = ($start2 - $end1) / 60;
+                                if ($diffMinutes <= 15) {
+                                    $isGandeng = true;
+                                }
+                            } else {
+                                $isGandeng = true;
+                            }
+                        }
+                    }
+                }
+
+                if ($isGandeng && $nextUj) {
+                    $skipIds[] = $nextUj->id;
+
+                    $item = new \stdClass();
+                    $item->is_gandeng = true;
+                    $item->id = $uj->id;
+                    $item->secondary_id = $nextUj->id;
+                    $item->ujians = collect([$uj, $nextUj]);
+                    $item->nama_agenda = ($uj->mapel?->nama_mapel ?: $uj->nama_ujian) . ' & ' . ($nextUj->mapel?->nama_mapel ?: $nextUj->nama_ujian);
+                    $item->nama_ujian = $item->nama_agenda;
+                    $item->mapel_nama = ($uj->mapel?->nama_mapel ?: 'Subtest 1') . ' & ' . ($nextUj->mapel?->nama_mapel ?: 'Subtest 2');
+
+                    $s1 = $uj->nomor_sesi ?: 'Sesi 1';
+                    $s2 = $nextUj->nomor_sesi ?: 'Sesi 2';
+                    $item->nomor_sesi = "{$s1} & {$s2} (Gandeng)";
+
+                    $wMulai = $uj->waktu_mulai ? substr((string) $uj->waktu_mulai, 0, 5) : '07:30';
+                    $wSelesai = $nextUj->waktu_selesai ? substr((string) $nextUj->waktu_selesai, 0, 5) : ($uj->waktu_selesai ? substr((string) $uj->waktu_selesai, 0, 5) : '09:30');
+                    $item->jadwal_jam = "{$wMulai} - {$wSelesai} WIB";
+
+                    $item->durasi_menit = ((int) ($uj->durasi_menit ?: 60)) + ((int) ($nextUj->durasi_menit ?: 60));
+                    $item->total_soal = ($uj->bankSoal?->soals_count ?? 0) + ($nextUj->bankSoal?->soals_count ?? 0);
+                    $item->guru_nama = $uj->guru?->name ?: ($nextUj->guru?->name ?: 'Guru Pengawas');
+                    $item->tipe_label = $uj->getTipeLabel();
+
+                    if ($uj->status === 'ONGOING' || $nextUj->status === 'ONGOING' || $isRoomOngoing) {
+                        $item->status = 'ONGOING';
+                    } elseif ($uj->status === 'COMPLETED' && $nextUj->status === 'COMPLETED') {
+                        $item->status = 'COMPLETED';
+                    } else {
+                        $item->status = 'SCHEDULED';
+                    }
+
+                    $item->subtests = [
+                        [
+                            'urutan' => 1,
+                            'nama' => $uj->mapel?->nama_mapel ?: $uj->nama_ujian,
+                            'durasi' => $uj->durasi_menit ?: 60,
+                            'soal' => $uj->bankSoal?->soals_count ?? 0,
+                            'jam' => $uj->jadwal_jam,
+                            'status' => $uj->status,
+                            'ujian_id' => $uj->id,
+                        ],
+                        [
+                            'urutan' => 2,
+                            'nama' => $nextUj->mapel?->nama_mapel ?: $nextUj->nama_ujian,
+                            'durasi' => $nextUj->durasi_menit ?: 60,
+                            'soal' => $nextUj->bankSoal?->soals_count ?? 0,
+                            'jam' => $nextUj->jadwal_jam,
+                            'status' => $nextUj->status,
+                            'ujian_id' => $nextUj->id,
+                        ],
+                    ];
+
+                    $daftarAgenda->push($item);
+                } else {
+                    $item = new \stdClass();
+                    $item->is_gandeng = false;
+                    $item->id = $uj->id;
+                    $item->secondary_id = null;
+                    $item->ujians = collect([$uj]);
+                    $item->nama_agenda = $uj->nama_ujian;
+                    $item->nama_ujian = $uj->nama_ujian;
+                    $item->mapel_nama = $uj->mapel?->nama_mapel ?: 'Mata Pelajaran';
+                    $item->nomor_sesi = $uj->nomor_sesi ?: 'Sesi 1';
+                    $item->jadwal_jam = $uj->jadwal_jam;
+                    $item->durasi_menit = $uj->durasi_menit ?: 60;
+                    $item->total_soal = $uj->bankSoal?->soals_count ?? ($uj->bankSoal?->soals()->count() ?: 0);
+                    $item->guru_nama = $uj->guru?->name ?: 'Guru Pengawas';
+                    $item->tipe_label = $uj->getTipeLabel();
+
+                    if ($uj->status === 'ONGOING' || $isRoomOngoing) {
+                        $item->status = 'ONGOING';
+                    } else {
+                        $item->status = $uj->status;
+                    }
+
+                    $item->subtests = [];
+
+                    $daftarAgenda->push($item);
+                }
+            }
         }
+
+        // Tentukan apakah ada sesi yang aktif/ONGOING saat ini
+        $hasOngoingSesi = $isRoomOngoing || $daftarAgenda->contains(fn ($it) => $it->status === 'ONGOING');
 
         // Map sesi aktif siswa berdasarkan ujian_id agar siswa bisa langsung klik "Lanjutkan Ujian"
         $sesiAktifMap = UjianSesi::where('user_id', $user->id)
@@ -350,7 +547,9 @@ class PortalUjian extends Component
         return view('livewire.siswa.portal-ujian', [
             'user' => $user,
             'siswa' => $siswa,
+            'daftarAgenda' => $daftarAgenda,
             'daftarUjian' => $daftarUjian,
+            'hasOngoingSesi' => $hasOngoingSesi,
             'sesiAktifMap' => $sesiAktifMap,
             'riwayatUjian' => $riwayatUjian,
         ]);

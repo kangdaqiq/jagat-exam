@@ -105,13 +105,13 @@
                             type="text"
                             wire:model="token_input"
                             maxlength="10"
-                            placeholder="CONTOH: A7K9P2"
+                            placeholder="{{ $hasOngoingSesi ? 'CONTOH: A7K9P2' : 'SESI BELUM DIMULAI' }}"
                             autocomplete="off"
                             autocapitalize="characters"
                             spellcheck="false"
-                            autofocus
+                            @if($hasOngoingSesi) autofocus @else disabled @endif
                             oninput="this.value = this.value.toUpperCase()"
-                            class="w-full text-center font-mono text-2xl sm:text-3xl font-black tracking-[0.25em] uppercase py-3.5 px-4 rounded-2xl border-2 bg-slate-50/90 focus:bg-white text-[#041F45] placeholder:text-slate-300 placeholder:tracking-normal placeholder:text-lg focus:border-[#041F45] focus:ring-4 focus:ring-emerald-500/15 outline-none transition"
+                            class="w-full text-center font-mono text-2xl sm:text-3xl font-black tracking-[0.25em] uppercase py-3.5 px-4 rounded-2xl border-2 bg-slate-50/90 focus:bg-white text-[#041F45] placeholder:text-slate-300 placeholder:tracking-normal placeholder:text-base sm:placeholder:text-lg focus:border-[#041F45] focus:ring-4 focus:ring-emerald-500/15 outline-none transition disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed"
                             style="border-color: {{ $errors->has('token_input') ? '#f43f5e' : '#cbd5e1' }};"
                         />
                     </div>
@@ -128,11 +128,21 @@
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
-                        class="w-full py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base text-white shadow-[0_8px_20px_-4px_rgba(4,31,69,0.35)] hover:shadow-[0_12px_24px_-4px_rgba(4,31,69,0.45)] active:scale-[0.99] transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-                        style="background: linear-gradient(135deg, #041F45 0%, #07336b 55%, #059669 100%);"
+                        @if(!$hasOngoingSesi) disabled @endif
+                        class="w-full py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base text-white shadow-[0_8px_20px_-4px_rgba(4,31,69,0.35)] transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none"
+                        style="{{ $hasOngoingSesi ? 'background: linear-gradient(135deg, #041F45 0%, #07336b 55%, #059669 100%);' : 'background: #94a3b8;' }}"
                     >
-                        <span wire:loading.remove wire:target="submitToken">Mulai Kerjakan Ujian &raquo;</span>
-                        <span wire:loading wire:target="submitToken">Memverifikasi Token &amp; Membuka Soal...</span>
+                        @if($hasOngoingSesi)
+                            <span wire:loading.remove wire:target="submitToken">Mulai Kerjakan Ujian &raquo;</span>
+                            <span wire:loading wire:target="submitToken">Memverifikasi Token &amp; Membuka Soal...</span>
+                        @else
+                            <span class="flex items-center justify-center gap-2 text-slate-100">
+                                <svg class="w-4 h-4 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                </svg>
+                                <span>Tombol Masuk Ditutup (Menunggu Pengawas)</span>
+                            </span>
+                        @endif
                     </button>
                 </form>
             </div>
@@ -147,25 +157,30 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </span>
-                    <span>Agenda Ujian Rombel {{ $siswa?->kelas?->nama_kelas ?: 'Anda' }}</span>
+                    <span>Agenda Ujian Hari Ini &bull; Rombel {{ $siswa?->kelas?->nama_kelas ?: 'Anda' }}</span>
                 </h2>
                 <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-white border border-slate-200 text-slate-600 shadow-2xs">
-                    {{ count($daftarUjian) }} Ujian Terjadwal
+                    {{ count($daftarAgenda) }} Agenda Hari Ini
                 </span>
             </div>
 
-            @if($daftarUjian->isEmpty())
+            @if($daftarAgenda->isEmpty())
                 <div class="p-8 sm:p-10 text-center bg-white rounded-3xl border border-dashed border-slate-300 text-slate-500">
                     <p class="text-sm font-bold text-slate-700">Belum ada jadwal ujian aktif untuk rombel kelas Anda hari ini.</p>
                     <p class="text-xs text-slate-400 mt-1">Guru atau Admin akan menjadwalkan ujian dan memberikan kode token di kelas.</p>
                 </div>
             @else
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    @foreach($daftarUjian as $uj)
+                <div class="grid grid-cols-1 {{ count($daftarAgenda) > 1 ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2' }} gap-4">
+                    @foreach($daftarAgenda as $agenda)
                         @php
-                            $isOngoing = $uj->status === 'ONGOING';
-                            $sesiAktif = isset($sesiAktifMap) ? ($sesiAktifMap[$uj->id] ?? null) : null;
-                            $jmlSoal = $uj->bankSoal?->soals_count ?? ($uj->bankSoal?->soals()->count() ?: 0);
+                            $isOngoing = $agenda->status === 'ONGOING';
+                            $sesiAktifUjianId = null;
+                            foreach ($agenda->ujians as $ujObj) {
+                                if (isset($sesiAktifMap[$ujObj->id])) {
+                                    $sesiAktifUjianId = $ujObj->id;
+                                    break;
+                                }
+                            }
                         @endphp
                         <div
                             class="bg-white rounded-2xl p-5 flex flex-col justify-between gap-4 transition shadow-xs hover:shadow-md"
@@ -174,11 +189,23 @@
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
                                     <div class="flex items-center gap-1.5 flex-wrap">
-                                        <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-[#041F45]">
-                                            {{ $uj->mapel?->nama_mapel ?: 'Mata Pelajaran' }}
-                                        </span>
+                                        @if($agenda->is_gandeng)
+                                            <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                🔗 {{ $agenda->nomor_sesi }}
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                2 Subtest Berurutan
+                                            </span>
+                                        @else
+                                            <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-[#041F45]">
+                                                {{ $agenda->mapel_nama }}
+                                            </span>
+                                            <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                                {{ $agenda->nomor_sesi }}
+                                            </span>
+                                        @endif
                                         <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200/80">
-                                            {{ $uj->getTipeLabel() }}
+                                            {{ $agenda->tipe_label }}
                                         </span>
                                     </div>
 
@@ -187,7 +214,7 @@
                                             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                                             SESI DIBUKA
                                         </span>
-                                    @elseif($uj->status === 'SCHEDULED')
+                                    @elseif($agenda->status === 'SCHEDULED')
                                         <span class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
                                             Dijadwalkan
                                         </span>
@@ -199,30 +226,60 @@
                                 </div>
 
                                 <h3 class="text-base font-black text-[#041F45] font-['Outfit',sans-serif] leading-snug">
-                                    {{ $uj->nama_ujian }}
+                                    {{ $agenda->nama_agenda }}
                                 </h3>
 
+                                @if($agenda->is_gandeng)
+                                    <div class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+                                        <div class="font-bold text-slate-700 flex items-center justify-between">
+                                            <span>Rangkaian Subtest Ujian:</span>
+                                            <span class="text-[11px] text-emerald-700 font-extrabold">Tanpa Token Ulang</span>
+                                        </div>
+                                        <div class="space-y-1.5 text-slate-600">
+                                            @foreach($agenda->subtests as $sub)
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium">
+                                                        <strong>Subtest {{ $sub['urutan'] }}:</strong> {{ $sub['nama'] }}
+                                                    </span>
+                                                    <span class="text-slate-500 shrink-0 font-mono text-[11px]">
+                                                        {{ $sub['durasi'] }}m &bull; {{ $sub['soal'] }} Soal
+                                                    </span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 italic border-t border-slate-200/60 pt-1.5">
+                                            * Subtest 2 langsung terbuka otomatis setelah Subtest 1 diserahkan.
+                                        </div>
+                                    </div>
+                                @endif
+
                                 <div class="mt-3 space-y-1.5 text-xs text-slate-500 font-medium">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <span>Jadwal: <strong class="text-slate-800 font-bold">{{ $agenda->jadwal_jam }}</strong> ({{ $agenda->nomor_sesi }})</span>
+                                    </div>
                                     <div class="flex items-center gap-2">
                                         <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                         </svg>
-                                        <span>Guru: <strong class="text-slate-700">{{ $uj->guru?->name ?: 'Guru Pengawas' }}</strong></span>
+                                        <span>Guru: <strong class="text-slate-700">{{ $agenda->guru_nama }}</strong></span>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                         </svg>
-                                        <span>Durasi: <strong class="text-slate-700">{{ $uj->durasi_menit ?: 60 }} Menit</strong> &bull; {{ $jmlSoal }} Butir Soal</span>
+                                        <span>Total Soal: <strong class="text-slate-700">{{ $agenda->total_soal }} Butir</strong> &bull; Durasi Total {{ $agenda->durasi_menit }} Menit</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="pt-3 border-t border-slate-100 text-xs">
-                                @if($isOngoing && $sesiAktif)
+                                @if($isOngoing && $sesiAktifUjianId)
                                     <button
                                         type="button"
-                                        wire:click="lanjutkanUjian({{ $uj->id }})"
+                                        wire:click="lanjutkanUjian({{ $sesiAktifUjianId }})"
                                         class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.99] transition cursor-pointer"
                                         style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);"
                                     >
@@ -231,16 +288,19 @@
                                 @elseif($isOngoing)
                                     <div class="text-emerald-700 font-bold flex items-center gap-1.5">
                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                        <span>Masukkan kode token di atas untuk memulai</span>
+                                        <span>Sesi Dibuka &bull; Masukkan token di atas untuk memulai</span>
                                     </div>
-                                @elseif($uj->status === 'SCHEDULED')
-                                    <span class="text-slate-400 font-medium">
-                                        Menunggu Guru Pengawas memulai sesi di kelas
-                                    </span>
                                 @else
-                                    <span class="text-slate-400">
-                                        Sesi ujian telah ditutup
-                                    </span>
+                                    <button
+                                        type="button"
+                                        disabled
+                                        class="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed flex items-center justify-center gap-1.5 opacity-80"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                        </svg>
+                                        <span>Tombol Masuk Ditutup (Menunggu Pengawas)</span>
+                                    </button>
                                 @endif
                             </div>
                         </div>

@@ -604,6 +604,7 @@ class ExamRunner extends Component
         $jadwal = $this->sesi->jadwalRuang;
         if (! $jadwal && $this->sesi->ruang_ujian_id) {
             $tanggalRef = ($this->sesi->waktu_mulai ?? now())->toDateString();
+            // 1. Coba cari jika ada mapping ujian eksplisit
             $jadwal = JadwalRuang::where('ruang_ujian_id', $this->sesi->ruang_ujian_id)
                 ->whereDate('tanggal', $tanggalRef)
                 ->where(function ($q) {
@@ -612,6 +613,22 @@ class ExamRunner extends Component
                 })
                 ->latest()
                 ->first();
+
+            // 2. Jika tidak ada mapping eksplisit (Mode ANBK), cari jadwal ruangan hari ini yang rentang waktunya cocok
+            if (! $jadwal) {
+                $timeRef = ($this->sesi->waktu_mulai ?? now())->format('H:i:s');
+                $jadwal = JadwalRuang::where('ruang_ujian_id', $this->sesi->ruang_ujian_id)
+                    ->whereDate('tanggal', $tanggalRef)
+                    ->where(function ($q) use ($timeRef) {
+                        $q->where('waktu_mulai', '<=', $timeRef)
+                          ->where('waktu_selesai', '>=', $timeRef);
+                    })
+                    ->first()
+                    ?: JadwalRuang::where('ruang_ujian_id', $this->sesi->ruang_ujian_id)
+                        ->whereDate('tanggal', $tanggalRef)
+                        ->orderBy('waktu_mulai')
+                        ->first();
+            }
         }
 
         if (! $jadwal) {
@@ -657,14 +674,38 @@ class ExamRunner extends Component
             return null;
         }
 
-        $subtests = $targetJadwal->getSubtestsForSiswa($siswa);
-        $nextPos = $subtests->search(fn (Ujian $u) => (int) $u->id === (int) $nextUjian->id);
+        // Hitung jumlah ujian yang sudah diselesaikan siswa pada hari yang sama
+        $selesaiCount = UjianPeserta::where(function ($q) use ($siswa) {
+            $q->where('siswa_id', $siswa->id);
+            if ($siswa->user_id) {
+                $q->orWhere('user_id', $siswa->user_id);
+            }
+        })
+        ->where('status', 'SELESAI')
+        ->whereHas('ujian', function ($uq) use ($jadwal) {
+            if ($jadwal->tanggal) {
+                $uq->whereDate('tanggal', $jadwal->tanggal);
+            }
+        })
+        ->count();
+
+        if ($targetJadwal->id !== $jadwal->id) {
+            // Sesi gandeng antar JadwalRuang: urutan lanjutan adalah (ujian selesai + 1)
+            $urutanKe = max(2, $selesaiCount + 1);
+            $totalSubtest = max($urutanKe, $selesaiCount + $targetJadwal->getSubtestsForSiswa($siswa)->count());
+        } else {
+            // Subtest berurutan dalam satu JadwalRuang yang sama
+            $subtests = $targetJadwal->getSubtestsForSiswa($siswa);
+            $nextPos = $subtests->search(fn (Ujian $u) => (int) $u->id === (int) $nextUjian->id);
+            $urutanKe = $nextPos !== false ? ($nextPos + 1) : max(2, $selesaiCount + 1);
+            $totalSubtest = max(2, $subtests->count());
+        }
 
         return [
             'jadwal' => $targetJadwal,
             'ujian' => $nextUjian->loadMissing(['mapel', 'bankSoal']),
-            'urutan_ke' => $nextPos !== false ? ($nextPos + 1) : 2,
-            'total_subtest' => max(2, $subtests->count()),
+            'urutan_ke' => $urutanKe,
+            'total_subtest' => $totalSubtest,
             'soal_count' => $nextUjian->bankSoal?->soals()->count() ?: 0,
         ];
     }

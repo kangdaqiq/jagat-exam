@@ -184,6 +184,7 @@ class AiQuestionService
             'gemini-3.7-flash' => '⚡ Gemini 3.7 Flash (Otomatis Failover jika Sibuk)',
             'gemini-3.6-flash' => '⚡ Gemini 3.6 Flash (Otomatis Failover jika Sibuk)',
             'gemini-3.5-flash' => '🚀 Gemini 3.5 Flash',
+            'gemini-3.5-pro' => '🧠 Gemini 3.5 Pro (Akurasi Maksimal & Penalaran Kompleks)',
         ];
     }
 

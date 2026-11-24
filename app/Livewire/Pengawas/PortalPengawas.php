@@ -73,6 +73,12 @@ class PortalPengawas extends Component
             return;
         }
 
+        if (! in_array($jadwal->status, ['ONGOING', 'ACTIVE', 'COMPLETED']) && ! $jadwal->isTokenActive() && ! Auth::user()?->isAdmin()) {
+            $this->flashType = 'warning';
+            $this->flashMessage = "Sesi {$jadwal->label_sesi_waktu} di {$jadwal->ruangUjian?->nama_ruang} belum berlangsung (status bukan ongoing). Ruang pengawasan belum dapat dibuka.";
+            return;
+        }
+
         $this->selectedJadwalRuangId = $jadwal->id;
         $this->selectedRuangId = null;
         $this->selectedUjianId = null;
@@ -164,12 +170,97 @@ class PortalPengawas extends Component
             $query->where('status', 'COMPLETED');
         }
 
-        return $query
-            ->orderByRaw("CASE WHEN status = 'ONGOING' THEN 0 WHEN status = 'SCHEDULED' THEN 1 ELSE 2 END")
+        $list = $query
             ->orderByDesc('tanggal')
             ->orderBy('sesi_ke')
             ->orderBy('waktu_mulai')
             ->get();
+
+        // Gabungkan sesi 1 dan 2 jika gandeng (ruangan & tanggal sama, waktu / sesi_ke berurutan)
+        $grouped = collect();
+        $skipIds = [];
+
+        $sorted = $list->sortBy([
+            ['ruang_ujian_id', 'asc'],
+            ['tanggal', 'desc'],
+            ['sesi_ke', 'asc'],
+            ['waktu_mulai', 'asc'],
+        ])->values();
+
+        for ($i = 0; $i < $sorted->count(); $i++) {
+            $jr = $sorted[$i];
+            if (in_array($jr->id, $skipIds)) {
+                continue;
+            }
+
+            $nextJr = $sorted->get($i + 1);
+            $isGandeng = false;
+
+            if ($nextJr && ! in_array($nextJr->id, $skipIds)) {
+                $sameRoom = (int) $jr->ruang_ujian_id === (int) $nextJr->ruang_ujian_id;
+                $sameDate = $jr->tanggal && $nextJr->tanggal && $jr->tanggal->toDateString() === $nextJr->tanggal->toDateString();
+
+                if ($sameRoom && $sameDate) {
+                    $end1 = $jr->waktu_selesai ? strtotime((string) $jr->waktu_selesai) : null;
+                    $start2 = $nextJr->waktu_mulai ? strtotime((string) $nextJr->waktu_mulai) : null;
+
+                    if ($end1 && $start2) {
+                        $diffMinutes = ($start2 - $end1) / 60;
+                        if ($diffMinutes >= 0 && $diffMinutes <= 15) {
+                            $isGandeng = true;
+                        }
+                    }
+
+                    if (! $isGandeng && ((int) $nextJr->sesi_ke === (int) $jr->sesi_ke + 1)) {
+                        if ($end1 && $start2) {
+                            $diffMinutes = ($start2 - $end1) / 60;
+                            if ($diffMinutes <= 15) {
+                                $isGandeng = true;
+                            }
+                        } else {
+                            $isGandeng = true;
+                        }
+                    }
+                }
+            }
+
+            if ($isGandeng && $nextJr) {
+                $skipIds[] = $nextJr->id;
+
+                // Utamakan sesi yang ONGOING sebagai kartu utama
+                $primary = ($jr->status === 'ONGOING' || $jr->isTokenActive()) ? $jr : (($nextJr->status === 'ONGOING' || $nextJr->isTokenActive()) ? $nextJr : $jr);
+                $secondary = ($primary->id === $jr->id) ? $nextJr : $jr;
+
+                $primary->is_sesi_gandeng = true;
+                $primary->gandeng_jr = $secondary;
+                $primary->label_sesi_gandeng = "Sesi {$jr->sesi_ke} & {$nextJr->sesi_ke} (Gandeng)";
+
+                $wMulai = $jr->waktu_mulai ? substr((string) $jr->waktu_mulai, 0, 5) : '06:30';
+                $wSelesai = $nextJr->waktu_selesai ? substr((string) $nextJr->waktu_selesai, 0, 5) : ($jr->waktu_selesai ? substr((string) $jr->waktu_selesai, 0, 5) : '08:30');
+                $primary->jam_jadwal_gandeng = "Sesi {$jr->sesi_ke} & {$nextJr->sesi_ke} ({$wMulai} - {$wSelesai})";
+
+                if ($jr->status === 'ONGOING' || $nextJr->status === 'ONGOING' || $jr->isTokenActive() || $nextJr->isTokenActive()) {
+                    $primary->status = 'ONGOING';
+                }
+
+                $mapels = array_filter([$jr->daftar_mapel, $nextJr->daftar_mapel]);
+                if (! empty($mapels)) {
+                    $primary->daftar_mapel_gandeng = implode(' & ', array_unique($mapels));
+                }
+
+                $grouped->push($primary);
+            } else {
+                $jr->is_sesi_gandeng = false;
+                $grouped->push($jr);
+            }
+        }
+
+        return $grouped->sortBy([
+            fn ($a, $b) => ($a->status === 'ONGOING' ? 0 : ($a->status === 'SCHEDULED' ? 1 : 2)) <=> ($b->status === 'ONGOING' ? 0 : ($b->status === 'SCHEDULED' ? 1 : 2)),
+            ['tanggal', 'desc'],
+            ['sesi_ke', 'asc'],
+            ['waktu_mulai', 'asc'],
+        ])->values();
     }
 
     public function getActiveJadwalRuangProperty(): ?JadwalRuang
@@ -197,6 +288,24 @@ class PortalPengawas extends Component
             if ($uj->status === 'ONGOING') {
                 $uj->autoCloseExpiredSessions();
             }
+        }
+
+        // Cek apakah sesi ini bagian dari sesi gandeng di ruangan & tanggal yang sama
+        $otherGandeng = JadwalRuang::where('ruang_ujian_id', $jr->ruang_ujian_id)
+            ->where('id', '!=', $jr->id)
+            ->whereDate('tanggal', $jr->tanggal)
+            ->where(function ($q) use ($jr) {
+                $q->where('sesi_ke', $jr->sesi_ke + 1)
+                  ->orWhere('sesi_ke', $jr->sesi_ke - 1);
+            })
+            ->first();
+
+        if ($otherGandeng) {
+            $sesiMin = min($jr->sesi_ke, $otherGandeng->sesi_ke);
+            $sesiMax = max($jr->sesi_ke, $otherGandeng->sesi_ke);
+            $jr->is_sesi_gandeng = true;
+            $jr->label_sesi_gandeng = "Sesi {$sesiMin} & {$sesiMax} (Gandeng)";
+            $jr->gandeng_jr = $otherGandeng;
         }
 
         return $jr;
@@ -330,6 +439,12 @@ class PortalPengawas extends Component
 
     public function selesaikanSesiRuang(): void
     {
+        if (! Auth::user()?->isAdmin()) {
+            $this->flashType = 'danger';
+            $this->flashMessage = 'Aksi menandai sesi selesai hanya dapat dilakukan oleh Admin.';
+            return;
+        }
+
         $jr = $this->activeJadwalRuang;
         if (! $jr) {
             return;
@@ -795,6 +910,12 @@ class PortalPengawas extends Component
      */
     public function selesaikanUjian(): void
     {
+        if (! Auth::user()?->isAdmin()) {
+            $this->flashType = 'danger';
+            $this->flashMessage = 'Aksi menutup pelaksanaan ujian hanya dapat dilakukan oleh Admin.';
+            return;
+        }
+
         $ujian = $this->activeUjian;
         if (!$ujian) return;
 
@@ -835,6 +956,7 @@ class PortalPengawas extends Component
         }
 
         $sesi = $peserta->ujianSesi;
+        $wasLocked = $sesi && ((int) $sesi->jumlah_pelanggaran >= 3);
 
         if ($peserta->status === 'SELESAI') {
             $peserta->update([
@@ -860,7 +982,11 @@ class PortalPengawas extends Component
 
         $nama = $peserta->siswa?->nama ?: 'Siswa';
         $this->flashType = 'success';
-        $this->flashMessage = "Login & kunci perangkat {$nama} berhasil di-reset. Siswa dapat langsung login dari perangkat baru.";
+        if ($wasLocked) {
+            $this->flashMessage = "Kunci pelanggaran pindah tab untuk {$nama} berhasil dibuka. Siswa dapat langsung melanjutkan pengerjaan ujian.";
+        } else {
+            $this->flashMessage = "Login & kunci perangkat {$nama} berhasil di-reset. Siswa dapat langsung login dari perangkat baru.";
+        }
     }
 
     /**
@@ -868,6 +994,12 @@ class PortalPengawas extends Component
      */
     public function resetUjianSiswaTotal(int $pesertaId): void
     {
+        if (! Auth::user()?->isAdmin()) {
+            $this->flashType = 'danger';
+            $this->flashMessage = 'Aksi reset total ujian hanya dapat dilakukan oleh Admin.';
+            return;
+        }
+
         $peserta = UjianPeserta::with(['ujianSesi.jawabans', 'siswa.user', 'user'])->find($pesertaId);
         if (!$peserta) return;
 
@@ -902,6 +1034,12 @@ class PortalPengawas extends Component
      */
     public function tambahWaktuSiswa(int $pesertaId, int $menit = 10): void
     {
+        if (! Auth::user()?->isAdmin()) {
+            $this->flashType = 'danger';
+            $this->flashMessage = 'Aksi penambahan waktu pengerjaan hanya dapat dilakukan oleh Admin.';
+            return;
+        }
+
         $peserta = UjianPeserta::with(['ujianSesi', 'siswa'])->find($pesertaId);
         if (!$peserta || !$peserta->ujianSesi) return;
 
@@ -929,6 +1067,12 @@ class PortalPengawas extends Component
      */
     public function paksaSelesaiSiswa(int $pesertaId): void
     {
+        if (! Auth::user()?->isAdmin()) {
+            $this->flashType = 'danger';
+            $this->flashMessage = 'Aksi menyelesaikan ujian siswa secara paksa hanya dapat dilakukan oleh Admin.';
+            return;
+        }
+
         $peserta = UjianPeserta::with(['ujianSesi', 'siswa'])->find($pesertaId);
         if (!$peserta) return;
 

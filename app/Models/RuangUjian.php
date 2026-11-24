@@ -339,6 +339,30 @@ class RuangUjian extends Model
             'token_generated_at' => now(),
         ]);
 
+        // Sinkronkan token ke jadwal ruangan aktif hari ini (jika ada)
+        $timeNow = now()->format('H:i:s');
+        $activeJadwal = $this->jadwalRuangs()
+            ->whereDate('tanggal', now()->toDateString())
+            ->whereIn('status', ['SCHEDULED', 'ONGOING'])
+            ->where(function ($q) use ($timeNow) {
+                $q->where('waktu_mulai', '<=', $timeNow)
+                  ->where('waktu_selesai', '>=', $timeNow);
+            })
+            ->first()
+            ?: $this->jadwalRuangs()
+                ->whereDate('tanggal', now()->toDateString())
+                ->whereIn('status', ['SCHEDULED', 'ONGOING'])
+                ->orderBy('waktu_mulai')
+                ->first();
+
+        if ($activeJadwal) {
+            $activeJadwal->update([
+                'token_ruang' => $token,
+                'token_generated_at' => now(),
+                'status' => 'ONGOING',
+            ]);
+        }
+
         // Otomatis buka status ONGOING & sync peserta untuk ujian kelas-kelas di ruangan ini yang belum berakhir jadwalnya
         $ujians = $this->getActiveUjiansForRoom();
         foreach ($ujians as $ujian) {
